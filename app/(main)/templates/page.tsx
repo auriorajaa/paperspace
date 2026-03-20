@@ -358,7 +358,7 @@ function TemplateGridCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            router.push(`/templates/${template._id}/connect-form`);
+            router.push(`/templates/${template._id}/connect`);
           }}
           className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all"
           style={{

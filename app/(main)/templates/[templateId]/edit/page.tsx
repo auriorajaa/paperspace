@@ -813,7 +813,7 @@ export default function TemplateEditPage() {
           </button>
 
           <Link
-            href={`/templates/${templateId}/connect-form`}
+            href={`/templates/${templateId}/connect`}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
             style={{
               background: "rgba(52,211,153,0.1)",
