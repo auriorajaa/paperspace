@@ -94,6 +94,16 @@ export default defineSchema({
     .index("by_owner_id", ["ownerId"])
     .index("by_template_id", ["templateId"]),
 
+  // ── Google OAuth accounts ────────────────────────────────────────────────────
+  googleAccounts: defineTable({
+    ownerId: v.string(),
+    email: v.string(),
+    accessToken: v.string(),
+    refreshToken: v.string(),
+    expiresAt: v.number(), // ms timestamp
+  }).index("by_owner_id", ["ownerId"]),
+
+  // ── Form connections ─────────────────────────────────────────────────────────
   formConnections: defineTable({
     ownerId: v.string(),
     templateId: v.id("templates"),
@@ -109,6 +119,12 @@ export default defineSchema({
     scriptToken: v.string(),
     filenamePattern: v.string(),
     isActive: v.boolean(),
+    // ── Google Forms specific (optional for backward compat) ─────────────────
+    connectionType: v.optional(v.string()), // "google" | "manual"
+    googleFormId: v.optional(v.string()),
+    // Maps Google questionId → questionTitle for response parsing
+    googleQuestionMap: v.optional(v.any()),
+    lastPolledAt: v.optional(v.number()),
   })
     .index("by_owner_id", ["ownerId"])
     .index("by_template_id", ["templateId"])

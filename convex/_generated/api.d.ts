@@ -9,9 +9,12 @@
  */
 
 import type * as collections from "../collections.js";
+import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
 import type * as formConnections from "../formConnections.js";
+import type * as googleAccounts from "../googleAccounts.js";
 import type * as http from "../http.js";
+import type * as processFormResponses from "../processFormResponses.js";
 import type * as templates from "../templates.js";
 
 import type {
@@ -22,9 +25,12 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   collections: typeof collections;
+  crons: typeof crons;
   documents: typeof documents;
   formConnections: typeof formConnections;
+  googleAccounts: typeof googleAccounts;
   http: typeof http;
+  processFormResponses: typeof processFormResponses;
   templates: typeof templates;
 }>;
 
