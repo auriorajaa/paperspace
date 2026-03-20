@@ -54,6 +54,7 @@ export default defineSchema({
     fileUrl: v.string(),
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     fields: v.array(
       v.object({
         id: v.string(),
@@ -91,5 +92,42 @@ export default defineSchema({
     bulkCount: v.optional(v.number()),
   })
     .index("by_owner_id", ["ownerId"])
+    .index("by_template_id", ["templateId"]),
+
+  formConnections: defineTable({
+    ownerId: v.string(),
+    templateId: v.id("templates"),
+    formId: v.string(),
+    formTitle: v.string(),
+    spreadsheetId: v.optional(v.string()),
+    fieldMappings: v.array(
+      v.object({
+        formQuestionTitle: v.string(),
+        templateFieldName: v.string(),
+      })
+    ),
+    scriptToken: v.string(),
+    filenamePattern: v.string(),
+    isActive: v.boolean(),
+  })
+    .index("by_owner_id", ["ownerId"])
+    .index("by_template_id", ["templateId"])
+    .index("by_script_token", ["scriptToken"]),
+
+  formSubmissions: defineTable({
+    connectionId: v.id("formConnections"),
+    templateId: v.id("templates"),
+    ownerId: v.string(),
+    respondentEmail: v.optional(v.string()),
+    fieldValues: v.any(),
+    storageId: v.optional(v.string()),
+    fileUrl: v.optional(v.string()),
+    filename: v.string(),
+    status: v.string(), // "pending" | "generated" | "error"
+    errorMessage: v.optional(v.string()),
+    submittedAt: v.number(),
+  })
+    .index("by_owner_id", ["ownerId"])
+    .index("by_connection_id", ["connectionId"])
     .index("by_template_id", ["templateId"]),
 });

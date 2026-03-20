@@ -10,6 +10,7 @@ import {
   LayoutTemplateIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  ZapIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/documents", label: "Documents", icon: FileTextIcon },
   { href: "/collections", label: "Collections", icon: FolderIcon },
   { href: "/templates", label: "Templates", icon: LayoutTemplateIcon },
+  { href: "/form-results", label: "Form Results", icon: ZapIcon },
 ];
 
 export function Navbar() {

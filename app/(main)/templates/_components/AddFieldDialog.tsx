@@ -8,44 +8,38 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
+import { CopyIcon, PlusIcon, XIcon, CheckIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { TemplateField, FieldType, SubField } from "./FieldCard";
+import { colors, fieldTypeColors } from "@/lib/design-tokens";
 
-const FIELD_TYPES: {
+const FIELD_CATEGORIES: {
   value: FieldType;
   label: string;
   description: string;
-  color: string;
 }[] = [
   {
     value: "text",
     label: "Merge Field",
-    description: "A single text, number, date, or email value",
-    color: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    description: "Text, number, date, or any value",
   },
   {
     value: "loop",
     label: "Repeating Rows",
-    description: "A table or list that repeats for each row of data",
-    color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
+    description: "Table rows that repeat per data item",
   },
   {
     value: "condition",
     label: "Show / Hide",
-    description: "Show a block of content only when a condition is true",
-    color: "bg-pink-500/10 text-pink-600 border-pink-500/20",
+    description: "Block shown only when condition is true",
   },
 ];
 
-const MERGE_SUBTYPES: { value: FieldType; label: string }[] = [
-  { value: "text", label: "Text" },
-  { value: "date", label: "Date" },
-  { value: "number", label: "Number" },
-  { value: "email", label: "Email" },
+const MERGE_SUBTYPES: { value: FieldType; label: string; hint: string }[] = [
+  { value: "text", label: "Text", hint: "Any free-form text" },
+  { value: "date", label: "Date", hint: "Free-text date (any format)" },
+  { value: "number", label: "Number", hint: "Numeric value" },
+  { value: "email", label: "Email", hint: "Email address" },
 ];
 
 function toName(label: string) {
@@ -60,7 +54,7 @@ function buildPlaceholder(name: string, type: FieldType): string {
     case "loop":
       return `{{#${name}}}…{{/${name}}}`;
     case "condition":
-      return `{{#if ${name}}}…{{/if ${name}}}`;
+      return `{{#${name}}}…{{/${name}}}`;
     default:
       return `{{${name}}}`;
   }
@@ -80,13 +74,15 @@ export function AddFieldDialog({
   const [category, setCategory] = useState<FieldType>("text");
   const [subtype, setSubtype] = useState<FieldType>("text");
   const [label, setLabel] = useState("");
-  const [required, setRequired] = useState(true);
+  const [required, setRequired] = useState(false);
   const [subFields, setSubFields] = useState<SubField[]>([]);
   const [newColLabel, setNewColLabel] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const name = toName(label);
   const effectiveType = category === "text" ? subtype : category;
   const placeholder = buildPlaceholder(name || "field_name", effectiveType);
+  const color = fieldTypeColors[effectiveType] ?? "#6b7280";
 
   const reset = () => {
     setCategory("text");
@@ -103,13 +99,10 @@ export function AddFieldDialog({
       return;
     }
     if (!name) {
-      toast.error(
-        "Field name is invalid. Use letters, numbers, or underscores."
-      );
+      toast.error("Field name invalid. Use letters, numbers, or underscores.");
       return;
     }
-
-    const field: TemplateField = {
+    onAdd({
       id: `field_${Date.now()}`,
       name,
       label: label.trim(),
@@ -117,9 +110,7 @@ export function AddFieldDialog({
       required,
       placeholder,
       subFields: category === "loop" ? subFields : undefined,
-    };
-
-    onAdd(field);
+    });
     toast.success("Field added");
     reset();
     onOpenChange(false);
@@ -127,12 +118,11 @@ export function AddFieldDialog({
 
   const addSubField = () => {
     if (!newColLabel.trim()) return;
-    const id = `sf_${Date.now()}`;
     const sfName = toName(newColLabel);
     setSubFields((prev) => [
       ...prev,
       {
-        id,
+        id: `sf_${Date.now()}`,
         name: sfName,
         label: newColLabel.trim(),
         type: "text",
@@ -143,8 +133,12 @@ export function AddFieldDialog({
     setNewColLabel("");
   };
 
-  const removeSubField = (id: string) => {
-    setSubFields((prev) => prev.filter((sf) => sf.id !== id));
+  const copyPlaceholder = () => {
+    if (!name) return;
+    navigator.clipboard.writeText(placeholder);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+    toast.success("Copied!");
   };
 
   return (
@@ -157,132 +151,252 @@ export function AddFieldDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add field</DialogTitle>
+          <DialogTitle style={{ color: colors.text }}>Add field</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Field category */}
+          {/* Category */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold">Field type</Label>
-            <div className="space-y-2">
-              {FIELD_TYPES.map((ft) => (
-                <button
-                  key={ft.value}
-                  type="button"
-                  onClick={() => setCategory(ft.value)}
-                  className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
-                    category === ft.value
-                      ? `${ft.color} border-current`
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide shrink-0 ${
-                      category === ft.value
-                        ? ft.color
-                        : "bg-muted text-muted-foreground"
-                    }`}
+            <p
+              className="text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: colors.textDim }}
+            >
+              Field type
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {FIELD_CATEGORIES.map((ft) => {
+                const c = fieldTypeColors[ft.value] ?? "#6b7280";
+                const active = category === ft.value;
+                return (
+                  <button
+                    key={ft.value}
+                    type="button"
+                    onClick={() => setCategory(ft.value)}
+                    className="flex flex-col items-start gap-1 p-2.5 rounded-xl text-left transition-all"
+                    style={{
+                      background: active ? `${c}15` : "rgba(255,255,255,0.03)",
+                      border: `1px solid ${active ? `${c}35` : colors.border}`,
+                    }}
                   >
-                    {ft.value}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium">{ft.label}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ color: active ? c : colors.textDim }}
+                    >
+                      {ft.value}
+                    </span>
+                    <span
+                      className="text-[11px] font-medium"
+                      style={{
+                        color: active ? colors.textSecondary : colors.textMuted,
+                      }}
+                    >
+                      {ft.label}
+                    </span>
+                    <span
+                      className="text-[10px] leading-tight"
+                      style={{ color: colors.textDim }}
+                    >
                       {ft.description}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Merge sub-type */}
+          {/* Subtype for text */}
           {category === "text" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Data type</Label>
-              <div className="flex gap-1.5 flex-wrap">
-                {MERGE_SUBTYPES.map((st) => (
-                  <button
-                    key={st.value}
-                    type="button"
-                    onClick={() => setSubtype(st.value)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                      subtype === st.value
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
+            <div className="space-y-2">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: colors.textDim }}
+              >
+                Data format
+              </p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {MERGE_SUBTYPES.map((st) => {
+                  const c = fieldTypeColors[st.value] ?? "#6b7280";
+                  const active = subtype === st.value;
+                  return (
+                    <button
+                      key={st.value}
+                      type="button"
+                      onClick={() => setSubtype(st.value)}
+                      className="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-center transition-all"
+                      style={{
+                        background: active
+                          ? `${c}15`
+                          : "rgba(255,255,255,0.03)",
+                        border: `1px solid ${active ? `${c}35` : colors.border}`,
+                      }}
+                    >
+                      <span
+                        className="text-[11px] font-semibold"
+                        style={{ color: active ? c : colors.textMuted }}
+                      >
+                        {st.label}
+                      </span>
+                      <span
+                        className="text-[9px]"
+                        style={{ color: colors.textDim }}
+                      >
+                        {st.hint}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              {subtype === "date" && (
+                <div
+                  className="rounded-lg p-2.5"
+                  style={{
+                    background: "rgba(52,211,153,0.06)",
+                    border: "1px solid rgba(52,211,153,0.15)",
+                  }}
+                >
+                  <p className="text-[10px]" style={{ color: "#34d399" }}>
+                    💡 Date is free-text — user types any format (e.g. "March
+                    12, 2026" or "12/03/2026").
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Label */}
-          <div className="space-y-1.5">
-            <Label htmlFor="field-label" className="text-xs font-semibold">
-              Label <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="field-label"
-              placeholder="e.g. Customer Name"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              autoFocus
-            />
-            {name && (
-              <p className="text-[10px] text-muted-foreground">
-                Field name:{" "}
-                <code className="font-mono bg-muted px-1 rounded">{name}</code>
+          {/* Label + name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: colors.textDim }}
+              >
+                Label <span style={{ color: "#f87171" }}>*</span>
               </p>
-            )}
+              <input
+                id="field-label"
+                placeholder="e.g. Customer Name"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                autoFocus
+                className="w-full h-9 rounded-xl px-3 text-sm outline-none"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: `1px solid ${colors.border}`,
+                  color: colors.text,
+                }}
+                onFocus={(e) =>
+                  (e.currentTarget.style.border = `1px solid ${color}40`)
+                }
+                onBlur={(e) =>
+                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: colors.textDim }}
+              >
+                Field name (auto)
+              </p>
+              <div
+                className="h-9 rounded-xl px-3 flex items-center"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                <code
+                  className="text-[11px] font-mono"
+                  style={{ color: name ? colors.accentLight : colors.textDim }}
+                >
+                  {name || "field_name"}
+                </code>
+              </div>
+            </div>
           </div>
 
-          {/* Required */}
+          {/* Required (not for condition) */}
           {category !== "condition" && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={required}
-                onClick={() => setRequired((v) => !v)}
-                className={`relative w-8 h-4 rounded-full transition-colors ${
-                  required ? "bg-primary" : "bg-muted"
-                }`}
+            <button
+              type="button"
+              onClick={() => setRequired((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all"
+              style={{
+                background: required
+                  ? "rgba(99,102,241,0.1)"
+                  : "rgba(255,255,255,0.04)",
+                border: `1px solid ${required ? "rgba(99,102,241,0.25)" : colors.border}`,
+                color: required ? colors.accentLight : colors.textMuted,
+              }}
+            >
+              <div
+                className="relative w-7 h-4 rounded-full transition-colors shrink-0"
+                style={{
+                  background: required
+                    ? "rgba(99,102,241,0.4)"
+                    : "rgba(255,255,255,0.12)",
+                }}
               >
                 <span
-                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-                    required ? "translate-x-4" : "translate-x-0.5"
-                  }`}
+                  className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform"
+                  style={{
+                    transform: required
+                      ? "translateX(14px)"
+                      : "translateX(2px)",
+                  }}
                 />
-              </button>
-              <span className="text-xs text-muted-foreground">
-                Required field
-              </span>
-            </div>
+              </div>
+              <span className="text-xs">Required field</span>
+            </button>
           )}
 
           {/* Columns for loop */}
           {category === "loop" && (
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: colors.textDim }}
+              >
                 Columns (optional)
-              </Label>
+              </p>
               {subFields.length > 0 && (
-                <div className="space-y-1">
+                <div
+                  className="space-y-1 rounded-xl p-2"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
                   {subFields.map((sf) => (
                     <div key={sf.id} className="flex items-center gap-2">
-                      <span className="text-xs flex-1 px-2 py-1 bg-muted rounded-md">
+                      <span
+                        className="flex-1 text-xs px-2 py-1 rounded-lg"
+                        style={{
+                          color: colors.textSecondary,
+                          background: "rgba(255,255,255,0.04)",
+                        }}
+                      >
                         {sf.label}
                       </span>
-                      <code className="text-[10px] font-mono text-muted-foreground">
-                        {`{{${sf.name}}}`}
-                      </code>
+                      <code
+                        className="text-[10px] font-mono shrink-0"
+                        style={{ color: colors.textDim }}
+                      >{`{{${sf.name}}}`}</code>
                       <button
                         type="button"
-                        onClick={() => removeSubField(sf.id)}
-                        className="w-5 h-5 rounded flex items-center justify-center hover:text-destructive text-muted-foreground"
+                        onClick={() =>
+                          setSubFields((p) => p.filter((s) => s.id !== sf.id))
+                        }
+                        className="w-5 h-5 rounded flex items-center justify-center transition-colors"
+                        style={{ color: colors.textDim }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.color = "#f87171")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.color = colors.textDim)
+                        }
                       >
                         <XIcon className="w-3 h-3" />
                       </button>
@@ -291,7 +405,7 @@ export function AddFieldDialog({
                 </div>
               )}
               <div className="flex gap-2">
-                <Input
+                <input
                   placeholder="Column name"
                   value={newColLabel}
                   onChange={(e) => setNewColLabel(e.target.value)}
@@ -301,40 +415,66 @@ export function AddFieldDialog({
                       addSubField();
                     }
                   }}
-                  className="h-8 text-sm flex-1"
+                  className="flex-1 h-8 rounded-lg px-2.5 text-sm outline-none"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${colors.border}`,
+                    color: colors.text,
+                  }}
                 />
-                <Button
+                <button
                   type="button"
-                  size="sm"
-                  variant="outline"
                   onClick={addSubField}
-                  className="h-8 gap-1"
+                  className="flex items-center gap-1 px-3 h-8 rounded-lg text-xs font-medium"
+                  style={{
+                    background: "rgba(99,102,241,0.12)",
+                    color: colors.accentLight,
+                    border: `1px solid rgba(99,102,241,0.2)`,
+                  }}
                 >
                   <PlusIcon className="w-3 h-3" />
                   Add
-                </Button>
+                </button>
               </div>
             </div>
           )}
 
           {/* Syntax preview */}
           {label && (
-            <div className="rounded-lg bg-muted/50 p-3 space-y-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <div
+              className="rounded-xl p-3 space-y-2"
+              style={{
+                background: `${color}08`,
+                border: `1px solid ${color}20`,
+              }}
+            >
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: colors.textDim }}
+              >
                 Paste this in the editor
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-[11px] font-mono bg-background border border-border px-2 py-1.5 rounded-md text-foreground truncate">
+                <code
+                  className="flex-1 text-[11px] font-mono px-2.5 py-1.5 rounded-lg truncate"
+                  style={{ background: "rgba(0,0,0,0.2)", color }}
+                >
                   {placeholder}
                 </code>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(placeholder);
-                    toast.success("Copied!");
+                  onClick={copyPlaceholder}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    color: copied ? "#34d399" : colors.textMuted,
+                    border: `1px solid ${colors.border}`,
                   }}
-                  className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-muted border border-border transition-colors shrink-0"
                 >
-                  <CopyIcon className="w-3 h-3 text-muted-foreground" />
+                  {copied ? (
+                    <CheckIcon className="w-3 h-3" />
+                  ) : (
+                    <CopyIcon className="w-3 h-3" />
+                  )}
                 </button>
               </div>
             </div>
@@ -342,16 +482,37 @@ export function AddFieldDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
+          <button
             onClick={() => {
               reset();
               onOpenChange(false);
             }}
+            className="px-4 py-2 rounded-xl text-sm font-medium"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: colors.textMuted,
+              border: `1px solid ${colors.border}`,
+            }}
           >
             Cancel
-          </Button>
-          <Button onClick={handleAdd}>Add field</Button>
+          </button>
+          <button
+            onClick={handleAdd}
+            className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            style={{
+              background: "rgba(99,102,241,0.2)",
+              color: "#a5b4fc",
+              border: "1px solid rgba(99,102,241,0.3)",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(99,102,241,0.3)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "rgba(99,102,241,0.2)")
+            }
+          >
+            Add field
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

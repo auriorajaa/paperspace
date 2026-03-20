@@ -38,17 +38,9 @@ function normalizeName(raw: string): string {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+// Ganti fungsi inferType saja — satu baris
 function inferType(name: string): FieldType {
-  const n = name.toLowerCase();
-  if (/(date|tanggal|tgl|dob|birth|lahir)/.test(n)) return "date";
-  if (/(email|mail|surel)/.test(n)) return "email";
-  if (
-    /(amount|total|qty|quantity|number|count|price|harga|jumlah|nilai|biaya|fee|salary|gaji|angka)/.test(
-      n
-    )
-  )
-    return "number";
-  return "text";
+  return "text"; // User tentukan format manual di fill page
 }
 
 let _counter = 0;
@@ -133,7 +125,7 @@ export function detectPlaceholders(text: string): DetectedField[] {
             name: subName,
             label: toLabel(subName),
             type: inferType(subName),
-            required: true,
+            required: false,
             placeholder: `{{${subName}}}`,
             format: "double_curly",
           });
