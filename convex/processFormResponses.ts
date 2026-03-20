@@ -110,7 +110,7 @@ export const pollConnection = internalAction({
     const questionMap: Record<string, string> =
       connection.googleQuestionMap ?? {};
 
-    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
+    const convexSiteUrl = process.env.CONVEX_SITE_URL!;
 
     for (const response of responses) {
       const submittedAt = new Date(response.createTime).getTime();
