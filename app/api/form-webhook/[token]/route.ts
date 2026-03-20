@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
-import { api, internal } from "@/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
   try {
-    const { token } = params;
+    const { token } = await context.params;
     const body = (await req.json()) as {
       respondentEmail?: string;
       answers?: Record<string, string>;
@@ -108,7 +108,6 @@ async function generateDocument({
     );
     if (!fileRes.ok) throw new Error("Failed to fetch template file");
 
-    // Use ArrayBuffer — works in both Node and Edge
     const buffer = await fileRes.arrayBuffer();
     const processed = await preprocessTemplate(buffer);
 
@@ -131,7 +130,6 @@ async function generateDocument({
     });
     doc.render(data);
 
-    // Generate as arraybuffer (not nodebuffer) — BodyInit compatible
     const outBuffer: ArrayBuffer = doc
       .getZip()
       .generate({ type: "arraybuffer" });
