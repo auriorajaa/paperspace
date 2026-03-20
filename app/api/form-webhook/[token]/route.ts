@@ -5,6 +5,8 @@ import { Id } from "@/convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+export const dynamic = "force-dynamic";
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ token: string }> }
