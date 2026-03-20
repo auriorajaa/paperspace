@@ -1033,7 +1033,8 @@ export default function ConnectFormPage() {
   const [showWizard, setShowWizard] = useState(false);
 
   const webhookBase =
-    typeof window !== "undefined" ? window.location.origin : "";
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
 
   if (template === undefined || connections === undefined) {
     return (
