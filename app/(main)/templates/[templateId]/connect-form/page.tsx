@@ -1,59 +1,110 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  ChevronLeftIcon,
   PlusIcon,
   Trash2Icon,
-  CopyIcon,
-  CheckIcon,
   LinkIcon,
   PlayIcon,
   PauseIcon,
   AlertCircleIcon,
   ZapIcon,
+  RefreshCwIcon,
+  CheckCircleIcon,
+  SearchIcon,
+  ChevronRightIcon,
+  LogOutIcon,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import { colors, fieldTypeColors } from "@/lib/design-tokens";
 import { formatDistanceToNow } from "date-fns";
 
-// ── Copy Button ───────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-function CopyBtn({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+interface GoogleForm {
+  id: string;
+  name: string;
+  modifiedTime: string;
+}
+
+interface FormQuestion {
+  id: string;
+  title: string;
+}
+
+// ── Google Account Badge ──────────────────────────────────────────────────────
+
+function AccountBadge({
+  email,
+  templateId,
+  onDisconnect,
+}: {
+  email: string;
+  templateId: string;
+  onDisconnect: () => void;
+}) {
+  const disconnect = useMutation(api.googleAccounts.disconnect);
+
+  const handleDisconnect = async () => {
+    if (
+      !confirm(
+        "Disconnect Google account? This will not delete existing connections."
+      )
+    )
+      return;
+    await disconnect();
+    onDisconnect();
+  };
+
   return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
+    <div
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
       style={{
-        background: copied ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.06)",
-        color: copied ? "#34d399" : colors.textMuted,
-        border: `1px solid ${copied ? "rgba(52,211,153,0.2)" : colors.border}`,
+        background: "rgba(52,211,153,0.06)",
+        border: "1px solid rgba(52,211,153,0.15)",
       }}
     >
-      {copied ? (
-        <CheckIcon className="w-3 h-3" />
-      ) : (
-        <CopyIcon className="w-3 h-3" />
-      )}
-      {label ?? "Copy"}
-    </button>
+      <CheckCircleIcon
+        className="w-4 h-4 shrink-0"
+        style={{ color: "#34d399" }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium" style={{ color: "#34d399" }}>
+          Google connected
+        </p>
+        <p className="text-[11px] truncate" style={{ color: colors.textDim }}>
+          {email}
+        </p>
+      </div>
+      <button
+        onClick={handleDisconnect}
+        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg transition-colors"
+        style={{ color: colors.textDim, border: `1px solid ${colors.border}` }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "#f87171";
+          e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = colors.textDim;
+          e.currentTarget.style.borderColor = colors.border;
+        }}
+        title="Disconnect"
+      >
+        <LogOutIcon className="w-3 h-3" />
+      </button>
+    </div>
   );
 }
 
-// ── Setup Wizard ──────────────────────────────────────────────────────────────
+// ── Google Form Wizard ────────────────────────────────────────────────────────
 
-function SetupWizard({
+function GoogleFormWizard({
   templateId,
   templateFields,
   onDone,
@@ -64,28 +115,65 @@ function SetupWizard({
 }) {
   const createConnection = useMutation(api.formConnections.create);
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [formId, setFormId] = useState("");
-  const [formTitle, setFormTitle] = useState("");
-  const [spreadsheetId, setSpreadsheetId] = useState("");
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [mappings, setMappings] = useState<Record<string, string>>({});
+
+  // Step 1 state
+  const [forms, setForms] = useState<GoogleForm[]>([]);
+  const [formsLoading, setFormsLoading] = useState(true);
+  const [formsError, setFormsError] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedForm, setSelectedForm] = useState<GoogleForm | null>(null);
+
+  // Step 2 state
+  const [questions, setQuestions] = useState<FormQuestion[]>([]);
+  const [questionIdMap, setQuestionIdMap] = useState<Record<string, string>>(
+    {}
+  );
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [mappings, setMappings] = useState<Record<string, string>>({}); // templateFieldName → questionTitle
+
+  // Step 3 state
   const [filenamePattern, setFilenamePattern] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const addQuestion = () => setQuestions((prev) => [...prev, ""]);
-  const updateQuestion = (i: number, val: string) =>
-    setQuestions((prev) => {
-      const n = [...prev];
-      n[i] = val;
-      return n;
-    });
-  const removeQuestion = (i: number) =>
-    setQuestions((prev) => prev.filter((_, idx) => idx !== i));
+  // Load forms on mount
+  useEffect(() => {
+    fetch("/api/google/forms")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) setFormsError(data.error);
+        else setForms(data.forms ?? []);
+      })
+      .catch(() => setFormsError("Failed to load forms"))
+      .finally(() => setFormsLoading(false));
+  }, []);
+
+  // Load questions when form is selected
+  const loadQuestions = useCallback(async (form: GoogleForm) => {
+    setSelectedForm(form);
+    setQuestionsLoading(true);
+    try {
+      const res = await fetch(`/api/google/forms/${form.id}/questions`);
+      const data = await res.json();
+      if (data.error) {
+        toast.error("Failed to load form questions");
+        return;
+      }
+      setQuestions(data.questions ?? []);
+      setQuestionIdMap(data.questionIdMap ?? {});
+      setStep(2);
+    } catch {
+      toast.error("Failed to load form questions");
+    } finally {
+      setQuestionsLoading(false);
+    }
+  }, []);
 
   const handleCreate = async () => {
+    if (!selectedForm) return;
+
     const validMappings = Object.entries(mappings)
-      .filter(([q, f]) => q.trim() && f)
-      .map(([formQuestionTitle, templateFieldName]) => ({
+      .filter(([, questionTitle]) => questionTitle)
+      .map(([templateFieldName, formQuestionTitle]) => ({
         formQuestionTitle,
         templateFieldName,
       }));
@@ -94,31 +182,45 @@ function SetupWizard({
       toast.error("Map at least one field.");
       return;
     }
+
     setSaving(true);
     try {
       await createConnection({
         templateId,
-        formId: formId.trim() || "manual",
-        formTitle: formTitle.trim() || "My Google Form",
-        spreadsheetId: spreadsheetId.trim() || undefined,
+        formId: selectedForm.id,
+        formTitle: selectedForm.name,
         fieldMappings: validMappings,
         filenamePattern: filenamePattern.trim() || `document_{{row_number}}`,
+        connectionType: "google",
+        googleFormId: selectedForm.id,
+        googleQuestionMap: questionIdMap,
       });
-      toast.success("Connection created");
+      toast.success("Connection created — first sync in ≤5 min");
       onDone();
     } catch (err: any) {
-      toast.error(err?.message ?? "Couldn't create. Try again.");
+      toast.error(err?.message ?? "Failed to create connection");
     } finally {
       setSaving(false);
     }
   };
+
+  const filteredForms = forms.filter((f) =>
+    f.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const mappableFields = templateFields.filter(
+    (f) =>
+      f.type !== "loop" &&
+      f.type !== "condition" &&
+      f.type !== "condition_inverse"
+  );
 
   return (
     <div className="space-y-6">
       {/* Step indicator */}
       <div className="flex items-center gap-2">
         {[
-          { n: 1, label: "Form info" },
+          { n: 1, label: "Select form" },
           { n: 2, label: "Map fields" },
           { n: 3, label: "Filename" },
         ].map(({ n, label }, idx) => (
@@ -160,317 +262,234 @@ function SetupWizard({
         ))}
       </div>
 
-      {/* Step 1 — Form info */}
+      {/* ── Step 1: Pick a Google Form ── */}
       {step === 1 && (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div>
             <h3
               className="text-sm font-semibold mb-1"
               style={{ color: colors.text }}
             >
-              Enter your Google Form details
+              Select a Google Form from your Drive
             </h3>
-            <p
-              className="text-xs leading-relaxed"
-              style={{ color: colors.textMuted }}
-            >
-              You don&apos;t need the Form ID to get started — just give it a
-              name. The Form ID helps identify it later.
+            <p className="text-xs" style={{ color: colors.textMuted }}>
+              We&apos;ll automatically read its questions — no copy-pasting
+              needed.
             </p>
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label
-                className="text-xs font-medium"
-                style={{ color: colors.textSecondary }}
-              >
-                Form title <span style={{ color: "#f87171" }}>*</span>
-              </label>
-              <input
-                placeholder="e.g. Customer Intake Form"
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
-                }
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                className="text-xs font-medium"
-                style={{ color: colors.textSecondary }}
-              >
-                Google Form ID{" "}
-                <span style={{ color: colors.textDim, fontWeight: 400 }}>
-                  (optional)
-                </span>
-              </label>
-              <input
-                placeholder="Found in the form URL: forms/d/[THIS_PART]/edit"
-                value={formId}
-                onChange={(e) => setFormId(e.target.value)}
-                className="w-full rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
-                }
-              />
-              <p className="text-[10px]" style={{ color: colors.textDim }}>
-                URL: docs.google.com/forms/d/
-                <span style={{ color: colors.accentLight }}>1FAIpQL...</span>
-                /edit
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                className="text-xs font-medium"
-                style={{ color: colors.textSecondary }}
-              >
-                Linked Spreadsheet ID{" "}
-                <span style={{ color: colors.textDim, fontWeight: 400 }}>
-                  (optional, for Apps Script)
-                </span>
-              </label>
-              <input
-                placeholder="Found in spreadsheet URL after /d/"
-                value={spreadsheetId}
-                onChange={(e) => setSpreadsheetId(e.target.value)}
-                className="w-full rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
-                }
-              />
-            </div>
-
-            {/* Question list */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label
-                  className="text-xs font-medium"
-                  style={{ color: colors.textSecondary }}
-                >
-                  Form question titles{" "}
-                  <span style={{ color: colors.textDim, fontWeight: 400 }}>
-                    (from your Google Form)
-                  </span>
-                </label>
-                <button
-                  onClick={addQuestion}
-                  className="flex items-center gap-1 text-[11px] font-medium transition-colors"
-                  style={{ color: colors.accentLight }}
-                >
-                  <PlusIcon className="w-3 h-3" />
-                  Add
-                </button>
-              </div>
-              <p className="text-[10px]" style={{ color: colors.textDim }}>
-                Type each question exactly as it appears in your Google Form.
-              </p>
-              <div className="space-y-2">
-                {questions.map((q, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      value={q}
-                      onChange={(e) => updateQuestion(i, e.target.value)}
-                      placeholder={`Question ${i + 1} title…`}
-                      className="flex-1 rounded-lg px-2.5 py-2 text-sm outline-none"
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: `1px solid ${colors.border}`,
-                        color: colors.text,
-                      }}
-                    />
-                    <button
-                      onClick={() => removeQuestion(i)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center"
-                      style={{ color: colors.textDim }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = "#f87171";
-                        e.currentTarget.style.background =
-                          "rgba(248,113,113,0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = colors.textDim;
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <Trash2Icon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {questions.length === 0 && (
-                  <button
-                    onClick={addQuestion}
-                    className="w-full flex items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed text-xs transition-all"
-                    style={{
-                      borderColor: "rgba(255,255,255,0.08)",
-                      color: colors.textDim,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = colors.accentBorder;
-                      e.currentTarget.style.color = colors.accentLight;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "rgba(255,255,255,0.08)";
-                      e.currentTarget.style.color = colors.textDim;
-                    }}
-                  >
-                    <PlusIcon className="w-3.5 h-3.5" />
-                    Add first question
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Search */}
+          <div className="relative">
+            <SearchIcon
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
+              style={{ color: colors.textDim }}
+            />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search forms…"
+              className="w-full rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+              }}
+              onFocus={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+              }
+              onBlur={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+              }
+            />
           </div>
 
-          <button
-            onClick={() => {
-              if (!formTitle.trim()) {
-                toast.error("Form title is required.");
-                return;
-              }
-              setStep(2);
-            }}
-            className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-medium transition-all"
-            style={{
-              background: "rgba(99,102,241,0.18)",
-              color: "#a5b4fc",
-              border: "1px solid rgba(99,102,241,0.28)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.28)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
-            }
-          >
-            Next: Map fields →
-          </button>
+          {/* Form list */}
+          {formsLoading ? (
+            <div className="flex items-center justify-center py-12 gap-2">
+              <div
+                className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: colors.accentLight }}
+              />
+              <span className="text-xs" style={{ color: colors.textDim }}>
+                Loading your forms…
+              </span>
+            </div>
+          ) : formsError ? (
+            <div
+              className="rounded-xl p-4 text-center"
+              style={{
+                background: "rgba(248,113,113,0.06)",
+                border: "1px solid rgba(248,113,113,0.15)",
+              }}
+            >
+              <p className="text-xs" style={{ color: "#f87171" }}>
+                {formsError}
+              </p>
+            </div>
+          ) : filteredForms.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-xs" style={{ color: colors.textDim }}>
+                {search
+                  ? "No forms match your search"
+                  : "No Google Forms found in your Drive"}
+              </p>
+            </div>
+          ) : (
+            <div
+              className="rounded-xl overflow-hidden divide-y max-h-72 overflow-y-auto"
+              style={{
+                border: `1px solid ${colors.border}`,
+                // divideColor: colors.border,
+              }}
+            >
+              {filteredForms.map((form) => (
+                <button
+                  key={form.id}
+                  onClick={() => loadQuestions(form)}
+                  disabled={questionsLoading}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors"
+                  style={{ background: "transparent" }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(99,102,241,0.06)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                >
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
+                    style={{ background: "rgba(99,102,241,0.12)" }}
+                  >
+                    📋
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-sm font-medium truncate"
+                      style={{ color: colors.text }}
+                    >
+                      {form.name}
+                    </p>
+                    <p
+                      className="text-[10px]"
+                      style={{ color: colors.textDim }}
+                    >
+                      Modified{" "}
+                      {formatDistanceToNow(new Date(form.modifiedTime), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  </div>
+                  {questionsLoading && selectedForm?.id === form.id ? (
+                    <div
+                      className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin shrink-0"
+                      style={{ borderColor: colors.accentLight }}
+                    />
+                  ) : (
+                    <ChevronRightIcon
+                      className="w-3.5 h-3.5 shrink-0"
+                      style={{ color: colors.textDim }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Step 2 — Map fields */}
+      {/* ── Step 2: Map fields ── */}
       {step === 2 && (
         <div className="space-y-5">
           <div>
-            <h3
-              className="text-sm font-semibold mb-1"
-              style={{ color: colors.text }}
-            >
-              Map form questions to template fields
-            </h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3
+                className="text-sm font-semibold"
+                style={{ color: colors.text }}
+              >
+                Map fields
+              </h3>
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                style={{ background: "rgba(52,211,153,0.1)", color: "#34d399" }}
+              >
+                {selectedForm?.name}
+              </span>
+            </div>
             <p className="text-xs" style={{ color: colors.textMuted }}>
-              For each template field, choose which form question provides its
-              value.
+              Match each template field to the Google Form question that
+              provides its value.
             </p>
           </div>
 
-          <div className="space-y-3">
-            {templateFields
-              .filter(
-                (f) =>
-                  f.type !== "loop" &&
-                  f.type !== "condition" &&
-                  f.type !== "condition_inverse"
-              )
-              .map((field) => {
-                const c = fieldTypeColors[field.type] ?? "#6b7280";
-                return (
-                  <div
-                    key={field.name}
-                    className="flex items-center gap-3 p-3 rounded-xl"
-                    style={{
-                      background: "rgba(255,255,255,0.02)",
-                      border: `1px solid ${colors.border}`,
-                    }}
-                  >
-                    <div className="w-2 shrink-0">
-                      <span
-                        className="w-1.5 h-1.5 rounded-full block"
-                        style={{ background: c }}
-                      />
-                    </div>
-                    <div className="w-32 shrink-0">
-                      <p
-                        className="text-xs font-medium truncate"
-                        style={{ color: colors.textSecondary }}
-                      >
-                        {field.label}
-                      </p>
-                      <code
-                        className="text-[9px] font-mono"
-                        style={{ color: colors.textDim }}
-                      >{`{{${field.name}}}`}</code>
-                    </div>
-                    <div
-                      className="w-4 shrink-0 text-center"
+          <div className="space-y-2.5">
+            {mappableFields.map((field) => {
+              const c = fieldTypeColors[field.type] ?? "#6b7280";
+              return (
+                <div
+                  key={field.name}
+                  className="flex items-center gap-3 p-3 rounded-xl"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: `1px solid ${mappings[field.name] ? `${c}25` : colors.border}`,
+                  }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: c }}
+                  />
+                  <div className="w-36 shrink-0">
+                    <p
+                      className="text-xs font-medium truncate"
+                      style={{ color: colors.textSecondary }}
+                    >
+                      {field.label}
+                    </p>
+                    <code
+                      className="text-[9px] font-mono"
                       style={{ color: colors.textDim }}
                     >
-                      →
-                    </div>
-                    <select
-                      value={mappings[field.name] ?? ""}
-                      onChange={(e) =>
-                        setMappings((prev) => ({
-                          ...prev,
-                          [field.name]: e.target.value,
-                        }))
-                      }
-                      className="flex-1 rounded-lg px-2.5 py-2 text-sm outline-none"
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: `1px solid ${colors.border}`,
-                        color: mappings[field.name]
-                          ? colors.text
-                          : colors.textDim,
-                      }}
-                    >
-                      <option value="" style={{ background: "#18181d" }}>
-                        — not mapped —
-                      </option>
-                      {questions
-                        .filter((q) => q.trim())
-                        .map((q) => (
-                          <option
-                            key={q}
-                            value={q}
-                            style={{ background: "#18181d" }}
-                          >
-                            {q}
-                          </option>
-                        ))}
-                    </select>
+                      {`{{${field.name}}}`}
+                    </code>
                   </div>
-                );
-              })}
+                  <span
+                    className="text-xs shrink-0"
+                    style={{ color: colors.textDim }}
+                  >
+                    ←
+                  </span>
+                  <select
+                    value={mappings[field.name] ?? ""}
+                    onChange={(e) =>
+                      setMappings((prev) => ({
+                        ...prev,
+                        [field.name]: e.target.value,
+                      }))
+                    }
+                    className="flex-1 rounded-lg px-2.5 py-2 text-sm outline-none"
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: `1px solid ${colors.border}`,
+                      color: mappings[field.name]
+                        ? colors.text
+                        : colors.textDim,
+                    }}
+                  >
+                    <option value="" style={{ background: "#18181d" }}>
+                      — not mapped —
+                    </option>
+                    {questions.map((q) => (
+                      <option
+                        key={q.id}
+                        value={q.title}
+                        style={{ background: "#18181d" }}
+                      >
+                        {q.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
           </div>
 
           {questions.length === 0 && (
@@ -482,8 +501,8 @@ function SetupWizard({
               }}
             >
               <p className="text-xs" style={{ color: "#fbbf24" }}>
-                No questions added in step 1. Go back to add your form questions
-                first.
+                No questions found in this form. Make sure your form has
+                questions.
               </p>
             </div>
           )}
@@ -515,13 +534,13 @@ function SetupWizard({
                 (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
               }
             >
-              Next: Filename pattern →
+              Next: Filename →
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 3 — Filename + finish */}
+      {/* ── Step 3: Filename pattern ── */}
       {step === 3 && (
         <div className="space-y-5">
           <div>
@@ -529,11 +548,11 @@ function SetupWizard({
               className="text-sm font-semibold mb-1"
               style={{ color: colors.text }}
             >
-              Set filename pattern
+              Filename pattern
             </h3>
             <p className="text-xs" style={{ color: colors.textMuted }}>
-              Documents will be saved with this filename. Use tokens from your
-              mapped fields.
+              How each generated document will be named. Click tokens to insert
+              them.
             </p>
           </div>
 
@@ -541,7 +560,7 @@ function SetupWizard({
             <input
               value={filenamePattern}
               onChange={(e) => setFilenamePattern(e.target.value)}
-              placeholder={`${formTitle || "document"}_{{row_number}}`}
+              placeholder={`${selectedForm?.name ?? "document"}_{{row_number}}`}
               className="w-full rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
               style={{
                 background: "rgba(255,255,255,0.05)",
@@ -559,23 +578,50 @@ function SetupWizard({
               {[
                 "{{row_number}}",
                 ...Object.keys(mappings)
-                  .slice(0, 3)
+                  .slice(0, 4)
                   .map((k) => `{{${k}}}`),
               ].map((token) => (
                 <button
                   key={token}
                   type="button"
                   onClick={() => setFilenamePattern((p) => (p || "") + token)}
-                  className="text-[10px] font-mono px-2 py-1 rounded-lg"
+                  className="text-[10px] font-mono px-2 py-1 rounded-lg transition-colors"
                   style={{
                     background: "rgba(99,102,241,0.1)",
                     color: "#818cf8",
                     border: "1px solid rgba(99,102,241,0.2)",
                   }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(99,102,241,0.2)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
+                  }
                 >
                   {token}
                 </button>
               ))}
+            </div>
+
+            {/* Info about timing */}
+            <div
+              className="rounded-xl p-3"
+              style={{
+                background: "rgba(99,102,241,0.05)",
+                border: "1px solid rgba(99,102,241,0.12)",
+              }}
+            >
+              <p
+                className="text-[11px] leading-relaxed"
+                style={{ color: colors.textMuted }}
+              >
+                <span style={{ color: colors.accentLight }}>
+                  ⏱ Auto-sync every 5 minutes.
+                </span>{" "}
+                After someone submits the form, their generated document will
+                appear in the submissions list within 5 minutes. You can also
+                sync manually.
+              </p>
             </div>
           </div>
 
@@ -614,7 +660,7 @@ function SetupWizard({
                     className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
                     style={{ borderColor: colors.accentLight }}
                   />
-                  Saving…
+                  Creating…
                 </>
               ) : (
                 <>
@@ -632,59 +678,34 @@ function SetupWizard({
 
 // ── Connection Card ───────────────────────────────────────────────────────────
 
-function ConnectionCard({
-  connection,
-  webhookBase,
-}: {
-  connection: any;
-  webhookBase: string;
-}) {
+function ConnectionCard({ connection }: { connection: any }) {
   const updateConnection = useMutation(api.formConnections.update);
   const removeConnection = useMutation(api.formConnections.remove);
+  const syncNow = useAction(api.processFormResponses.syncConnection);
   const submissions = useQuery(api.formConnections.getSubmissions, {
     connectionId: connection._id,
   });
   const [expanded, setExpanded] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  const webhookUrl = `${webhookBase}/api/form-webhook/${connection.scriptToken}`;
-
-  const pendingCount = (submissions ?? []).filter(
-    (s: { status: string }) => s.status === "pending"
-  ).length;
   const generatedCount = (submissions ?? []).filter(
-    (s: { status: string }) => s.status === "generated"
+    (s: any) => s.status === "generated"
   ).length;
   const errorCount = (submissions ?? []).filter(
-    (s: { status: string }) => s.status === "error"
+    (s: any) => s.status === "error"
   ).length;
 
-  const appsScript = `// Paperspace Form Webhook
-// Paste this in your Google Apps Script editor and set a trigger on "On form submit"
-
-const WEBHOOK_URL = "${webhookUrl}";
-
-function onFormSubmit(e) {
-  const response = e.response;
-  const itemResponses = response.getItemResponses();
-  const answers = {};
-  
-  itemResponses.forEach(function(r) {
-    answers[r.getItem().getTitle()] = r.getResponse();
-  });
-  
-  const payload = {
-    respondentEmail: response.getRespondentEmail ? response.getRespondentEmail() : "",
-    answers: answers,
-    timestamp: new Date().toISOString()
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncNow({ connectionId: connection._id });
+      toast.success("Sync complete");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
   };
-  
-  UrlFetchApp.fetch(WEBHOOK_URL, {
-    method: "POST",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-}`;
 
   return (
     <div
@@ -697,7 +718,7 @@ function onFormSubmit(e) {
       {/* Header */}
       <div className="flex items-center gap-3 p-4">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base"
           style={{
             background: connection.isActive
               ? "rgba(99,102,241,0.15)"
@@ -705,10 +726,7 @@ function onFormSubmit(e) {
             border: `1px solid ${connection.isActive ? colors.accentBorder : colors.border}`,
           }}
         >
-          <LinkIcon
-            className="w-4 h-4"
-            style={{ color: connection.isActive ? "#818cf8" : colors.textDim }}
-          />
+          📋
         </div>
 
         <div className="flex-1 min-w-0">
@@ -720,7 +738,7 @@ function onFormSubmit(e) {
               {connection.formTitle}
             </p>
             <span
-              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
               style={{
                 background: connection.isActive
                   ? "rgba(52,211,153,0.12)"
@@ -729,6 +747,12 @@ function onFormSubmit(e) {
               }}
             >
               {connection.isActive ? "active" : "paused"}
+            </span>
+            <span
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+              style={{ background: "rgba(99,102,241,0.1)", color: "#818cf8" }}
+            >
+              Google Forms
             </span>
           </div>
           <div className="flex items-center gap-3 mt-0.5">
@@ -744,10 +768,38 @@ function onFormSubmit(e) {
                 {errorCount} errors
               </span>
             )}
+            {connection.lastPolledAt && (
+              <span className="text-[10px]" style={{ color: colors.textDim }}>
+                synced{" "}
+                {formatDistanceToNow(new Date(connection.lastPolledAt), {
+                  addSuffix: true,
+                })}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Sync Now */}
+          <button
+            onClick={handleSync}
+            disabled={syncing || !connection.isActive}
+            className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+            style={{
+              background: "rgba(99,102,241,0.1)",
+              color: syncing ? colors.textDim : "#818cf8",
+              border: "1px solid rgba(99,102,241,0.2)",
+              opacity: !connection.isActive ? 0.4 : 1,
+            }}
+            title="Sync now"
+          >
+            <RefreshCwIcon
+              className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`}
+            />
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+
+          {/* Pause/Resume */}
           <button
             onClick={() =>
               updateConnection({
@@ -771,6 +823,7 @@ function onFormSubmit(e) {
             )}
             {connection.isActive ? "Pause" : "Resume"}
           </button>
+
           <button
             onClick={() => setExpanded((v) => !v)}
             className="text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
@@ -780,95 +833,17 @@ function onFormSubmit(e) {
               border: `1px solid ${colors.border}`,
             }}
           >
-            {expanded ? "Hide" : "Setup"}
+            {expanded ? "Hide" : "Details"}
           </button>
         </div>
       </div>
 
-      {/* Expanded: Apps Script + mapping */}
+      {/* Expanded: mappings + submissions */}
       {expanded && (
         <div
           className="border-t p-4 space-y-5"
           style={{ borderColor: colors.border }}
         >
-          {/* Apps Script */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p
-                className="text-xs font-semibold"
-                style={{ color: colors.textSecondary }}
-              >
-                Apps Script code
-              </p>
-              <CopyBtn text={appsScript} label="Copy script" />
-            </div>
-
-            <div
-              className="rounded-xl overflow-hidden"
-              style={{ border: `1px solid ${colors.border}` }}
-            >
-              <div
-                className="flex items-center justify-between px-3 py-2"
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  borderBottom: `1px solid ${colors.border}`,
-                }}
-              >
-                <span
-                  className="text-[10px] font-mono"
-                  style={{ color: colors.textDim }}
-                >
-                  Code.gs
-                </span>
-                <CopyBtn text={appsScript} />
-              </div>
-              <pre
-                className="p-3 text-[10px] font-mono overflow-x-auto max-h-48"
-                style={{ color: "#a5b4fc", background: "rgba(0,0,0,0.3)" }}
-              >
-                {appsScript}
-              </pre>
-            </div>
-
-            <div
-              className="rounded-xl p-3 space-y-2"
-              style={{
-                background: "rgba(99,102,241,0.05)",
-                border: "1px solid rgba(99,102,241,0.12)",
-              }}
-            >
-              <p
-                className="text-xs font-semibold"
-                style={{ color: colors.accentLight }}
-              >
-                How to install:
-              </p>
-              <ol className="space-y-1">
-                {[
-                  "Open Google Forms → ⋮ menu → Script editor",
-                  "Delete existing code, paste the script above",
-                  "Save (Ctrl+S), then click Triggers (clock icon)",
-                  "Add trigger: function onFormSubmit, Event type: On form submit",
-                  "Authorize the script when prompted",
-                ].map((step, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 text-[11px]"
-                    style={{ color: colors.textMuted }}
-                  >
-                    <span
-                      className="shrink-0 font-semibold"
-                      style={{ color: colors.accentLight }}
-                    >
-                      {i + 1}.
-                    </span>
-                    {step}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
-
           {/* Field mappings */}
           <div className="space-y-2">
             <p
@@ -879,7 +854,10 @@ function onFormSubmit(e) {
             </p>
             <div className="space-y-1.5">
               {connection.fieldMappings.map((m: any, i: number) => (
-                <div key={i} className="flex items-center gap-3 text-xs">
+                <div
+                  key={i}
+                  className="flex items-center gap-3 text-xs flex-wrap"
+                >
                   <code
                     className="px-2 py-1 rounded-lg font-mono text-[10px]"
                     style={{
@@ -911,85 +889,89 @@ function onFormSubmit(e) {
                 className="text-xs font-semibold"
                 style={{ color: colors.textSecondary }}
               >
-                Recent submissions ({submissions.length})
+                Generated documents ({submissions.length})
               </p>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {submissions
-                  .slice(0, 8)
-                  .map(
-                    (s: {
-                      _id: string;
-                      filename: string;
-                      status: string;
-                      submittedAt: number;
-                      fileUrl?: string;
-                      respondentEmail?: string;
-                      errorMessage?: string;
-                    }) => (
-                      <div
-                        key={s._id}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl"
-                        style={{
-                          background: "rgba(255,255,255,0.02)",
-                          border: `1px solid ${colors.border}`,
-                        }}
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {submissions.map((s: any) => (
+                  <div
+                    key={s._id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                    style={{
+                      background: "rgba(255,255,255,0.02)",
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{
+                        background:
+                          s.status === "generated"
+                            ? "#34d399"
+                            : s.status === "error"
+                              ? "#f87171"
+                              : "#fbbf24",
+                      }}
+                    />
+                    <span
+                      className="flex-1 text-[11px] truncate"
+                      style={{ color: colors.textSecondary }}
+                    >
+                      {s.filename}.docx
+                    </span>
+                    {s.respondentEmail && (
+                      <span
+                        className="text-[10px] shrink-0"
+                        style={{ color: colors.textDim }}
                       >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0`}
-                          style={{
-                            background:
-                              s.status === "generated"
-                                ? "#34d399"
-                                : s.status === "error"
-                                  ? "#f87171"
-                                  : "#fbbf24",
-                          }}
-                        />
-                        <span
-                          className="flex-1 text-[11px] truncate"
-                          style={{ color: colors.textSecondary }}
-                        >
-                          {s.filename}.docx
-                        </span>
-                        <span
-                          className="text-[10px] shrink-0"
-                          style={{ color: colors.textDim }}
-                        >
-                          {formatDistanceToNow(new Date(s.submittedAt), {
-                            addSuffix: true,
-                          })}
-                        </span>
-                        {s.status === "generated" && s.fileUrl && (
-                          <a
-                            href={s.fileUrl}
-                            download={`${s.filename}.docx`}
-                            className="text-[10px] font-medium px-2 py-0.5 rounded-lg transition-colors"
-                            style={{
-                              background: "rgba(52,211,153,0.1)",
-                              color: "#34d399",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            ↓
-                          </a>
-                        )}
-                        {s.status === "error" && (
-                          <span
-                            className="text-[9px]"
-                            style={{ color: "#f87171" }}
-                            title={s.errorMessage}
-                          >
-                            Error
-                          </span>
-                        )}
-                      </div>
-                    )
-                  )}
+                        {s.respondentEmail}
+                      </span>
+                    )}
+                    <span
+                      className="text-[10px] shrink-0"
+                      style={{ color: colors.textDim }}
+                    >
+                      {formatDistanceToNow(new Date(s.submittedAt), {
+                        addSuffix: true,
+                      })}
+                    </span>
+                    {s.status === "generated" && s.fileUrl && (
+                      <a
+                        href={s.fileUrl}
+                        download={`${s.filename}.docx`}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors shrink-0"
+                        style={{
+                          background: "rgba(52,211,153,0.1)",
+                          color: "#34d399",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Download
+                      </a>
+                    )}
+                    {s.status === "error" && (
+                      <span
+                        className="text-[9px] shrink-0"
+                        style={{ color: "#f87171" }}
+                        title={s.errorMessage}
+                      >
+                        Error ⚠
+                      </span>
+                    )}
+                    {s.status === "pending" && (
+                      <span
+                        className="text-[9px] shrink-0"
+                        style={{ color: "#fbbf24" }}
+                      >
+                        Processing…
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Danger */}
+          {/* Delete */}
           <button
             onClick={async () => {
               if (confirm(`Delete connection to "${connection.formTitle}"?`))
@@ -1021,7 +1003,8 @@ function onFormSubmit(e) {
 export default function ConnectFormPage() {
   const params = useParams();
   const router = useRouter();
-  const { isLoaded, isSignedIn } = useAuth();
+  const searchParams = useSearchParams();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const templateId = params.templateId as Id<"templates">;
 
   const template = useQuery(api.templates.getById, { id: templateId });
@@ -1029,12 +1012,25 @@ export default function ConnectFormPage() {
     api.formConnections.getByTemplateId,
     isLoaded && isSignedIn ? { templateId } : "skip"
   );
+  const googleAccount = useQuery(api.googleAccounts.getMyAccount);
 
   const [showWizard, setShowWizard] = useState(false);
+  const [accountRefresh, setAccountRefresh] = useState(0);
 
-  const webhookBase =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "");
+  // Show success toast when returning from OAuth
+  useEffect(() => {
+    if (searchParams.get("connected") === "1") {
+      toast.success("Google account connected!");
+      // Clean URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("connected");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [searchParams]);
+
+  const handleConnectGoogle = () => {
+    window.location.href = `/api/google/auth?templateId=${templateId}`;
+  };
 
   if (template === undefined || connections === undefined) {
     return (
@@ -1073,6 +1069,8 @@ export default function ConnectFormPage() {
       </div>
     );
   }
+
+  const isConnected = !!googleAccount;
 
   return (
     <div className="flex flex-col h-full" style={{ background: colors.bg }}>
@@ -1124,10 +1122,10 @@ export default function ConnectFormPage() {
               Google Form connections
             </h1>
             <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
-              Auto-generate documents when a Google Form is submitted.
+              Auto-generate documents when your Google Form receives a response.
             </p>
           </div>
-          {!showWizard && (
+          {isConnected && !showWizard && (
             <button
               onClick={() => setShowWizard(true)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all"
@@ -1136,12 +1134,12 @@ export default function ConnectFormPage() {
                 color: colors.accentPale,
                 border: `1px solid ${colors.accentBorder}`,
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = colors.accentBgHover;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = colors.accentBg;
-              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = colors.accentBgHover)
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = colors.accentBg)
+              }
             >
               <PlusIcon className="w-3.5 h-3.5" />
               Connect a form
@@ -1151,84 +1149,154 @@ export default function ConnectFormPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        {showWizard ? (
-          <div className="max-w-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2
-                className="text-sm font-semibold"
+        {/* ── Not connected to Google ── */}
+        {!isConnected && (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-5">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              🔗
+            </div>
+            <div>
+              <p
+                className="text-sm font-semibold mb-2"
                 style={{ color: colors.text }}
               >
-                New connection
-              </h2>
-              <button
-                onClick={() => setShowWizard(false)}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                style={{
-                  color: colors.textMuted,
-                  border: `1px solid ${colors.border}`,
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
+                Connect your Google account
+              </p>
+              <p
+                className="text-xs max-w-xs leading-relaxed mx-auto"
+                style={{ color: colors.textDim }}
               >
-                Cancel
-              </button>
+                Connect once, then pick any Google Form from your Drive.
+                Responses will automatically generate documents — no code
+                needed.
+              </p>
             </div>
-            <SetupWizard
-              templateId={templateId}
-              templateFields={template.fields}
-              onDone={() => setShowWizard(false)}
-            />
-          </div>
-        ) : connections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-              style={{
-                background: "rgba(99,102,241,0.08)",
-                border: "1px solid rgba(99,102,241,0.15)",
-              }}
-            >
-              <LinkIcon className="w-7 h-7" style={{ color: "#818cf8" }} />
-            </div>
-            <p
-              className="text-sm font-semibold mb-2"
-              style={{ color: colors.textSecondary }}
-            >
-              No form connections yet
-            </p>
-            <p
-              className="text-xs mb-5 max-w-xs leading-relaxed"
-              style={{ color: colors.textDim }}
-            >
-              Connect a Google Form to automatically generate documents when
-              someone submits a response.
-            </p>
             <button
-              onClick={() => setShowWizard(true)}
-              className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-xl"
+              onClick={handleConnectGoogle}
+              className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
               style={{
-                background: colors.accentBg,
-                color: colors.accentPale,
-                border: `1px solid ${colors.accentBorder}`,
+                background: "rgba(99,102,241,0.2)",
+                color: "#a5b4fc",
+                border: "1px solid rgba(99,102,241,0.35)",
               }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(99,102,241,0.3)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "rgba(99,102,241,0.2)")
+              }
             >
-              <PlusIcon className="w-3.5 h-3.5" />
-              Connect a form
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              Connect with Google
             </button>
           </div>
-        ) : (
-          <div className="max-w-2xl space-y-4">
-            {connections.map((conn) => (
-              <ConnectionCard
-                key={conn._id}
-                connection={conn}
-                webhookBase={webhookBase}
-              />
-            ))}
+        )}
+
+        {/* ── Connected, show wizard or connections ── */}
+        {isConnected && (
+          <div className="max-w-xl space-y-5">
+            {/* Account badge */}
+            <AccountBadge
+              email={googleAccount.email}
+              templateId={templateId}
+              onDisconnect={() => {}}
+            />
+
+            {showWizard ? (
+              <div>
+                <div className="flex items-center justify-between mb-5">
+                  <h2
+                    className="text-sm font-semibold"
+                    style={{ color: colors.text }}
+                  >
+                    New connection
+                  </h2>
+                  <button
+                    onClick={() => setShowWizard(false)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                    style={{
+                      color: colors.textMuted,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background =
+                        "rgba(255,255,255,0.05)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "transparent")
+                    }
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <GoogleFormWizard
+                  templateId={templateId}
+                  templateFields={template.fields}
+                  onDone={() => setShowWizard(false)}
+                />
+              </div>
+            ) : connections.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center py-16 text-center rounded-2xl"
+                style={{ border: `1px dashed ${colors.border}` }}
+              >
+                <LinkIcon
+                  className="w-7 h-7 mb-3"
+                  style={{ color: colors.textDim }}
+                />
+                <p
+                  className="text-sm font-semibold mb-1"
+                  style={{ color: colors.textSecondary }}
+                >
+                  No connections yet
+                </p>
+                <p className="text-xs mb-4" style={{ color: colors.textDim }}>
+                  Pick a Google Form to start generating documents
+                  automatically.
+                </p>
+                <button
+                  onClick={() => setShowWizard(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-xl"
+                  style={{
+                    background: colors.accentBg,
+                    color: colors.accentPale,
+                    border: `1px solid ${colors.accentBorder}`,
+                  }}
+                >
+                  <PlusIcon className="w-3.5 h-3.5" />
+                  Connect a form
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-2xl">
+                {connections.map((conn) => (
+                  <ConnectionCard key={conn._id} connection={conn} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
