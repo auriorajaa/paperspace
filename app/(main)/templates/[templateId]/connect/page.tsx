@@ -935,18 +935,26 @@ function ConnectionCard({ connection }: { connection: any }) {
                       })}
                     </span>
                     {s.status === "generated" && s.fileUrl && (
-                      <a
-                        href={s.fileUrl}
-                        download={`${s.filename}.docx`}
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const res = await fetch(s.fileUrl);
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `${s.filename}.docx`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
                         className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors shrink-0"
                         style={{
                           background: "rgba(52,211,153,0.1)",
                           color: "#34d399",
                         }}
-                        onClick={(e) => e.stopPropagation()}
                       >
                         Download
-                      </a>
+                      </button>
                     )}
                     {s.status === "error" && (
                       <span
