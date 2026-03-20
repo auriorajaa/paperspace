@@ -14,18 +14,19 @@ import {
   FileTextIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  InfoIcon,
+  BookOpenIcon,
+  LinkIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OnlyOfficeEditor } from "@/components/OnlyOfficeEditor";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import { detectPlaceholders } from "@/lib/placeholder-detector";
+import { colors } from "@/lib/design-tokens";
 
 async function extractAllText(buffer: ArrayBuffer): Promise<string> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(buffer);
-
   const targets = [
     "word/document.xml",
     "word/header1.xml",
@@ -35,385 +36,571 @@ async function extractAllText(buffer: ArrayBuffer): Promise<string> {
     "word/footer2.xml",
     "word/footer3.xml",
   ];
-
   const parts: string[] = [];
   for (const path of targets) {
     const file = zip.file(path);
     if (!file) continue;
     const xml = await file.async("string");
-    // Strip XML tags, preserve text content
-    const text = xml
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    parts.push(text);
+    parts.push(
+      xml
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
   }
-
   return parts.join("\n");
 }
 
-// ── Copy button ───────────────────────────────────────────────────────────────
+// ── Copy snippet button ────────────────────────────────────────────────────────
 
-function CopyBtn({ text, className }: { text: string; className?: string }) {
+function Snippet({ code, label }: { code: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       onClick={() => {
-        navigator.clipboard.writeText(text);
+        navigator.clipboard.writeText(code);
         setCopied(true);
         setTimeout(() => setCopied(false), 1400);
       }}
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
-        copied
-          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-          : "border-border bg-background hover:bg-muted text-foreground"
-      } ${className ?? ""}`}
-      title="Copy"
+      className="group flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-left w-full"
+      style={{
+        background: copied ? "rgba(52,211,153,0.08)" : "rgba(255,255,255,0.03)",
+        border: `1px solid ${copied ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.08)"}`,
+      }}
     >
-      {text}
-      {copied ? (
-        <CheckIcon className="w-2.5 h-2.5 shrink-0" />
-      ) : (
-        <CopyIcon className="w-2.5 h-2.5 shrink-0 opacity-50" />
+      <code
+        className="flex-1 text-[11px] font-mono"
+        style={{ color: copied ? "#34d399" : "#a5b4fc" }}
+      >
+        {code}
+      </code>
+      <span className="shrink-0 transition-all">
+        {copied ? (
+          <CheckIcon className="w-3 h-3" style={{ color: "#34d399" }} />
+        ) : (
+          <CopyIcon
+            className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity"
+            style={{ color: colors.textMuted }}
+          />
+        )}
+      </span>
+      {label && (
+        <span
+          className="text-[10px] shrink-0"
+          style={{ color: colors.textDim }}
+        >
+          {label}
+        </span>
       )}
     </button>
   );
 }
 
-// ── Syntax Guide Bar ──────────────────────────────────────────────────────────
-
-const GUIDE_SECTIONS = [
-  {
-    id: "simple",
-    label: "Simple field",
-    color: "text-blue-600",
-    dotColor: "bg-blue-500",
-    description: "Replaced with a single value when generating.",
-    rules: [
-      "Use only letters, numbers, and underscores in the name.",
-      "Name must start with a letter.",
-      "Case sensitive — {{Name}} ≠ {{name}}.",
-    ],
-    examples: [
-      { syntax: "{{customer_name}}", note: "text field" },
-      { syntax: "{{invoice_date}}", note: "date field (auto-detected)" },
-      { syntax: "{{total_amount}}", note: "number field (auto-detected)" },
-      { syntax: "{{email}}", note: "email field (auto-detected)" },
-    ],
-  },
-  {
-    id: "loop",
-    label: "Repeating rows",
-    color: "text-indigo-600",
-    dotColor: "bg-indigo-500",
-    description:
-      "Repeats a table row or paragraph for each item in an array. The data must be an array of objects.",
-    rules: [
-      "Opening tag {{#name}} and closing tag {{/name}} must be in separate table rows (with paragraphLoop: true).",
-      "Sub-fields inside the loop reference properties of each array item.",
-      "The array name should be plural: items, rows, products, employees.",
-      "Do NOT put the open/close tags in the same paragraph.",
-    ],
-    examples: [
-      {
-        syntax: "{{#items}}",
-        note: "open — put in its own table row",
-      },
-      { syntax: "{{product_name}}", note: "sub-field inside loop" },
-      { syntax: "{{qty}}", note: "another sub-field" },
-      { syntax: "{{unit_price}}", note: "another sub-field" },
-      { syntax: "{{/items}}", note: "close — put in its own table row" },
-    ],
-    tip: "In your Word table: Row 1 = headers | Row 2 = {{#items}} | Row 3 = sub-fields | Row 4 = {{/items}}",
-  },
-  {
-    id: "condition",
-    label: "Show / Hide (condition)",
-    color: "text-pink-600",
-    dotColor: "bg-pink-500",
-    description:
-      "Shows a block only when the value is truthy (non-empty, non-zero, true).",
-    rules: [
-      "{{#name}} shows the block when value is true / non-empty.",
-      "{{^name}} shows the block when value is false / empty (inverse).",
-      "The block can contain any content including other placeholders.",
-      "Opening and closing tags should be on their own paragraphs.",
-    ],
-    examples: [
-      { syntax: "{{#show_discount}}", note: "shows block when true" },
-      { syntax: "Discount: {{discount_amount}}", note: "content inside" },
-      { syntax: "{{/show_discount}}", note: "end of block" },
-      { syntax: "{{^items}}", note: "shows when items array is EMPTY" },
-      { syntax: "No items found.", note: "content for empty state" },
-      { syntax: "{{/items}}", note: "end of inverse block" },
-    ],
-  },
-  {
-    id: "rules",
-    label: "Important rules",
-    color: "text-amber-600",
-    dotColor: "bg-amber-500",
-    description: "Docxtemplater requirements you must follow.",
-    rules: [
-      "Every opening {{#tag}} MUST have a matching closing {{/tag}}.",
-      "Tags cannot span across table cells — open and close in the same cell, OR use paragraphLoop for rows.",
-      "Whitespace inside tags is ignored: {{ name }} = {{name}}.",
-      "Nested loops are supported: {{#outer}}{{#inner}}…{{/inner}}{{/outer}}.",
-      "If ONLYOFFICE splits your tag across runs, click Save — the preprocessor will fix it automatically.",
-      "Do not use special characters < > & inside tag names.",
-    ],
-    examples: [],
-  },
-];
+// ── Syntax Guide ──────────────────────────────────────────────────────────────
 
 function SyntaxGuideBar() {
   const [open, setOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState("simple");
-
-  const section = GUIDE_SECTIONS.find((s) => s.id === activeSection)!;
+  const [activeTab, setActiveTab] = useState<
+    "simple" | "loop" | "condition" | "rules"
+  >("simple");
 
   return (
-    <div className="border-b border-border bg-background shrink-0">
-      {/* Toggle row */}
+    <div
+      className="shrink-0"
+      style={{
+        borderBottom: `1px solid rgba(255,255,255,0.06)`,
+        background: "#0e0e12",
+      }}
+    >
+      {/* Toggle bar */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-muted/40 transition-colors"
+        className="w-full flex items-center gap-3 px-5 py-2.5 transition-colors"
+        style={{ color: colors.textMuted }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "rgba(255,255,255,0.02)")
+        }
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
-        <InfoIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-        <span className="text-xs font-medium text-foreground">
-          Placeholder syntax guide
+        <BookOpenIcon
+          className="w-3.5 h-3.5 shrink-0"
+          style={{ color: "#818cf8" }}
+        />
+        <span
+          className="text-xs font-medium"
+          style={{ color: colors.textSecondary }}
+        >
+          Placeholder syntax reference
         </span>
         <div className="flex items-center gap-1.5 ml-1">
-          {GUIDE_SECTIONS.slice(0, 3).map((s) => (
-            <span
-              key={s.id}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border border-border bg-muted/50 text-muted-foreground`}
+          {[
+            { code: "{{field}}", color: "#60a5fa" },
+            { code: "{{#loop}}", color: "#818cf8" },
+            { code: "{{#if}}", color: "#f472b6" },
+          ].map(({ code, color }) => (
+            <code
+              key={code}
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color,
+              }}
             >
-              {s.id === "simple"
-                ? "{{field}}"
-                : s.id === "loop"
-                  ? "{{#loop}}"
-                  : "{{#if}}"}
-            </span>
+              {code}
+            </code>
           ))}
         </div>
-        <span className="ml-auto text-[10px] text-muted-foreground flex items-center gap-1">
-          {open ? "Hide" : "Show guide"}
+        <div
+          className="ml-auto flex items-center gap-1.5 text-[11px]"
+          style={{ color: colors.textDim }}
+        >
+          {open ? "Hide" : "Show reference"}
           {open ? (
             <ChevronUpIcon className="w-3 h-3" />
           ) : (
             <ChevronDownIcon className="w-3 h-3" />
           )}
-        </span>
+        </div>
       </button>
 
-      {/* Expanded guide */}
+      {/* Expanded content */}
       {open && (
-        <div className="border-t border-border">
-          {/* Section tabs */}
-          <div className="flex items-center gap-0 border-b border-border px-4 overflow-x-auto">
-            {GUIDE_SECTIONS.map((s) => (
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {/* Tabs */}
+          <div
+            className="flex border-b px-5"
+            style={{ borderColor: "rgba(255,255,255,0.06)" }}
+          >
+            {[
+              {
+                id: "simple" as const,
+                label: "Text fields",
+                color: "#60a5fa",
+                dot: "bg-blue-400",
+              },
+              {
+                id: "loop" as const,
+                label: "Repeating rows",
+                color: "#818cf8",
+                dot: "bg-indigo-400",
+              },
+              {
+                id: "condition" as const,
+                label: "Show / Hide",
+                color: "#f472b6",
+                dot: "bg-pink-400",
+              },
+              {
+                id: "rules" as const,
+                label: "Rules & mistakes",
+                color: "#fbbf24",
+                dot: "bg-amber-400",
+              },
+            ].map((tab) => (
               <button
-                key={s.id}
-                onClick={() => setActiveSection(s.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeSection === s.id
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap"
+                style={{
+                  borderColor: activeTab === tab.id ? tab.color : "transparent",
+                  color: activeTab === tab.id ? tab.color : colors.textDim,
+                }}
               >
-                <span
-                  className={`w-2 h-2 rounded-full ${s.dotColor} shrink-0`}
-                />
-                {s.label}
+                <span className={`w-1.5 h-1.5 rounded-full ${tab.dot}`} />
+                {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Section content */}
-          <div className="px-4 py-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Description + Rules */}
-            <div className="space-y-2 md:col-span-1">
-              <p className={`text-xs font-semibold ${section.color}`}>
-                What it does
-              </p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {section.description}
-              </p>
-
-              {section.rules.length > 0 && (
-                <div className="space-y-1 pt-1">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                    Rules
-                  </p>
-                  <ul className="space-y-1">
-                    {section.rules.map((rule, i) => (
-                      <li
-                        key={i}
-                        className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
-                      >
-                        <span
-                          className={`mt-1 w-1.5 h-1.5 rounded-full ${section.dotColor} shrink-0 opacity-60`}
-                        />
-                        {rule}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {section.tip && (
-                <div className="rounded-lg bg-amber-500/8 border border-amber-500/20 p-2.5">
-                  <p className="text-[11px] text-amber-700">💡 {section.tip}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Examples */}
-            {section.examples.length > 0 && (
-              <div className="md:col-span-2 space-y-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Examples — click to copy
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {section.examples.map((ex, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-border bg-muted/20 group"
+          {/* Tab content */}
+          <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-5 gap-5">
+            {activeTab === "simple" && (
+              <>
+                <div className="md:col-span-2 space-y-3">
+                  <div>
+                    <p
+                      className="text-xs font-semibold mb-1"
+                      style={{ color: "#60a5fa" }}
                     >
-                      <CopyBtn text={ex.syntax} />
-                      <span className="text-[10px] text-muted-foreground flex-1 text-right">
-                        {ex.note}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Full template example for loop */}
-                {section.id === "loop" && (
-                  <div className="mt-2 rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-1">
-                    <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide mb-2">
-                      Table structure in Word
+                      What it does
                     </p>
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Replaced with the value you enter when generating the
+                      document. Works for text, numbers, dates, and email
+                      addresses.
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-2"
+                      style={{ color: colors.textDim }}
+                    >
+                      Rules
+                    </p>
+                    <ul className="space-y-1.5">
+                      {[
+                        "Use letters, numbers, and underscores only.",
+                        "Must start with a letter — not a number.",
+                        "Case-sensitive: {{Name}} ≠ {{name}}.",
+                        "No spaces — use {{customer_name}} not {{customer name}}.",
+                      ].map((r) => (
+                        <li
+                          key={r}
+                          className="flex items-start gap-1.5 text-[11px]"
+                          style={{ color: colors.textMuted }}
+                        >
+                          <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0 opacity-60" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="md:col-span-3 space-y-2">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-wider"
+                    style={{ color: colors.textDim }}
+                  >
+                    Click to copy
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[
-                      ["Header row", "Product | Qty | Price", "bg-muted/50"],
-                      ["Loop open row", "{{#items}}", "bg-indigo-500/10"],
-                      [
-                        "Data row",
-                        "{{product_name}} | {{qty}} | {{unit_price}}",
-                        "bg-background",
-                      ],
-                      ["Loop close row", "{{/items}}", "bg-indigo-500/10"],
-                    ].map(([label, content, bg]) => (
-                      <div
-                        key={label}
-                        className={`flex items-center gap-3 px-2 py-1.5 rounded ${bg}`}
-                      >
-                        <span className="text-[10px] text-muted-foreground w-28 shrink-0">
-                          {label}
-                        </span>
-                        <code className="text-[10px] font-mono text-foreground flex-1">
-                          {content}
-                        </code>
-                        {content.includes("{{") && <CopyBtn text={content} />}
-                      </div>
+                      ["{{customer_name}}", "text"],
+                      ["{{invoice_date}}", "date → auto-detected"],
+                      ["{{total_amount}}", "number → auto-detected"],
+                      ["{{email}}", "email → auto-detected"],
+                    ].map(([code, label]) => (
+                      <Snippet key={code} code={code} label={label} />
                     ))}
                   </div>
-                )}
-
-                {/* Condition visual for condition section */}
-                {section.id === "condition" && (
-                  <div className="mt-2 rounded-lg border border-pink-500/20 bg-pink-500/5 p-3 space-y-1">
-                    <p className="text-[10px] font-semibold text-pink-600 uppercase tracking-wide mb-2">
-                      In your document
-                    </p>
-                    {[
-                      ["Truthy open", "{{#show_discount}}", "bg-pink-500/10"],
-                      [
-                        "Content",
-                        "Discount: {{discount_amount}}",
-                        "bg-background",
-                      ],
-                      ["Close", "{{/show_discount}}", "bg-pink-500/10"],
-                      ["", "", ""],
-                      ["Falsy open", "{{^items}}", "bg-rose-500/10"],
-                      ["Content", "No items in this order.", "bg-background"],
-                      ["Close", "{{/items}}", "bg-rose-500/10"],
-                    ].map(([label, content, bg], i) =>
-                      label === "" ? (
-                        <div key={i} className="h-1" />
-                      ) : (
-                        <div
-                          key={i}
-                          className={`flex items-center gap-3 px-2 py-1.5 rounded ${bg}`}
-                        >
-                          <span className="text-[10px] text-muted-foreground w-20 shrink-0">
-                            {label}
-                          </span>
-                          <code className="text-[10px] font-mono text-foreground flex-1">
-                            {content}
-                          </code>
-                          {content.includes("{{") && <CopyBtn text={content} />}
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
 
-            {/* Rules-only section (no examples grid) */}
-            {section.id === "rules" && (
-              <div className="md:col-span-2 space-y-3">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Common mistakes & how to fix them
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    {
-                      bad: "{{#items}}...{{/items}} in same cell",
-                      good: "Put open/close in separate rows with paragraphLoop",
-                      color: "border-destructive/20 bg-destructive/5",
-                    },
-                    {
-                      bad: "{{customer name}} — space in name",
-                      good: "{{customer_name}} — use underscore",
-                      color: "border-destructive/20 bg-destructive/5",
-                    },
-                    {
-                      bad: "{{#block}} with no {{/block}}",
-                      good: "Always close every opening tag",
-                      color: "border-destructive/20 bg-destructive/5",
-                    },
-                    {
-                      bad: "Tag split by Word formatting",
-                      good: "Click Save — preprocessor fixes split tags",
-                      color: "border-amber-500/20 bg-amber-500/5",
-                    },
-                  ].map(({ bad, good, color }) => (
-                    <div
-                      key={bad}
-                      className={`rounded-lg border p-3 space-y-1.5 ${color}`}
+            {activeTab === "loop" && (
+              <>
+                <div className="md:col-span-2 space-y-3">
+                  <div>
+                    <p
+                      className="text-xs font-semibold mb-1"
+                      style={{ color: "#818cf8" }}
                     >
-                      <div className="flex items-start gap-1.5">
-                        <span className="text-[10px] font-semibold text-destructive shrink-0 mt-0.5">
-                          ✗
+                      What it does
+                    </p>
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Repeats a table row for each item in a list. When filling
+                      the form, you add rows one by one. When generating from
+                      Excel, each column maps to a sub-field.
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-2"
+                      style={{ color: colors.textDim }}
+                    >
+                      Rules
+                    </p>
+                    <ul className="space-y-1.5">
+                      {[
+                        "Opening {{#name}} and closing {{/name}} must each be in their OWN table row.",
+                        "Sub-fields go in the data row between open and close.",
+                        "Use plural names: items, rows, products, employees.",
+                        "Never put open and close in the same cell.",
+                      ].map((r) => (
+                        <li
+                          key={r}
+                          className="flex items-start gap-1.5 text-[11px]"
+                          style={{ color: colors.textMuted }}
+                        >
+                          <span className="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0 opacity-60" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div
+                    className="rounded-xl p-3 space-y-0.5"
+                    style={{
+                      background: "rgba(251,191,36,0.06)",
+                      border: "1px solid rgba(251,191,36,0.15)",
+                    }}
+                  >
+                    <p
+                      className="text-[10px] font-semibold mb-1"
+                      style={{ color: "#fbbf24" }}
+                    >
+                      💡 Table structure
+                    </p>
+                    <p
+                      className="text-[11px]"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Row 1 → column headers
+                      <br />
+                      Row 2 → {"{{"}
+                      <span style={{ color: "#818cf8" }}>#items</span>
+                      {"}}"}
+                      <br />
+                      Row 3 → {"{{"}
+                      <span style={{ color: "#818cf8" }}>product</span>
+                      {"}} {{"}
+                      <span style={{ color: "#818cf8" }}>qty</span>
+                      {"}}"}
+                      <br />
+                      Row 4 → {"{{"}
+                      <span style={{ color: "#818cf8" }}>/items</span>
+                      {"}}"}
+                    </p>
+                  </div>
+                </div>
+                <div className="md:col-span-3 space-y-2">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-wider"
+                    style={{ color: colors.textDim }}
+                  >
+                    Copy in order
+                  </p>
+                  <Snippet code="{{#items}}" label="① open — own row" />
+                  <Snippet code="{{product_name}}" label="② sub-field" />
+                  <Snippet code="{{qty}}" label="② sub-field" />
+                  <Snippet code="{{unit_price}}" label="② sub-field" />
+                  <Snippet code="{{/items}}" label="③ close — own row" />
+                  <div
+                    className="rounded-xl overflow-hidden mt-2"
+                    style={{ border: "1px solid rgba(99,102,241,0.2)" }}
+                  >
+                    {[
+                      {
+                        label: "Headers",
+                        content: "Product Name  |  Qty  |  Price",
+                        bg: "rgba(255,255,255,0.04)",
+                      },
+                      {
+                        label: "Loop open",
+                        content: "{{#items}}",
+                        bg: "rgba(99,102,241,0.1)",
+                      },
+                      {
+                        label: "Data row",
+                        content:
+                          "{{product_name}}  |  {{qty}}  |  {{unit_price}}",
+                        bg: "rgba(255,255,255,0.02)",
+                      },
+                      {
+                        label: "Loop close",
+                        content: "{{/items}}",
+                        bg: "rgba(99,102,241,0.1)",
+                      },
+                    ].map(({ label, content, bg }) => (
+                      <div
+                        key={label}
+                        className="flex items-center gap-3 px-3 py-2"
+                        style={{
+                          background: bg,
+                          borderBottom: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <span
+                          className="text-[10px] w-20 shrink-0"
+                          style={{ color: colors.textDim }}
+                        >
+                          {label}
                         </span>
-                        <code className="text-[10px] font-mono text-muted-foreground">
-                          {bad}
+                        <code
+                          className="text-[10px] font-mono flex-1"
+                          style={{
+                            color: content.includes("{{")
+                              ? "#a5b4fc"
+                              : colors.textMuted,
+                          }}
+                        >
+                          {content}
                         </code>
                       </div>
-                      <div className="flex items-start gap-1.5">
-                        <span className="text-[10px] font-semibold text-emerald-600 shrink-0 mt-0.5">
-                          ✓
-                        </span>
-                        <span className="text-[11px] text-foreground">
-                          {good}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+              </>
+            )}
+
+            {activeTab === "condition" && (
+              <>
+                <div className="md:col-span-2 space-y-3">
+                  <div>
+                    <p
+                      className="text-xs font-semibold mb-1"
+                      style={{ color: "#f472b6" }}
+                    >
+                      What it does
+                    </p>
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Shows or hides a block of content based on a true/false
+                      value. Two variants: truthy (show when true) and falsy
+                      (show when false or empty).
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-wider mb-2"
+                      style={{ color: colors.textDim }}
+                    >
+                      Variants
+                    </p>
+                    <div className="space-y-2">
+                      {[
+                        {
+                          syntax: "{{#name}}",
+                          desc: "Show block when value is true / non-empty",
+                          color: "#f472b6",
+                        },
+                        {
+                          syntax: "{{^name}}",
+                          desc: "Show block when value is FALSE or empty (inverse)",
+                          color: "#fb7185",
+                        },
+                      ].map(({ syntax, desc, color }) => (
+                        <div
+                          key={syntax}
+                          className="rounded-lg p-2.5 space-y-1"
+                          style={{
+                            background: `${color}08`,
+                            border: `1px solid ${color}20`,
+                          }}
+                        >
+                          <code
+                            className="text-[11px] font-mono"
+                            style={{ color }}
+                          >
+                            {syntax}
+                          </code>
+                          <p
+                            className="text-[11px]"
+                            style={{ color: colors.textMuted }}
+                          >
+                            {desc}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="md:col-span-3 space-y-2">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-wider"
+                    style={{ color: colors.textDim }}
+                  >
+                    Examples
+                  </p>
+                  <Snippet code="{{#show_discount}}" label="open (truthy)" />
+                  <Snippet
+                    code="Discount: {{discount_amount}}"
+                    label="content inside"
+                  />
+                  <Snippet code="{{/show_discount}}" label="close" />
+                  <div
+                    className="h-px my-1"
+                    style={{ background: "rgba(255,255,255,0.06)" }}
+                  />
+                  <Snippet
+                    code="{{^items}}"
+                    label="open (falsy — empty list)"
+                  />
+                  <Snippet
+                    code="No items in this order."
+                    label="content inside"
+                  />
+                  <Snippet code="{{/items}}" label="close" />
+                </div>
+              </>
+            )}
+
+            {activeTab === "rules" && (
+              <div className="md:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  {
+                    bad: "{{#items}} and {{/items}} in the same table cell",
+                    good: "Each must be in its own separate table row",
+                    type: "error",
+                  },
+                  {
+                    bad: "{{customer name}} — space in field name",
+                    good: "{{customer_name}} — use underscore",
+                    type: "error",
+                  },
+                  {
+                    bad: "{{#block}} with no {{/block}} closing tag",
+                    good: "Every opening tag must have a matching close",
+                    type: "error",
+                  },
+                  {
+                    bad: "ONLYOFFICE splits {{field}} across text runs",
+                    good: "Click Save — the preprocessor fixes this automatically",
+                    type: "warn",
+                  },
+                  {
+                    bad: "{{Item}} and {{item}} used for same field",
+                    good: "Pick one casing and stick to it throughout",
+                    type: "warn",
+                  },
+                  {
+                    bad: "{{2name}} — starts with a number",
+                    good: "{{item_2}} or {{product_name}} — start with letter",
+                    type: "error",
+                  },
+                ].map(({ bad, good, type }) => (
+                  <div
+                    key={bad}
+                    className="rounded-xl p-3 space-y-2"
+                    style={{
+                      background:
+                        type === "error"
+                          ? "rgba(248,113,113,0.05)"
+                          : "rgba(251,191,36,0.05)",
+                      border: `1px solid ${type === "error" ? "rgba(248,113,113,0.15)" : "rgba(251,191,36,0.15)"}`,
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="text-[11px] font-bold shrink-0"
+                        style={{
+                          color: type === "error" ? "#f87171" : "#fbbf24",
+                        }}
+                      >
+                        ✗
+                      </span>
+                      <code
+                        className="text-[10px] font-mono"
+                        style={{ color: colors.textMuted }}
+                      >
+                        {bad}
+                      </code>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="text-[11px] font-bold shrink-0"
+                        style={{ color: "#34d399" }}
+                      >
+                        ✓
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: colors.textSecondary }}
+                      >
+                        {good}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -439,14 +626,29 @@ export default function TemplateEditPage() {
 
   if (template === undefined) {
     return (
-      <div className="flex flex-col h-screen">
-        <div className="flex items-center gap-3 px-4 h-12 border-b border-border animate-pulse shrink-0">
-          <div className="w-20 h-3.5 bg-muted rounded" />
-          <div className="w-px h-4 bg-muted" />
-          <div className="w-40 h-3.5 bg-muted rounded" />
+      <div className="flex flex-col h-screen" style={{ background: colors.bg }}>
+        <div
+          className="flex items-center gap-3 px-4 h-11 shrink-0 animate-pulse"
+          style={{
+            borderBottom: `1px solid ${colors.borderSubtle}`,
+            background: "#0e0e12",
+          }}
+        >
+          <div
+            className="w-20 h-3 rounded"
+            style={{ background: "rgba(255,255,255,0.07)" }}
+          />
+          <div className="w-px h-4" style={{ background: colors.border }} />
+          <div
+            className="w-40 h-3 rounded"
+            style={{ background: "rgba(255,255,255,0.07)" }}
+          />
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <div className="w-7 h-7 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+          <div
+            className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+            style={{ borderColor: colors.accentLight }}
+          />
         </div>
       </div>
     );
@@ -454,16 +656,25 @@ export default function TemplateEditPage() {
 
   if (template === null) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <AlertCircleIcon className="w-8 h-8 text-destructive" />
-        <p className="text-sm font-semibold">Template not found</p>
-        <Button
-          size="sm"
-          variant="outline"
+      <div
+        className="flex flex-col items-center justify-center h-screen gap-4"
+        style={{ background: colors.bg }}
+      >
+        <AlertCircleIcon className="w-8 h-8" style={{ color: colors.danger }} />
+        <p className="text-sm font-semibold" style={{ color: colors.text }}>
+          Template not found
+        </p>
+        <button
           onClick={() => router.push("/templates")}
+          className="text-xs font-medium px-4 py-2 rounded-xl"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            color: colors.textSecondary,
+            border: `1px solid ${colors.border}`,
+          }}
         >
           Back to Templates
-        </Button>
+        </button>
       </div>
     );
   }
@@ -471,13 +682,11 @@ export default function TemplateEditPage() {
   const scanAndSave = async (redirectTo?: "fill") => {
     setSaving(true);
     try {
-      // Fetch current file from ONLYOFFICE proxy → mammoth scan
       const res = await fetch(
         `/api/onlyoffice-file?url=${encodeURIComponent(template.fileUrl)}`
       );
       if (!res.ok) throw new Error("Failed to fetch template file");
       const buffer = await res.arrayBuffer();
-
       const fullText = await extractAllText(buffer);
       const detected = detectPlaceholders(fullText);
 
@@ -508,10 +717,7 @@ export default function TemplateEditPage() {
           ? `Saved — ${count} field${count !== 1 ? "s" : ""} detected`
           : "Saved — no placeholders detected yet"
       );
-
-      if (redirectTo === "fill") {
-        router.push(`/templates/${templateId}/fill`);
-      }
+      if (redirectTo === "fill") router.push(`/templates/${templateId}/fill`);
     } catch (err) {
       console.error(err);
       toast.error("Couldn't save. Check your connection and try again.");
@@ -521,98 +727,167 @@ export default function TemplateEditPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* Top header */}
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-border shrink-0 bg-background">
+    <div
+      className="flex flex-col h-screen overflow-hidden"
+      style={{ background: colors.bg }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center gap-2 px-4 h-11 shrink-0"
+        style={{
+          borderBottom: `1px solid ${colors.borderSubtle}`,
+          background: "#0e0e12",
+        }}
+      >
         <Link
           href="/templates"
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          className="flex items-center gap-1 text-xs transition-colors shrink-0"
+          style={{ color: colors.textMuted }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.color = colors.accentLight)
+          }
+          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           Templates
         </Link>
-        <span className="text-muted-foreground/40 text-xs shrink-0">/</span>
-        <span className="text-sm font-semibold truncate max-w-[220px]">
+        <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
+        <span
+          className="text-sm font-medium truncate max-w-[220px]"
+          style={{ color: colors.text }}
+        >
           {template.name}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
+          <button
             onClick={() => scanAndSave()}
             disabled={saving}
-            className="gap-1.5"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: colors.textSecondary,
+              border: `1px solid ${colors.border}`,
+            }}
           >
             {saving ? (
-              <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              <div
+                className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: colors.textMuted }}
+              />
             ) : (
               <CheckIcon className="w-3.5 h-3.5" />
             )}
             Save
-          </Button>
-          <Button
-            size="sm"
+          </button>
+          <button
             onClick={() => scanAndSave("fill")}
             disabled={saving}
-            className="gap-1.5"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              background: "rgba(99,102,241,0.18)",
+              color: "#a5b4fc",
+              border: "1px solid rgba(99,102,241,0.28)",
+            }}
+            onMouseEnter={(e) => {
+              if (!saving) {
+                e.currentTarget.style.background = "rgba(99,102,241,0.28)";
+                e.currentTarget.style.boxShadow =
+                  "0 0 12px rgba(99,102,241,0.2)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(99,102,241,0.18)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
           >
             {saving ? (
-              <>
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                Saving…
-              </>
+              <div
+                className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: colors.accentLight }}
+              />
             ) : (
-              <>
-                <FileTextIcon className="w-3.5 h-3.5" />
-                Save & Use →
-              </>
+              <FileTextIcon className="w-3.5 h-3.5" />
             )}
-          </Button>
+            Save & Use →
+          </button>
+
+          <Link
+            href={`/templates/${templateId}/connect-form`}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            style={{
+              background: "rgba(52,211,153,0.1)",
+              color: "#34d399",
+              border: "1px solid rgba(52,211,153,0.2)",
+            }}
+          >
+            <LinkIcon className="w-3.5 h-3.5" />
+            Connect Form
+          </Link>
         </div>
       </div>
 
-      {/* Syntax guide bar — above editor */}
+      {/* Syntax guide */}
       <SyntaxGuideBar />
 
-      {/* ONLYOFFICE — full remaining height, full width */}
+      {/* Editor */}
       <div className="flex-1 flex overflow-hidden">
         {editorError ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center bg-muted/10">
-            <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center">
-              <AlertCircleIcon className="w-6 h-6 text-destructive" />
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ background: colors.dangerBg }}
+            >
+              <AlertCircleIcon
+                className="w-6 h-6"
+                style={{ color: colors.danger }}
+              />
             </div>
             <div className="space-y-1 max-w-xs">
-              <p className="text-sm font-semibold">Editor couldn&apos;t load</p>
-              <p className="text-xs text-muted-foreground">
+              <p
+                className="text-sm font-semibold"
+                style={{ color: colors.text }}
+              >
+                Editor couldn&apos;t load
+              </p>
+              <p className="text-xs" style={{ color: colors.textMuted }}>
                 Make sure ONLYOFFICE is running at{" "}
-                <code className="font-mono bg-muted px-1 rounded text-[11px]">
+                <code
+                  className="font-mono px-1 rounded text-[11px]"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    color: colors.accentLight,
+                  }}
+                >
                   localhost:80
                 </code>
               </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
+              <button
                 onClick={() => {
                   setEditorError(false);
                   setEditorKey((k) => k + 1);
                 }}
-                className="gap-1.5"
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.border}`,
+                }}
               >
                 <RefreshCwIcon className="w-3.5 h-3.5" />
                 Retry
-              </Button>
-              <Button size="sm" variant="ghost" asChild>
-                <a
-                  href="http://localhost/healthcheck"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  Check server
-                </a>
-              </Button>
+              </button>
+              <a
+                href="http://localhost/healthcheck"
+                target="_blank"
+                rel="noopener"
+                className="text-xs font-medium px-3 py-2 rounded-xl"
+                style={{ color: colors.textMuted }}
+              >
+                Check server
+              </a>
             </div>
           </div>
         ) : (

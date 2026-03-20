@@ -10,6 +10,7 @@
 
 import type * as collections from "../collections.js";
 import type * as documents from "../documents.js";
+import type * as formConnections from "../formConnections.js";
 import type * as http from "../http.js";
 import type * as templates from "../templates.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   collections: typeof collections;
   documents: typeof documents;
+  formConnections: typeof formConnections;
   http: typeof http;
   templates: typeof templates;
 }>;

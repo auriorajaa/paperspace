@@ -74,6 +74,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
     organizationId: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     fields: v.array(fieldSchema),
   },
   handler: async (ctx, args) => {
@@ -88,6 +89,7 @@ export const create = mutation({
       fileUrl: args.fileUrl,
       description: args.description,
       previewText: args.previewText,
+      tags: args.tags ?? [],
       fields: args.fields,
     });
   },
@@ -99,6 +101,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     fields: v.optional(v.array(fieldSchema)),
     storageId: v.optional(v.string()),
     fileUrl: v.optional(v.string()),
@@ -192,5 +195,18 @@ export const updateFileStorageInternal = internalMutation({
       storageId: args.storageId,
       fileUrl: args.fileUrl,
     });
+  },
+});
+
+export const getGeneratedCount = query({
+  args: { templateId: v.id("templates") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+    const docs = await ctx.db
+      .query("generatedDocuments")
+      .withIndex("by_template_id", (q) => q.eq("templateId", args.templateId))
+      .collect();
+    return docs.length;
   },
 });
