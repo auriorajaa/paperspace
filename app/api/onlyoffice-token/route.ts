@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
       config.token = jwt.sign(config, jwtSecret, { algorithm: "HS256" });
     }
 
-    return NextResponse.json({ config });
+    return NextResponse.json({
+      config,
+      serverUrl: `${appUrl}/api/oo-proxy`,
+    });
   } catch (err) {
     console.error("[onlyoffice-token] error:", err);
     return NextResponse.json(

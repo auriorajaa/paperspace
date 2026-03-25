@@ -31,12 +31,11 @@ function OnlyOfficeInner({
   onReady,
   onError,
 }: OnlyOfficeEditorProps) {
-  const [config, setConfig] = useState<object | null>(null);
   const [editorId] = useState(() => `oo-${crypto.randomUUID().slice(0, 8)}`);
-
-  const serverUrl = (
-    process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL ?? ""
-  ).replace(/\/$/, "");
+  const [editorData, setEditorData] = useState<{
+    config: object;
+    serverUrl: string;
+  } | null>(null);
 
   useEffect(() => {
     async function buildConfig() {
@@ -58,8 +57,9 @@ function OnlyOfficeInner({
         });
 
         if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
-        const { config } = await res.json();
-        setConfig(config);
+
+        const { config, serverUrl } = await res.json();
+        setEditorData({ config, serverUrl });
       } catch (err) {
         console.error("[ONLYOFFICE] Failed to build config:", err);
         onError?.();
@@ -86,7 +86,7 @@ function OnlyOfficeInner({
     editorId,
   ]);
 
-  if (!config) {
+  if (!editorData) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -101,8 +101,8 @@ function OnlyOfficeInner({
     <div className="flex-1 w-full h-full">
       <DocumentEditor
         id={editorId}
-        documentServerUrl={serverUrl}
-        config={config}
+        documentServerUrl={editorData.serverUrl}
+        config={editorData.config}
         events_onDocumentReady={onReady}
         onLoadComponentError={(code: number, desc: string) => {
           console.error("[ONLYOFFICE]", code, desc);
