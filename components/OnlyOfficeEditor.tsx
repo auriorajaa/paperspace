@@ -11,6 +11,9 @@ interface OnlyOfficeEditorProps {
   documentId?: string;
   templateId?: string;
   storageId?: string;
+  userId?: string;
+  userName?: string;
+  userAvatar?: string;
   onReady?: () => void;
   onError?: () => void;
 }
@@ -22,6 +25,9 @@ function OnlyOfficeInner({
   documentId,
   templateId,
   storageId,
+  userId,
+  userName,
+  userAvatar,
   onReady,
   onError,
 }: OnlyOfficeEditorProps) {
@@ -33,64 +39,34 @@ function OnlyOfficeInner({
   ).replace(/\/$/, "");
 
   useEffect(() => {
-    const hostname = window.location.hostname;
-    const port = window.location.port || "3000";
-    const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
-    const base = isLocal
-      ? `http://host.docker.internal:${port}`
-      : `${window.location.protocol}//${hostname}${port ? `:${port}` : ""}`;
+    async function buildConfig() {
+      try {
+        const res = await fetch("/api/onlyoffice-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileUrl,
+            fileName,
+            fileKey,
+            documentId,
+            templateId,
+            storageId,
+            userId,
+            userName,
+            userAvatar,
+          }),
+        });
 
-    const proxiedUrl = `${base}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
+        if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
+        const { config } = await res.json();
+        setConfig(config);
+      } catch (err) {
+        console.error("[ONLYOFFICE] Failed to build config:", err);
+        onError?.();
+      }
+    }
 
-    const params = new URLSearchParams();
-    if (documentId) params.set("documentId", documentId);
-    if (templateId) params.set("templateId", templateId);
-    if (storageId) params.set("storageId", storageId);
-
-    const callbackUrl = `${base}/api/onlyoffice-callback?${params.toString()}`;
-
-    setConfig({
-      document: {
-        fileType: "docx",
-        key: storageId ? `${fileKey}-${storageId.slice(-8)}` : fileKey,
-        title: fileName,
-        url: proxiedUrl,
-        permissions: {
-          chat: false,
-          comment: false,
-          download: true,
-          edit: true,
-          fillForms: true,
-          modifyContentControl: true,
-          modifyFilter: false,
-          print: false,
-          review: false,
-        },
-      },
-      documentType: "word",
-      editorConfig: {
-        callbackUrl,
-        mode: "edit",
-        lang: "en",
-        customization: {
-          autosave: true,
-          forcesave: false,
-          compactHeader: true,
-          compactToolbar: false, // ← false: toolbar always expanded, not hidden
-          hideRightMenu: true,
-          integrationMode: "embed",
-          toolbarHideFileName: true,
-          features: { tabStyle: "line", tabBackground: "toolbar" },
-          plugins: false,
-          macros: false,
-          spellcheck: false,
-          help: false,
-          feedback: false,
-          logo: { visible: false },
-          uiTheme: "theme-contrast-dark",
-        },
-      },
-    });
+    buildConfig();
 
     return () => {
       try {
@@ -98,7 +74,17 @@ function OnlyOfficeInner({
         win.DocEditor?.instances?.[editorId]?.destroyEditor();
       } catch (_) {}
     };
-  }, [fileUrl, fileKey, documentId, templateId, storageId, editorId]);
+  }, [
+    fileUrl,
+    fileKey,
+    documentId,
+    templateId,
+    storageId,
+    userId,
+    userName,
+    userAvatar,
+    editorId,
+  ]);
 
   if (!config) {
     return (

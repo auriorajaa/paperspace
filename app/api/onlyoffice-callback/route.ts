@@ -1,3 +1,4 @@
+// app/api/onlyoffice-callback/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -10,10 +11,12 @@ export async function POST(req: NextRequest) {
     if ((status === 2 || status === 6) && url) {
       const documentId = req.nextUrl.searchParams.get("documentId");
       const templateId = req.nextUrl.searchParams.get("templateId");
+      const storageId = req.nextUrl.searchParams.get("storageId");
 
       console.log("[onlyoffice-callback] saving for", {
         documentId,
         templateId,
+        storageId,
       });
 
       try {
@@ -72,7 +75,6 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
 
-        // Convex storage returns { storageId } after upload
         const uploadResult = await uploadRes.json();
         const savedStorageId = uploadResult.storageId;
         console.log(

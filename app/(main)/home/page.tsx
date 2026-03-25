@@ -1,3 +1,4 @@
+// home/page.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -20,6 +21,8 @@ import {
   StarIcon,
   ClockIcon,
   ZapIcon,
+  BuildingIcon,
+  UsersIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -44,13 +47,14 @@ import Link from "next/link";
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 
-function DocCardSkeleton() {
+function PaperCardSkeleton() {
   return (
     <div
-      className="rounded-2xl p-4 space-y-3 animate-pulse"
+      className="rounded-2xl p-4 flex flex-col gap-3 animate-pulse"
       style={{
         background: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.06)",
+        minHeight: 172,
       }}
     >
       <div className="flex items-center gap-3">
@@ -68,22 +72,31 @@ function DocCardSkeleton() {
             style={{ background: "rgba(255,255,255,0.05)" }}
           />
         </div>
+        <div
+          className="w-7 h-7 rounded-lg shrink-0"
+          style={{ background: "rgba(255,255,255,0.05)" }}
+        />
       </div>
       <div
-        className="h-10 rounded-xl"
+        className="rounded-xl h-14"
+        style={{ background: "rgba(255,255,255,0.04)" }}
+      />
+      <div
+        className="h-4 rounded-md w-1/2"
         style={{ background: "rgba(255,255,255,0.04)" }}
       />
     </div>
   );
 }
 
-function SmallSkeleton() {
+function RowSkeleton() {
   return (
     <div
       className="rounded-xl p-3.5 flex items-center gap-3 animate-pulse"
       style={{
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(255,255,255,0.05)",
+        minHeight: 60,
       }}
     >
       <div
@@ -104,9 +117,9 @@ function SmallSkeleton() {
   );
 }
 
-// ── Document Card ─────────────────────────────────────────────────────────────
+// ── Paper Card ────────────────────────────────────────────────────────────────
 
-function DocumentCard({ document }: { document: Doc<"documents"> }) {
+function PaperCard({ document }: { document: Doc<"documents"> }) {
   const router = useRouter();
   const duplicate = useMutation(api.documents.duplicate);
   const archive = useMutation(api.documents.archive);
@@ -121,7 +134,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
   const handleDuplicate = async () => {
     try {
       const newId = await duplicate({ id: document._id });
-      toast.success("Document duplicated");
+      toast.success("Paper duplicated");
       router.push(`/documents/${newId}`);
     } catch {
       toast.error("Couldn't duplicate. Try again.");
@@ -131,7 +144,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
   const handleArchive = async () => {
     try {
       await archive({ id: document._id });
-      toast.success("Document archived");
+      toast.success("Paper archived");
     } catch {
       toast.error("Couldn't archive. Try again.");
     }
@@ -140,7 +153,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
   const handleDelete = async () => {
     try {
       await remove({ id: document._id });
-      toast.success("Document deleted");
+      toast.success("Paper deleted");
     } catch {
       toast.error("Couldn't delete. Try again.");
     }
@@ -149,7 +162,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
   return (
     <>
       <div
-        className="rounded-2xl p-4 flex flex-col gap-3.5 cursor-pointer group transition-all duration-200"
+        className="rounded-2xl p-4 flex flex-col gap-3 cursor-pointer transition-all duration-200 h-full"
         style={{
           background: hovered
             ? "rgba(255,255,255,0.045)"
@@ -163,7 +176,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Header */}
+        {/* Header row — icon + title + always-visible menu */}
         <div className="flex items-start gap-3">
           <div
             className="text-lg shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
@@ -173,14 +186,14 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
           </div>
           <div className="flex-1 min-w-0">
             <p
-              className="text-sm font-medium truncate"
+              className="text-sm font-medium leading-snug line-clamp-2"
               style={{ color: "rgba(255,255,255,0.9)" }}
             >
               {document.title}
             </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="flex items-center gap-1.5 mt-1">
               <ClockIcon
-                className="w-2.5 h-2.5"
+                className="w-2.5 h-2.5 shrink-0"
                 style={{ color: "rgba(255,255,255,0.28)" }}
               />
               <p
@@ -193,12 +206,23 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
               </p>
             </div>
           </div>
+
+          {/* Always-visible 3-dot menu (no hover dependency) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 onClick={(e) => e.stopPropagation()}
-                className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.07)" }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+                }
               >
                 <MoreHorizontalIcon
                   className="w-3.5 h-3.5"
@@ -213,8 +237,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
                   router.push(`/documents/${document._id}`);
                 }}
               >
-                <FileTextIcon className="w-3.5 h-3.5 mr-2" />
-                Open
+                <FileTextIcon className="w-3.5 h-3.5 mr-2" /> Open
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={(e) => {
@@ -222,8 +245,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
                   handleDuplicate();
                 }}
               >
-                <CopyIcon className="w-3.5 h-3.5 mr-2" />
-                Duplicate
+                <CopyIcon className="w-3.5 h-3.5 mr-2" /> Duplicate
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -232,8 +254,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
                   handleArchive();
                 }}
               >
-                <ArchiveIcon className="w-3.5 h-3.5 mr-2" />
-                Archive
+                <ArchiveIcon className="w-3.5 h-3.5 mr-2" /> Archive
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
@@ -242,19 +263,20 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
                   setConfirmDelete(true);
                 }}
               >
-                <Trash2Icon className="w-3.5 h-3.5 mr-2" />
+                <Trash2Icon className="w-3.5 h-3.5 mr-2 text-destructive hover:text-destructive" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        {/* AI Summary */}
+        {/* AI Summary — fixed height so cards stay uniform */}
         <div
-          className="rounded-xl px-3 py-2.5 flex items-start gap-2 min-h-[44px]"
+          className="rounded-xl px-3 py-2.5 flex items-start gap-2 flex-1"
           style={{
             background: "rgba(99,102,241,0.07)",
             border: "1px solid rgba(99,102,241,0.12)",
+            minHeight: 56,
           }}
         >
           <SparklesIcon
@@ -263,7 +285,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
           />
           {document.aiSummaryStatus === "done" && document.aiSummary ? (
             <p
-              className="text-[11px] leading-relaxed line-clamp-2"
+              className="text-[11px] leading-relaxed line-clamp-3"
               style={{ color: "rgba(255,255,255,0.6)" }}
             >
               {document.aiSummary}
@@ -271,7 +293,7 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
           ) : document.aiSummaryStatus === "pending" ? (
             <div className="flex items-center gap-1.5">
               <div
-                className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin"
+                className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin shrink-0"
                 style={{ color: "#818cf8" }}
               />
               <p
@@ -286,46 +308,60 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
               className="text-[11px] italic"
               style={{ color: "rgba(255,255,255,0.28)" }}
             >
-              AI summary not yet generated
+              No AI summary yet
             </p>
           )}
         </div>
 
-        {/* Collection badges */}
-        {collections && collections.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap -mt-0.5">
-            {(collections as Doc<"collections">[]).slice(0, 2).map((col) => (
-              <span
-                key={col._id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
-                style={{
-                  background: col.color
-                    ? `${col.color}22`
-                    : "rgba(255,255,255,0.07)",
-                  color: col.color ? `${col.color}` : "rgba(255,255,255,0.55)",
-                  border: `1px solid ${col.color ? `${col.color}35` : "rgba(255,255,255,0.08)"}`,
-                }}
-              >
-                <span>{col.icon}</span>
-                <span>{col.name}</span>
-              </span>
-            ))}
-            {collections.length > 2 && (
-              <span
-                className="text-[10px]"
-                style={{ color: "rgba(255,255,255,0.28)" }}
-              >
-                +{collections.length - 2}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Collection badges — fixed min-height so bottom of every card aligns */}
+        <div className="flex items-center gap-1.5 flex-wrap min-h-[18px]">
+          {collections && collections.length > 0
+            ? (collections as Doc<"collections">[]).slice(0, 2).map((col) => (
+                <span
+                  key={col._id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
+                  style={{
+                    background: col.color
+                      ? `${col.color}22`
+                      : "rgba(255,255,255,0.07)",
+                    color: col.color ?? "rgba(255,255,255,0.55)",
+                    border: `1px solid ${col.color ? `${col.color}35` : "rgba(255,255,255,0.08)"}`,
+                  }}
+                >
+                  <span>{col.icon}</span>
+                  <span>{col.name}</span>
+                </span>
+              ))
+            : null}
+          {collections && collections.length > 2 && (
+            <span
+              className="text-[10px]"
+              style={{ color: "rgba(255,255,255,0.28)" }}
+            >
+              +{collections.length - 2}
+            </span>
+          )}
+          {/* org indicator */}
+          {document.organizationId && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ml-auto"
+              style={{
+                background: "rgba(99,102,241,0.1)",
+                color: "#818cf8",
+                border: "1px solid rgba(99,102,241,0.18)",
+              }}
+            >
+              <UsersIcon className="w-2.5 h-2.5" />
+              Shared
+            </span>
+          )}
+        </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>Delete paper?</AlertDialogTitle>
             <AlertDialogDescription>
               &ldquo;{document.title}&rdquo; will be permanently deleted. This
               cannot be undone.
@@ -346,9 +382,9 @@ function DocumentCard({ document }: { document: Doc<"documents"> }) {
   );
 }
 
-// ── Collection Card ───────────────────────────────────────────────────────────
+// ── Collection Row ────────────────────────────────────────────────────────────
 
-function CollectionCard({
+function CollectionRow({
   col,
 }: {
   col: Doc<"collections"> & { documentCount?: number };
@@ -357,33 +393,29 @@ function CollectionCard({
   const accentColor = col.color ?? "#6366f1";
 
   return (
-    <Link href={`/collections/${col._id}`}>
+    <Link href={`/collections/${col._id}`} className="block">
       <div
-        className="rounded-xl p-3.5 my-2 flex items-center gap-3 transition-all duration-150 cursor-pointer"
+        className="rounded-xl px-3.5 py-3 flex items-center gap-3 transition-all duration-150 cursor-pointer"
         style={{
           background: hovered
             ? "rgba(255,255,255,0.04)"
             : "rgba(255,255,255,0.02)",
           border: `1px solid ${hovered ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)"}`,
+          minHeight: 60,
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Color strip */}
         <div
-          className="w-0.5 h-8 rounded-full shrink-0"
-          style={{ background: accentColor, opacity: 0.7 }}
+          className="w-0.5 h-7 rounded-full shrink-0"
+          style={{ background: accentColor, opacity: 0.65 }}
         />
-
-        {/* Icon */}
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
           style={{ background: `${accentColor}18` }}
         >
           {col.icon ?? "📁"}
         </div>
-
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p
@@ -401,7 +433,7 @@ function CollectionCard({
               className="text-[11px]"
               style={{ color: "rgba(255,255,255,0.4)" }}
             >
-              {col.documentCount ?? 0} doc
+              {col.documentCount ?? 0} paper
               {(col.documentCount ?? 0) !== 1 ? "s" : ""}
             </p>
             {col.tags && col.tags.length > 0 && (
@@ -434,7 +466,6 @@ function CollectionCard({
             )}
           </div>
         </div>
-
         <ArrowRightIcon
           className="w-3.5 h-3.5 shrink-0 transition-transform duration-150"
           style={{
@@ -447,13 +478,12 @@ function CollectionCard({
   );
 }
 
-// ── Template Card ─────────────────────────────────────────────────────────────
+// ── Template Row ──────────────────────────────────────────────────────────────
 
-function TemplateCard({ template }: { template: Doc<"templates"> }) {
+function TemplateRow({ template }: { template: Doc<"templates"> }) {
   const [hovered, setHovered] = useState(false);
 
   const fieldTypes = [...new Set(template.fields.map((f) => f.type))];
-
   const typeColors: Record<string, string> = {
     text: "#60a5fa",
     date: "#34d399",
@@ -465,14 +495,15 @@ function TemplateCard({ template }: { template: Doc<"templates"> }) {
   };
 
   return (
-    <Link href={`/templates/${template._id}/fill`}>
+    <Link href={`/templates/${template._id}/fill`} className="block">
       <div
-        className="rounded-xl p-3.5 my-2 flex items-center gap-3 transition-all duration-150 cursor-pointer"
+        className="rounded-xl px-3.5 py-3 flex items-center gap-3 transition-all duration-150 cursor-pointer"
         style={{
           background: hovered
             ? "rgba(99,102,241,0.08)"
             : "rgba(99,102,241,0.04)",
           border: `1px solid ${hovered ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.1)"}`,
+          minHeight: 60,
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -489,7 +520,6 @@ function TemplateCard({ template }: { template: Doc<"templates"> }) {
             style={{ color: "#818cf8" }}
           />
         </div>
-
         <div className="flex-1 min-w-0">
           <p
             className="text-[13px] font-medium truncate"
@@ -507,7 +537,7 @@ function TemplateCard({ template }: { template: Doc<"templates"> }) {
             </p>
             {fieldTypes.length > 0 && (
               <div className="flex items-center gap-1">
-                {fieldTypes.slice(0, 4).map((type) => (
+                {fieldTypes.slice(0, 5).map((type) => (
                   <span
                     key={type}
                     className="w-1.5 h-1.5 rounded-full"
@@ -519,9 +549,8 @@ function TemplateCard({ template }: { template: Doc<"templates"> }) {
             )}
           </div>
         </div>
-
         <span
-          className="text-[10px] font-medium px-2 py-1 rounded-lg shrink-0 transition-all duration-150"
+          className="text-[10px] font-semibold px-2 py-1 rounded-lg shrink-0 transition-all duration-150"
           style={{
             background: hovered
               ? "rgba(99,102,241,0.25)"
@@ -552,11 +581,11 @@ function SectionHeader({
 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-3">
       <div className="flex items-center gap-2">
         <h2
-          className="text-[13px] font-semibold tracking-wide uppercase"
-          style={{ color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}
+          className="text-[11px] font-semibold tracking-widest uppercase"
+          style={{ color: "rgba(255,255,255,0.38)", letterSpacing: "0.07em" }}
         >
           {title}
         </h2>
@@ -604,24 +633,24 @@ function EmptyState({
 }) {
   return (
     <div
-      className="flex flex-col items-center justify-center py-8 px-4 text-center rounded-xl"
-      style={{ border: "1px dashed rgba(255,255,255,0.08)" }}
+      className="flex flex-col items-center justify-center py-7 px-4 text-center rounded-xl"
+      style={{ border: "1px dashed rgba(255,255,255,0.08)", minHeight: 120 }}
     >
       <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
+        className="w-8 h-8 rounded-xl flex items-center justify-center mb-2.5"
         style={{ background: "rgba(255,255,255,0.04)" }}
       >
-        <Icon className="w-4 h-4" style={{ color: "rgba(255,255,255,0.25)" }} />
+        <Icon className="w-4 h-4" style={{ color: "rgba(255,255,255,0.22)" }} />
       </div>
       <p
-        className="text-xs font-medium mb-1"
-        style={{ color: "rgba(255,255,255,0.5)" }}
+        className="text-[12px] font-medium mb-1"
+        style={{ color: "rgba(255,255,255,0.45)" }}
       >
         {title}
       </p>
       <p
         className="text-[11px] mb-4 max-w-[180px] leading-relaxed"
-        style={{ color: "rgba(255,255,255,0.25)" }}
+        style={{ color: "rgba(255,255,255,0.22)" }}
       >
         {description}
       </p>
@@ -643,38 +672,6 @@ function EmptyState({
   );
 }
 
-// ── Stat Chip ─────────────────────────────────────────────────────────────────
-
-function StatChip({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center px-5 py-3 rounded-xl"
-      style={{
-        background: `${color}0d`,
-        border: `1px solid ${color}20`,
-      }}
-    >
-      <span className="text-xl font-bold tabular-nums" style={{ color }}>
-        {value}
-      </span>
-      <span
-        className="text-[10px] mt-0.5 font-medium"
-        style={{ color: "rgba(255,255,255,0.4)" }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
@@ -687,40 +684,31 @@ export default function HomePage() {
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const updateDocument = useMutation(api.documents.update);
 
+  const skip = !(isLoaded && isSignedIn);
+
   const recentDocs = useQuery(
     api.documents.getRecent,
-    isLoaded && isSignedIn ? { limit: 6 } : "skip"
+    skip ? "skip" : { limit: 6 }
   );
   const orgDocs = useQuery(
     api.documents.getByOrg,
-    isLoaded && isSignedIn && organization
-      ? { organizationId: organization.id }
-      : "skip"
+    skip || !organization ? "skip" : { organizationId: organization.id }
   );
   const collections = useQuery(
     api.collections.getRecent,
-    isLoaded && isSignedIn ? { limit: 4 } : "skip"
+    skip ? "skip" : { limit: 4 }
   );
   const templates = useQuery(
     api.templates.getRecent,
-    isLoaded && isSignedIn ? { limit: 4 } : "skip"
+    skip ? "skip" : { limit: 4 }
   );
-  const allDocs = useQuery(
-    api.documents.getAll,
-    isLoaded && isSignedIn ? {} : "skip"
-  );
-  const allCollections = useQuery(
-    api.collections.getAll,
-    isLoaded && isSignedIn ? {} : "skip"
-  );
-  const allTemplates = useQuery(
-    api.templates.getAll,
-    isLoaded && isSignedIn ? {} : "skip"
-  );
+  const allDocs = useQuery(api.documents.getAll, skip ? "skip" : {});
+  const allCollections = useQuery(api.collections.getAll, skip ? "skip" : {});
+  const allTemplates = useQuery(api.templates.getAll, skip ? "skip" : {});
 
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleNewDocument = async () => {
+  const handleNewPaper = async () => {
     setIsCreating(true);
     try {
       const { default: JSZip } = await import("jszip");
@@ -746,7 +734,6 @@ export default function HomePage() {
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
-
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, {
         method: "POST",
@@ -761,16 +748,16 @@ export default function HomePage() {
       const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
       const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
       const docId = await createDocument({
-        title: "Untitled document",
+        title: "Untitled paper",
         organizationId: organization?.id,
         storageId,
       });
       await updateDocument({ id: docId, fileUrl });
       router.push(`/documents/${docId}`);
-      toast.success("Document created");
+      toast.success("Paper created");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't create document. Check your connection.");
+      toast.error("Couldn't create paper. Check your connection.");
     } finally {
       setIsCreating(false);
     }
@@ -786,111 +773,213 @@ export default function HomePage() {
   const docCount = allDocs?.length ?? 0;
   const colCount = allCollections?.length ?? 0;
   const tmplCount = allTemplates?.length ?? 0;
+  const hasStats = docCount > 0 || colCount > 0 || tmplCount > 0;
+
+  const quickActions = [
+    {
+      label: "New paper",
+      icon: FileTextIcon,
+      color: "#818cf8",
+      bg: "rgba(99,102,241,0.10)",
+      border: "rgba(99,102,241,0.18)",
+      onClick: handleNewPaper,
+    },
+    {
+      label: "New collection",
+      icon: FolderIcon,
+      color: "#34d399",
+      bg: "rgba(52,211,153,0.08)",
+      border: "rgba(52,211,153,0.18)",
+      onClick: () => router.push("/collections"),
+    },
+    {
+      label: "New template",
+      icon: LayoutTemplateIcon,
+      color: "#f472b6",
+      bg: "rgba(244,114,182,0.08)",
+      border: "rgba(244,114,182,0.18)",
+      onClick: () => router.push("/templates/new"),
+    },
+    {
+      label: "All papers",
+      icon: ZapIcon,
+      color: "#fb923c",
+      bg: "rgba(251,146,60,0.08)",
+      border: "rgba(251,146,60,0.18)",
+      onClick: () => router.push("/documents"),
+    },
+  ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ── Header ── */}
+    <div className="flex flex-col h-full min-h-0">
+      {/* ── Page header ── */}
       <div
-        className="flex items-center justify-between px-7 py-5 shrink-0"
+        className="shrink-0 px-4 sm:px-6 lg:px-7 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
       >
-        <div>
-          <h1
-            className="text-[15px] font-semibold"
-            style={{ color: "rgba(255,255,255,0.9)" }}
-          >
-            {user ? `${greeting}, ${user.firstName ?? "there"}` : "Home"}
-            <span style={{ color: "#6366f1" }}> ✦</span>
-          </h1>
-          <p
-            className="text-[11px] mt-0.5"
-            style={{ color: "rgba(255,255,255,0.32)" }}
-          >
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
+        {/* Greeting + button — stack on very small screens, row on sm+ */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h1
+              className="text-[15px] sm:text-base font-semibold leading-tight truncate"
+              style={{ color: "rgba(255,255,255,0.9)" }}
+            >
+              {user ? `${greeting}, ${user.firstName ?? "there"}` : "Home"}
+              <span style={{ color: "#6366f1" }}> ✦</span>
+            </h1>
+            <p
+              className="text-[11px] mt-0.5"
+              style={{ color: "rgba(255,255,255,0.3)" }}
+            >
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
 
-        <button
-          onClick={handleNewDocument}
-          disabled={isCreating}
-          className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150"
-          style={{
-            background: "rgba(99,102,241,0.18)",
-            color: "#a5b4fc",
-            border: "1px solid rgba(99,102,241,0.28)",
-          }}
-          onMouseEnter={(e) => {
-            if (!isCreating) {
-              e.currentTarget.style.background = "rgba(99,102,241,0.28)";
-              e.currentTarget.style.boxShadow =
-                "0 0 20px rgba(99,102,241,0.25)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(99,102,241,0.18)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          {isCreating ? (
-            <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-          ) : (
-            <PlusIcon className="w-3.5 h-3.5" />
-          )}
-          {isCreating ? "Creating…" : "New document"}
-        </button>
+          <button
+            onClick={handleNewPaper}
+            disabled={isCreating}
+            className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0 self-start sm:self-auto"
+            style={{
+              background: "rgba(99,102,241,0.18)",
+              color: "#a5b4fc",
+              border: "1px solid rgba(99,102,241,0.28)",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              if (!isCreating) {
+                e.currentTarget.style.background = "rgba(99,102,241,0.28)";
+                e.currentTarget.style.boxShadow =
+                  "0 0 20px rgba(99,102,241,0.25)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(99,102,241,0.18)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            {isCreating ? (
+              <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            ) : (
+              <PlusIcon className="w-3.5 h-3.5" />
+            )}
+            {isCreating ? "Creating…" : "New paper"}
+          </button>
+        </div>
       </div>
 
-      {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto px-7 py-6 space-y-8">
-        {/* Stats row */}
-        {(docCount > 0 || colCount > 0 || tmplCount > 0) && (
-          <div className="flex items-center gap-3">
-            <StatChip label="Documents" value={docCount} color="#818cf8" />
-            <StatChip label="Collections" value={colCount} color="#34d399" />
-            <StatChip label="Templates" value={tmplCount} color="#f472b6" />
+      {/* ── Scrollable content ── */}
+      <div
+        className="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6 lg:px-7 py-5 space-y-7
+        pb-[calc(1.25rem+env(safe-area-inset-bottom)+52px)] md:pb-5"
+      >
+        {/* ── Stats + org banner ── */}
+        {hasStats && (
+          <div className="space-y-2.5">
+            {/* Stat pills row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                {
+                  label: "Papers",
+                  value: docCount,
+                  color: "#818cf8",
+                  bg: "rgba(99,102,241,0.08)",
+                  border: "rgba(99,102,241,0.15)",
+                },
+                {
+                  label: "Collections",
+                  value: colCount,
+                  color: "#34d399",
+                  bg: "rgba(52,211,153,0.07)",
+                  border: "rgba(52,211,153,0.15)",
+                },
+                {
+                  label: "Templates",
+                  value: tmplCount,
+                  color: "#f472b6",
+                  bg: "rgba(244,114,182,0.07)",
+                  border: "rgba(244,114,182,0.15)",
+                },
+              ].map(({ label, value, color, bg, border }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl"
+                  style={{ background: bg, border: `1px solid ${border}` }}
+                >
+                  <span
+                    className="text-[18px] font-bold tabular-nums leading-none"
+                    style={{ color }}
+                  >
+                    {value}
+                  </span>
+                  <span
+                    className="text-[11px] font-medium"
+                    style={{ color: "rgba(255,255,255,0.4)" }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Org banner — only if in an org */}
             {organization && (
               <div
-                className="flex-1 flex items-center gap-2 px-4 py-3 rounded-xl"
+                className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
                 style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  background: "rgba(99,102,241,0.06)",
+                  border: "1px solid rgba(99,102,241,0.12)",
                 }}
               >
-                {organization.imageUrl ? (
-                  <img
-                    src={organization.imageUrl}
-                    alt=""
-                    className="w-5 h-5 rounded-md"
-                  />
-                ) : (
-                  <div
-                    className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold"
+                <BuildingIcon
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: "#818cf8" }}
+                />
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {organization.imageUrl ? (
+                    <img
+                      src={organization.imageUrl}
+                      alt=""
+                      className="w-5 h-5 rounded-md shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0"
+                      style={{
+                        background: "rgba(99,102,241,0.2)",
+                        color: "#818cf8",
+                      }}
+                    >
+                      {organization.name.charAt(0)}
+                    </div>
+                  )}
+                  <p
+                    className="text-[12px] font-medium truncate"
+                    style={{ color: "rgba(255,255,255,0.65)" }}
+                  >
+                    {organization.name}
+                  </p>
+                  <span
+                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0"
                     style={{
                       background: "rgba(99,102,241,0.2)",
                       color: "#818cf8",
                     }}
                   >
-                    {organization.name.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <p
-                    className="text-[11px] font-medium"
-                    style={{ color: "rgba(255,255,255,0.6)" }}
-                  >
-                    {organization.name}
-                  </p>
-                  <p
-                    className="text-[10px]"
-                    style={{ color: "rgba(255,255,255,0.25)" }}
-                  >
-                    Organization workspace
-                  </p>
+                    ORG
+                  </span>
                 </div>
+                {orgDocs !== undefined && orgDocs.length > 0 && (
+                  <p
+                    className="text-[11px] shrink-0"
+                    style={{ color: "rgba(255,255,255,0.3)" }}
+                  >
+                    {orgDocs.length} shared
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -898,112 +987,87 @@ export default function HomePage() {
 
         {/* ── Quick actions ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            {
-              label: "New document",
-              icon: FileTextIcon,
-              color: "#818cf8",
-              bg: "rgba(99,102,241,0.1)",
-              onClick: handleNewDocument,
-            },
-            {
-              label: "New collection",
-              icon: FolderIcon,
-              color: "#34d399",
-              bg: "rgba(52,211,153,0.08)",
-              onClick: () => router.push("/collections"),
-            },
-            {
-              label: "New template",
-              icon: LayoutTemplateIcon,
-              color: "#f472b6",
-              bg: "rgba(244,114,182,0.08)",
-              onClick: () => router.push("/templates/new"),
-            },
-            {
-              label: "Browse documents",
-              icon: ZapIcon,
-              color: "#fb923c",
-              bg: "rgba(251,146,60,0.08)",
-              onClick: () => router.push("/documents"),
-            },
-          ].map(({ label, icon: Icon, color, bg, onClick }) => (
-            <button
-              key={label}
-              onClick={onClick}
-              className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl text-left transition-all duration-150 group"
-              style={{
-                background: bg,
-                border: `1px solid ${color}20`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.border = `1px solid ${color}35`;
-                e.currentTarget.style.transform = "translateY(-1px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.border = `1px solid ${color}20`;
-                e.currentTarget.style.transform = "none";
-              }}
-            >
-              <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-              <span
-                className="text-[12px] font-medium"
-                style={{ color: "rgba(255,255,255,0.7)" }}
+          {quickActions.map(
+            ({ label, icon: Icon, color, bg, border, onClick }) => (
+              <button
+                key={label}
+                onClick={onClick}
+                className="flex flex-col sm:flex-row items-center sm:items-center gap-2 px-3 py-3 rounded-xl text-left transition-all duration-150"
+                style={{ background: bg, border: `1px solid ${border}` }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter = "brightness(1.15)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = "none";
+                  e.currentTarget.style.transform = "none";
+                }}
               >
-                {label}
-              </span>
-            </button>
-          ))}
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: `${color}18` }}
+                >
+                  <Icon className="w-3.5 h-3.5" style={{ color }} />
+                </div>
+                <span
+                  className="text-[12px] font-medium text-center sm:text-left leading-tight"
+                  style={{ color: "rgba(255,255,255,0.72)" }}
+                >
+                  {label}
+                </span>
+              </button>
+            )
+          )}
         </div>
 
-        {/* ── Recent documents ── */}
+        {/* ── Recent papers ── */}
         <section>
           <SectionHeader
-            title="Recent"
+            title="Recent papers"
             count={recentDocs?.length}
             href="/documents"
           />
           {recentDocs === undefined ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <DocCardSkeleton key={i} />
+                <PaperCardSkeleton key={i} />
               ))}
             </div>
           ) : recentDocs.length === 0 ? (
             <EmptyState
               icon={FileTextIcon}
-              title="No documents yet"
-              description="Create your first document to get started."
-              action={{ label: "New document", onClick: handleNewDocument }}
+              title="No papers yet"
+              description="Create your first paper to get started."
+              action={{ label: "New paper", onClick: handleNewPaper }}
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
               {recentDocs.map((doc) => (
-                <DocumentCard key={doc._id} document={doc} />
+                <PaperCard key={doc._id} document={doc} />
               ))}
             </div>
           )}
         </section>
 
-        {/* ── Org shared ── */}
+        {/* ── Shared in org ── */}
         {organization && orgDocs !== undefined && orgDocs.length > 0 && (
           <section>
             <SectionHeader
               title="Shared in org"
               count={orgDocs.length}
               href="/documents"
-              hrefLabel="View all"
             />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
               {orgDocs.map((doc) => (
-                <DocumentCard key={doc._id} document={doc} />
+                <PaperCard key={doc._id} document={doc} />
               ))}
             </div>
           </section>
         )}
 
-        {/* ── Collections + Templates ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* ── Collections + Templates two-column ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+          {/* Collections */}
           <section>
             <SectionHeader
               title="Collections"
@@ -1013,14 +1077,14 @@ export default function HomePage() {
             {collections === undefined ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <SmallSkeleton key={i} />
+                  <RowSkeleton key={i} />
                 ))}
               </div>
             ) : collections.length === 0 ? (
               <EmptyState
                 icon={FolderIcon}
                 title="No collections yet"
-                description="Organize your documents into collections."
+                description="Organise your papers into collections."
                 action={{
                   label: "New collection",
                   onClick: () => router.push("/collections"),
@@ -1033,12 +1097,13 @@ export default function HomePage() {
                     documentCount?: number;
                   })[]
                 ).map((col) => (
-                  <CollectionCard key={col._id} col={col} />
+                  <CollectionRow key={col._id} col={col} />
                 ))}
               </div>
             )}
           </section>
 
+          {/* Templates */}
           <section>
             <SectionHeader
               title="Templates"
@@ -1048,7 +1113,7 @@ export default function HomePage() {
             {templates === undefined ? (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <SmallSkeleton key={i} />
+                  <RowSkeleton key={i} />
                 ))}
               </div>
             ) : templates.length === 0 ? (
@@ -1064,7 +1129,7 @@ export default function HomePage() {
             ) : (
               <div className="space-y-2">
                 {templates.map((tmpl) => (
-                  <TemplateCard key={tmpl._id} template={tmpl} />
+                  <TemplateRow key={tmpl._id} template={tmpl} />
                 ))}
               </div>
             )}

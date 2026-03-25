@@ -79,7 +79,7 @@ export const disconnect = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     const account = await ctx.db
       .query("googleAccounts")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))

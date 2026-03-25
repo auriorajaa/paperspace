@@ -22,6 +22,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import type { TemplateField } from "../../_components/FieldCard";
 import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import { useAuth } from "@clerk/nextjs";
 
 // ── Field Input ────────────────────────────────────────────────────────────────
 
@@ -1523,8 +1524,12 @@ export default function TemplateFillPage() {
   const params = useParams();
   const router = useRouter();
   const templateId = params.templateId as Id<"templates">;
-  const template = useQuery(api.templates.getById, { id: templateId });
+  const { isLoaded, isSignedIn } = useAuth();
 
+  const template = useQuery(
+    api.templates.getById,
+    isLoaded && isSignedIn ? { id: templateId } : "skip" // ← guard
+  );
   if (template === undefined) {
     return (
       <div className="flex flex-col h-full" style={{ background: colors.bg }}>

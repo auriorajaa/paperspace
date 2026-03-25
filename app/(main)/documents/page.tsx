@@ -54,9 +54,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/lib/useDebounce";
-import { colors, shadows, fieldTypeColors } from "@/lib/design-tokens";
+import { colors, shadows } from "@/lib/design-tokens";
 
 // ── Add to Collection Dialog ──────────────────────────────────────────────────
 
@@ -158,9 +157,7 @@ function AddToCollectionDialog({
                 >
                   <div
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0"
-                    style={{
-                      background: `${col.color ?? colors.accent}18`,
-                    }}
+                    style={{ background: `${col.color ?? colors.accent}18` }}
                   >
                     {col.icon ?? "📁"}
                   </div>
@@ -198,6 +195,8 @@ function AddToCollectionDialog({
     </Dialog>
   );
 }
+
+// ── Rename Dialog ─────────────────────────────────────────────────────────────
 
 function RenameDialog({
   open,
@@ -269,7 +268,7 @@ function RenameDialog({
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => onOpenChange(false)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium"
               style={{
                 color: colors.textMuted,
                 background: "rgba(255,255,255,0.04)",
@@ -281,7 +280,7 @@ function RenameDialog({
             <button
               onClick={handleSave}
               disabled={saving || !value.trim()}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium"
               style={{
                 background: colors.accentBg,
                 color: colors.accentLight,
@@ -297,6 +296,8 @@ function RenameDialog({
     </Dialog>
   );
 }
+
+// ── Collections Panel ─────────────────────────────────────────────────────────
 
 function CollectionsPanel({
   open,
@@ -324,7 +325,6 @@ function CollectionsPanel({
     >
       {open && (
         <>
-          {/* Panel header */}
           <div
             className="flex items-center justify-between px-4 py-3 shrink-0"
             style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
@@ -367,7 +367,6 @@ function CollectionsPanel({
             </button>
           </div>
 
-          {/* Collections list */}
           <div className="flex-1 overflow-y-auto py-2">
             {collections === undefined ? (
               <div className="space-y-1.5 px-3 py-2">
@@ -416,7 +415,6 @@ function CollectionsPanel({
             )}
           </div>
 
-          {/* Footer */}
           <div
             className="px-4 py-3 shrink-0"
             style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
@@ -463,7 +461,6 @@ function CollectionPanelItem({
 
   return (
     <div>
-      {/* Collection header button */}
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left group"
@@ -479,21 +476,17 @@ function CollectionPanelItem({
           if (!expanded) e.currentTarget.style.background = "transparent";
         }}
       >
-        {/* Color dot */}
         <div
           className="w-1.5 h-1.5 rounded-full shrink-0"
           style={{ background: accentColor }}
         />
-        {/* Icon */}
         <span className="text-sm shrink-0">{col.icon ?? "📁"}</span>
-        {/* Name */}
         <span
           className="flex-1 text-xs font-medium truncate"
           style={{ color: expanded ? colors.text : colors.textSecondary }}
         >
           {col.name}
         </span>
-        {/* Count */}
         <span
           className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
           style={{
@@ -503,7 +496,6 @@ function CollectionPanelItem({
         >
           {col.documentCount ?? 0}
         </span>
-        {/* Chevron */}
         <ChevronRightIcon
           className="w-3 h-3 shrink-0 transition-transform duration-150"
           style={{
@@ -513,7 +505,6 @@ function CollectionPanelItem({
         />
       </button>
 
-      {/* Documents inside collection */}
       {expanded && (
         <div className="ml-4 mb-1 space-y-0.5">
           {docs === undefined ? (
@@ -560,8 +551,6 @@ function CollectionPanelItem({
               </button>
             ))
           )}
-
-          {/* Link to full collection */}
           <button
             onClick={() => router.push(`/collections/${col._id}`)}
             className="w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-colors"
@@ -657,13 +646,13 @@ function DocumentGridCard({
   onRename: (id: Id<"documents">, title: string) => void;
 }) {
   const router = useRouter();
+  const { organization } = useOrganization();
   const duplicate = useMutation(api.documents.duplicate);
   const archive = useMutation(api.documents.archive);
   const restore = useMutation(api.documents.restore);
   const remove = useMutation(api.documents.remove);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
-
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
@@ -671,39 +660,43 @@ function DocumentGridCard({
   const handleDuplicate = async () => {
     try {
       const newId = await duplicate({ id: document._id });
-      toast.success("Document duplicated");
+      toast.success("Duplicated");
       router.push(`/documents/${newId}`);
     } catch {
       toast.error("Couldn't duplicate. Try again.");
     }
   };
-
   const handleArchive = async () => {
     try {
       await archive({ id: document._id });
-      toast.success("Document archived");
+      toast.success("Archived");
     } catch {
       toast.error("Couldn't archive. Try again.");
     }
   };
-
   const handleRestore = async () => {
     try {
       await restore({ id: document._id });
-      toast.success("Document restored");
+      toast.success("Restored");
     } catch {
       toast.error("Couldn't restore. Try again.");
     }
   };
-
   const handleDelete = async () => {
     try {
       await remove({ id: document._id });
-      toast.success("Document deleted");
-    } catch {
-      toast.error("Couldn't delete. Try again.");
+      toast.success("Deleted");
+    } catch (err: any) {
+      toast.error(err?.data ?? "Couldn't delete. Try again.");
     }
   };
+
+  // Org badge label
+  const orgLabel = document.organizationId
+    ? organization?.id === document.organizationId
+      ? organization.name
+      : "Shared"
+    : null;
 
   return (
     <>
@@ -718,7 +711,6 @@ function DocumentGridCard({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Header */}
         <div className="flex items-start gap-3">
           <div
             className="text-lg shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
@@ -733,7 +725,7 @@ function DocumentGridCard({
             >
               {document.title}
             </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               <ClockIcon
                 className="w-2.5 h-2.5"
                 style={{ color: colors.textDim }}
@@ -743,7 +735,7 @@ function DocumentGridCard({
                   addSuffix: true,
                 })}
               </p>
-              {document.organizationId && (
+              {orgLabel && (
                 <>
                   <span style={{ color: colors.textDim }}>·</span>
                   <BuildingIcon
@@ -754,7 +746,7 @@ function DocumentGridCard({
                     className="text-[11px]"
                     style={{ color: colors.textMuted }}
                   >
-                    Shared
+                    {orgLabel}
                   </p>
                 </>
               )}
@@ -846,7 +838,6 @@ function DocumentGridCard({
           </DropdownMenu>
         </div>
 
-        {/* Archived badge */}
         {document.isArchived && (
           <span
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium w-fit"
@@ -861,7 +852,6 @@ function DocumentGridCard({
           </span>
         )}
 
-        {/* AI Summary */}
         <div
           className="rounded-xl px-3 py-2.5 flex items-start gap-2 min-h-[44px]"
           style={{
@@ -897,7 +887,6 @@ function DocumentGridCard({
           )}
         </div>
 
-        {/* Collections */}
         {collections && collections.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {(collections as Doc<"collections">[]).slice(0, 2).map((col) => (
@@ -960,13 +949,13 @@ function DocumentListRow({
   onRename: (id: Id<"documents">, title: string) => void;
 }) {
   const router = useRouter();
+  const { organization } = useOrganization();
   const duplicate = useMutation(api.documents.duplicate);
   const archive = useMutation(api.documents.archive);
   const restore = useMutation(api.documents.restore);
   const remove = useMutation(api.documents.remove);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
-
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
@@ -1000,10 +989,16 @@ function DocumentListRow({
     try {
       await remove({ id: document._id });
       toast.success("Deleted");
-    } catch {
-      toast.error("Couldn't delete.");
+    } catch (err: any) {
+      toast.error(err?.data ?? "Couldn't delete.");
     }
   };
+
+  const orgLabel = document.organizationId
+    ? organization?.id === document.organizationId
+      ? organization.name
+      : "Shared"
+    : null;
 
   return (
     <>
@@ -1017,15 +1012,12 @@ function DocumentListRow({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Icon */}
         <span
           className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0"
           style={{ background: "rgba(255,255,255,0.06)" }}
         >
           {document.icon ?? "📄"}
         </span>
-
-        {/* Title + meta */}
         <div className="flex-1 min-w-0">
           <p
             className="text-[13px] font-medium truncate"
@@ -1042,15 +1034,12 @@ function DocumentListRow({
             {document.isArchived && (
               <span
                 className="text-[10px] font-medium px-1.5 py-px rounded-md"
-                style={{
-                  background: colors.warningBg,
-                  color: colors.warning,
-                }}
+                style={{ background: colors.warningBg, color: colors.warning }}
               >
                 Archived
               </span>
             )}
-            {document.organizationId && (
+            {orgLabel && (
               <span
                 className="text-[10px] font-medium px-1.5 py-px rounded-md"
                 style={{
@@ -1058,10 +1047,9 @@ function DocumentListRow({
                   color: colors.accentLight,
                 }}
               >
-                Shared
+                {orgLabel}
               </span>
             )}
-            {/* Collection badges */}
             {collections &&
               (collections as Doc<"collections">[]).slice(0, 2).map((col) => (
                 <span
@@ -1081,7 +1069,6 @@ function DocumentListRow({
           </div>
         </div>
 
-        {/* AI summary snippet */}
         {document.aiSummaryStatus === "done" && document.aiSummary && (
           <p
             className="hidden lg:block text-[11px] max-w-[200px] truncate shrink-0"
@@ -1091,7 +1078,6 @@ function DocumentListRow({
           </p>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={(e) => {
@@ -1234,7 +1220,6 @@ export default function DocumentsPage() {
     title: string;
   } | null>(null);
   const [collectionsPanelOpen, setCollectionsPanelOpen] = useState(false);
-
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [filter, setFilter] = useState<Filter>("all");
@@ -1247,31 +1232,19 @@ export default function DocumentsPage() {
     title: string;
   } | null>(null);
 
-  const searchResults = useQuery(
-    api.documents.search,
-    isLoaded && isSignedIn && debouncedSearch.trim()
-      ? { query: debouncedSearch }
-      : "skip"
-  );
-
   const allDocs = useQuery(
     api.documents.getAll,
     isLoaded && isSignedIn ? { includeArchived: false } : "skip"
   );
-
   const archivedDocs = useQuery(
     api.documents.getArchived,
     isLoaded && isSignedIn ? {} : "skip"
   );
 
   const displayDocs = useMemo(() => {
-    // Combine active + archived based on toggle
     const activeDocs = allDocs ?? [];
     const archived = showArchived ? (archivedDocs ?? []) : [];
-
     const combined = [...activeDocs, ...archived];
-
-    // Deduplicate (shouldn't be needed but safe)
     const seen = new Set<string>();
     const source = combined.filter((d) => {
       if (seen.has(d._id)) return false;
@@ -1279,21 +1252,18 @@ export default function DocumentsPage() {
       return true;
     });
 
-    // Apply search filter
     const searchLower = debouncedSearch.trim().toLowerCase();
     let filtered = searchLower
       ? source.filter((d) => d.title.toLowerCase().includes(searchLower))
       : source;
 
-    // Apply org/mine filter
     filtered = filtered.filter((d) => {
       if (filter === "mine") return !d.organizationId;
       if (filter === "org")
-        return organization && d.organizationId === organization.id;
+        return !!(organization && d.organizationId === organization.id);
       return true;
     });
 
-    // Sort
     return [...filtered].sort((a, b) => {
       switch (sort) {
         case "newest":
@@ -1315,20 +1285,16 @@ export default function DocumentsPage() {
     debouncedSearch,
     filter,
     sort,
-    showArchived,
     organization,
   ]);
 
   const isLoading =
     allDocs === undefined || (showArchived && archivedDocs === undefined);
-
-  // Stats
   const totalDocs = allDocs?.length ?? 0;
   const archivedCount = useQuery(
     api.documents.getArchived,
     isLoaded && isSignedIn ? {} : "skip"
   );
-
   const sharedCount = allDocs?.filter((d) => d.organizationId).length ?? 0;
 
   const handleNewDocument = async () => {
@@ -1357,7 +1323,6 @@ export default function DocumentsPage() {
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
-
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, {
         method: "POST",
@@ -1394,6 +1359,9 @@ export default function DocumentsPage() {
     name_desc: "Name Z–A",
   };
 
+  // ── Filter label — pakai nama org kalau ada ───────────────────────────────
+  const orgFilterLabel = organization?.name ?? "Org";
+
   return (
     <div className="flex flex-col h-full" style={{ background: colors.bg }}>
       {/* Header */}
@@ -1414,6 +1382,12 @@ export default function DocumentsPage() {
               style={{ color: colors.textMuted }}
             >
               {totalDocs} active
+              {sharedCount > 0 && (
+                <span style={{ color: colors.accentLight }}>
+                  {" "}
+                  · {sharedCount} shared
+                </span>
+              )}
               {showArchived &&
                 archivedDocs !== undefined &&
                 archivedDocs.length > 0 && (
@@ -1425,7 +1399,6 @@ export default function DocumentsPage() {
             </p>
           )}
         </div>
-
         <button
           onClick={handleNewDocument}
           disabled={isCreating}
@@ -1517,7 +1490,7 @@ export default function DocumentsPage() {
                   color: filter === f ? colors.accentLight : colors.textMuted,
                 }}
               >
-                {f === "all" ? "All" : f === "mine" ? "Mine" : "Shared"}
+                {f === "all" ? "All" : f === "mine" ? "Mine" : orgFilterLabel}
               </button>
             )
           )}
@@ -1575,6 +1548,7 @@ export default function DocumentsPage() {
             </span>
           )}
         </button>
+
         {/* Collections panel toggle */}
         <button
           onClick={() => setCollectionsPanelOpen((v) => !v)}
@@ -1706,14 +1680,12 @@ export default function DocumentsPage() {
           )}
         </div>
 
-        {/* Collections side panel */}
         <CollectionsPanel
           open={collectionsPanelOpen}
           onClose={() => setCollectionsPanelOpen(false)}
         />
       </div>
 
-      {/* Add to collection dialog */}
       {addColDialog && (
         <AddToCollectionDialog
           open={!!addColDialog}
@@ -1722,7 +1694,6 @@ export default function DocumentsPage() {
           documentTitle={addColDialog.title}
         />
       )}
-
       {renameDialog && (
         <RenameDialog
           open={!!renameDialog}

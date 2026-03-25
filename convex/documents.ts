@@ -3,24 +3,59 @@ import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internalMutation } from "./_generated/server";
 
-// ── Queries ──────────────────────────────────────────────────────────────────
+// ── Access helpers ────────────────────────────────────────────────────────────
+
+function getOrgId(identity: any): string | undefined {
+  return identity.organization_id as string | undefined;
+}
+
+function hasAccess(
+  doc: { ownerId: string; organizationId?: string },
+  identity: any
+): boolean {
+  if (doc.ownerId === identity.subject) return true;
+  const orgId = getOrgId(identity);
+  return !!(orgId && doc.organizationId && doc.organizationId === orgId);
+}
+
+function isOwner(doc: { ownerId: string }, identity: any): boolean {
+  return doc.ownerId === identity.subject;
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
 
 export const getAll = query({
-  args: {
-    includeArchived: v.optional(v.boolean()),
-  },
+  args: { includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
-    const docs = await ctx.db
+    const orgId = getOrgId(identity);
+
+    const personalDocs = await ctx.db
       .query("documents")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .order("desc")
       .collect();
 
-    if (args.includeArchived) return docs;
-    return docs.filter((d) => !d.isArchived);
+    let orgDocs: typeof personalDocs = [];
+    if (orgId) {
+      orgDocs = await ctx.db
+        .query("documents")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+        .order("desc")
+        .collect();
+    }
+
+    const seen = new Set<string>();
+    const all = [...personalDocs, ...orgDocs].filter((d) => {
+      if (seen.has(d._id)) return false;
+      seen.add(d._id);
+      return true;
+    });
+
+    if (args.includeArchived) return all;
+    return all.filter((d) => !d.isArchived);
   },
 });
 
@@ -28,14 +63,33 @@ export const getArchived = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
-    return ctx.db
+    const orgId = getOrgId(identity);
+
+    const personalArchived = await ctx.db
       .query("documents")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .filter((q) => q.eq(q.field("isArchived"), true))
       .order("desc")
       .collect();
+
+    let orgArchived: typeof personalArchived = [];
+    if (orgId) {
+      orgArchived = await ctx.db
+        .query("documents")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+        .filter((q) => q.eq(q.field("isArchived"), true))
+        .order("desc")
+        .collect();
+    }
+
+    const seen = new Set<string>();
+    return [...personalArchived, ...orgArchived].filter((d) => {
+      if (seen.has(d._id)) return false;
+      seen.add(d._id);
+      return true;
+    });
   },
 });
 
@@ -43,16 +97,37 @@ export const getRecent = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
-    const docs = await ctx.db
+    const orgId = getOrgId(identity);
+    const limit = args.limit ?? 6;
+
+    const personalDocs = await ctx.db
       .query("documents")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .filter((q) => q.eq(q.field("isArchived"), false))
       .order("desc")
-      .take(args.limit ?? 6);
+      .take(limit);
 
-    return docs;
+    let orgDocs: typeof personalDocs = [];
+    if (orgId) {
+      orgDocs = await ctx.db
+        .query("documents")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+        .filter((q) => q.eq(q.field("isArchived"), false))
+        .order("desc")
+        .take(limit);
+    }
+
+    const seen = new Set<string>();
+    return [...personalDocs, ...orgDocs]
+      .filter((d) => {
+        if (seen.has(d._id)) return false;
+        seen.add(d._id);
+        return true;
+      })
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, limit);
   },
 });
 
@@ -60,7 +135,10 @@ export const getByOrg = query({
   args: { organizationId: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
+
+    const orgId = getOrgId(identity);
+    if (orgId !== args.organizationId) return [];
 
     return ctx.db
       .query("documents")
@@ -69,7 +147,7 @@ export const getByOrg = query({
       )
       .filter((q) => q.eq(q.field("isArchived"), false))
       .order("desc")
-      .take(6);
+      .take(20);
   },
 });
 
@@ -77,10 +155,12 @@ export const getById = query({
   args: { id: v.id("documents") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return null;
 
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
+    if (!hasAccess(doc, identity)) return null;
+
     return doc;
   },
 });
@@ -89,15 +169,34 @@ export const search = query({
   args: { query: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
+
+    const orgId = getOrgId(identity);
 
     if (!args.query.trim()) {
-      return ctx.db
+      const personalDocs = await ctx.db
         .query("documents")
         .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
         .filter((q) => q.eq(q.field("isArchived"), false))
         .order("desc")
         .take(20);
+
+      let orgDocs: typeof personalDocs = [];
+      if (orgId) {
+        orgDocs = await ctx.db
+          .query("documents")
+          .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+          .filter((q) => q.eq(q.field("isArchived"), false))
+          .order("desc")
+          .take(20);
+      }
+
+      const seen = new Set<string>();
+      return [...personalDocs, ...orgDocs].filter((d) => {
+        if (seen.has(d._id)) return false;
+        seen.add(d._id);
+        return true;
+      });
     }
 
     return ctx.db
@@ -126,7 +225,7 @@ export const getCollectionsForDocument = query({
   },
 });
 
-// ── Mutations ─────────────────────────────────────────────────────────────────
+// ── Mutations — tetap throw (mutations tidak boleh silent fail) ────────────────
 
 export const create = mutation({
   args: {
@@ -140,7 +239,7 @@ export const create = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    const id = await ctx.db.insert("documents", {
+    return ctx.db.insert("documents", {
       title: args.title,
       ownerId: identity.subject,
       organizationId: args.organizationId,
@@ -149,8 +248,6 @@ export const create = mutation({
       icon: args.icon ?? "📄",
       isArchived: false,
     });
-
-    return id;
   },
 });
 
@@ -167,12 +264,12 @@ export const update = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    const { id, ...fields } = args;
-    const doc = await ctx.db.get(id);
+    const doc = await ctx.db.get(args.id);
     if (!doc) throw new ConvexError("Document not found");
-    if (doc.ownerId !== identity.subject)
+    if (!hasAccess(doc, identity))
       throw new ConvexError("You don't have access to this document");
 
+    const { id, ...fields } = args;
     const patch: Record<string, unknown> = {};
     if (fields.title !== undefined) patch.title = fields.title;
     if (fields.icon !== undefined) patch.icon = fields.icon;
@@ -193,7 +290,7 @@ export const archive = mutation({
 
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new ConvexError("Document not found");
-    if (doc.ownerId !== identity.subject)
+    if (!hasAccess(doc, identity))
       throw new ConvexError("You don't have access to this document");
 
     await ctx.db.patch(args.id, { isArchived: true });
@@ -208,7 +305,7 @@ export const restore = mutation({
 
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new ConvexError("Document not found");
-    if (doc.ownerId !== identity.subject)
+    if (!hasAccess(doc, identity))
       throw new ConvexError("You don't have access to this document");
 
     await ctx.db.patch(args.id, { isArchived: false });
@@ -223,10 +320,9 @@ export const remove = mutation({
 
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new ConvexError("Document not found");
-    if (doc.ownerId !== identity.subject)
-      throw new ConvexError("You don't have access to this document");
+    if (!isOwner(doc, identity))
+      throw new ConvexError("Only the document owner can delete this document");
 
-    // Delete from storage if exists
     if (doc.storageId) {
       try {
         await ctx.storage.delete(doc.storageId as any);
@@ -235,7 +331,6 @@ export const remove = mutation({
       }
     }
 
-    // Remove all collection junctions
     const junctions = await ctx.db
       .query("documentCollections")
       .withIndex("by_document_id", (q) => q.eq("documentId", args.id))
@@ -254,8 +349,10 @@ export const duplicate = mutation({
 
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new ConvexError("Document not found");
+    if (!hasAccess(doc, identity))
+      throw new ConvexError("You don't have access to this document");
 
-    const newId = await ctx.db.insert("documents", {
+    return ctx.db.insert("documents", {
       title: `Copy of ${doc.title}`,
       ownerId: identity.subject,
       organizationId: doc.organizationId,
@@ -264,8 +361,6 @@ export const duplicate = mutation({
       icon: doc.icon,
       isArchived: false,
     });
-
-    return newId;
   },
 });
 
