@@ -16,10 +16,15 @@ export async function POST(req: NextRequest) {
       userAvatar,
     } = await req.json();
 
-    // Use NEXT_PUBLIC_APP_URL in prod; fall back to request origin for local dev
+    // App URL — used for callback and file proxy (stays on Vercel/Next.js)
     const appUrl = (
       process.env.NEXT_PUBLIC_APP_URL ??
       `${req.nextUrl.protocol}//${req.nextUrl.host}`
+    ).replace(/\/$/, "");
+
+    // OnlyOffice server URL — browser connects DIRECTLY here (WebSocket needs direct connection)
+    const ooServerUrl = (
+      process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL ?? ""
     ).replace(/\/$/, "");
 
     const proxiedUrl = `${appUrl}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
@@ -86,7 +91,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       config,
-      serverUrl: `${appUrl}/api/oo-proxy`,
+      // Return direct OO server URL — browser must connect directly for WebSocket
+      serverUrl: ooServerUrl,
     });
   } catch (err) {
     console.error("[onlyoffice-token] error:", err);
