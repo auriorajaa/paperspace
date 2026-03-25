@@ -3,21 +3,23 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
+import { useUser, useOrganization, useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeftIcon,
   AlertCircleIcon,
   RefreshCwIcon,
-  CheckIcon,
   PencilIcon,
   WifiIcon,
   XIcon,
+  BuildingIcon,
+  LockIcon,
 } from "lucide-react";
 import { OnlyOfficeEditor } from "@/components/OnlyOfficeEditor";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
-import { colors, shadows } from "@/lib/design-tokens";
+import { colors } from "@/lib/design-tokens";
 
 // ── Inline Title ──────────────────────────────────────────────────────────────
 
@@ -113,7 +115,7 @@ function InlineTitle({
             setValue(initialValue);
             setEditing(false);
           }}
-          className="text-[11px] px-2 py-1 rounded-lg transition-colors"
+          className="text-[11px] px-2 py-1 rounded-lg"
           style={{ color: colors.textMuted }}
         >
           <XIcon className="w-3.5 h-3.5" />
@@ -144,10 +146,53 @@ function InlineTitle({
         {value}
       </span>
       <PencilIcon
-        className="w-3 h-3 shrink-0 transition-opacity"
+        className="w-3 h-3 shrink-0"
         style={{ color: colors.accentLight, opacity: 0.6 }}
       />
     </button>
+  );
+}
+
+// ── Error States ──────────────────────────────────────────────────────────────
+
+function ErrorState({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center h-screen gap-5 p-8 text-center"
+      style={{ background: colors.bg }}
+    >
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: `1px solid ${colors.border}`,
+        }}
+      >
+        {icon}
+      </div>
+      <div className="space-y-1.5 max-w-sm">
+        <p className="text-sm font-semibold" style={{ color: colors.text }}>
+          {title}
+        </p>
+        <div
+          className="text-xs leading-relaxed"
+          style={{ color: colors.textMuted }}
+        >
+          {description}
+        </div>
+      </div>
+      {action && <div className="flex items-center gap-2">{action}</div>}
+    </div>
   );
 }
 
@@ -157,8 +202,15 @@ export default function DocumentEditorPage() {
   const params = useParams();
   const router = useRouter();
   const documentId = params.documentId as Id<"documents">;
+  const { isLoaded, isSignedIn } = useAuth();
 
-  const document = useQuery(api.documents.getById, { id: documentId });
+  const { user } = useUser();
+  const { organization } = useOrganization();
+
+  const document = useQuery(
+    api.documents.getById,
+    isLoaded && isSignedIn ? { id: documentId } : "skip" // ← guard
+  );
   const updateDocument = useMutation(api.documents.update);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
 
@@ -206,7 +258,6 @@ export default function DocumentEditorPage() {
           mimeType:
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         });
-
         const uploadUrl = await generateUploadUrl();
         const res = await fetch(uploadUrl, {
           method: "POST",
@@ -223,13 +274,14 @@ export default function DocumentEditorPage() {
         setFileUrl(url);
       } catch (err) {
         console.error(err);
-        toast.error("Couldn't initialize document.");
+        toast.error("Couldn't initialize document. Please try again.");
       }
     };
     resolve();
   }, [document?.storageId, document?.fileUrl]);
 
-  // Loading
+  // ── Loading ───────────────────────────────────────────────────────────────
+
   if (document === undefined) {
     return (
       <div className="flex flex-col h-screen" style={{ background: colors.bg }}>
@@ -262,42 +314,50 @@ export default function DocumentEditorPage() {
     );
   }
 
-  // Not found
+  // ── Not found or no access ────────────────────────────────────────────────
+
   if (document === null) {
+    // If user is in personal mode (no org), hint them to switch
+    const hint = !organization
+      ? "If this is a shared document, switch to your organization and try again."
+      : "This document doesn't exist or has been deleted.";
+
     return (
-      <div
-        className="flex flex-col items-center justify-center h-screen gap-4"
-        style={{ background: colors.bg }}
-      >
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center"
-          style={{ background: colors.dangerBg }}
-        >
-          <AlertCircleIcon
-            className="w-6 h-6"
-            style={{ color: colors.danger }}
-          />
-        </div>
-        <p className="text-sm font-semibold" style={{ color: colors.text }}>
-          Document not found
-        </p>
-        <p className="text-xs" style={{ color: colors.textMuted }}>
-          This document may have been deleted or moved.
-        </p>
-        <button
-          onClick={() => router.push("/documents")}
-          className="text-xs font-medium px-4 py-2 rounded-xl transition-colors"
-          style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textSecondary,
-            border: `1px solid ${colors.border}`,
-          }}
-        >
-          Back to Documents
-        </button>
-      </div>
+      <ErrorState
+        icon={
+          <LockIcon className="w-6 h-6" style={{ color: colors.textDim }} />
+        }
+        title="Document not found or access denied"
+        description={hint}
+        action={
+          <>
+            <button
+              onClick={() => router.push("/documents")}
+              className="text-xs font-medium px-4 py-2 rounded-xl transition-colors"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: colors.textSecondary,
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              ← Back to Documents
+            </button>
+            {!organization && (
+              <span
+                className="flex items-center gap-1.5 text-xs"
+                style={{ color: colors.textDim }}
+              >
+                <BuildingIcon className="w-3.5 h-3.5" />
+                Switch org via the account menu
+              </span>
+            )}
+          </>
+        }
+      />
     );
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -312,7 +372,6 @@ export default function DocumentEditorPage() {
           background: colors.bgSidebar,
         }}
       >
-        {/* Back */}
         <Link
           href="/documents"
           className="flex items-center gap-1 text-xs transition-colors shrink-0"
@@ -328,13 +387,27 @@ export default function DocumentEditorPage() {
 
         <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
 
-        {/* Inline title */}
         <InlineTitle
           initialValue={document.title}
           onSave={async (title) => {
             await updateDocument({ id: documentId, title });
           }}
         />
+
+        {/* Org badge */}
+        {document.organizationId && organization && (
+          <span
+            className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
+            style={{
+              background: colors.accentBg,
+              color: colors.accentLight,
+              border: `1px solid ${colors.accentBorder}`,
+            }}
+          >
+            <BuildingIcon className="w-2.5 h-2.5" />
+            {organization.name}
+          </span>
+        )}
 
         {/* Status */}
         <div className="ml-auto flex items-center gap-3">
@@ -389,18 +462,12 @@ export default function DocumentEditorPage() {
               >
                 Editor couldn&apos;t load
               </p>
-              <p className="text-xs" style={{ color: colors.textMuted }}>
-                Make sure ONLYOFFICE is running at{" "}
-                <code
-                  className="font-mono px-1 rounded text-[11px]"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: colors.accentLight,
-                  }}
-                >
-                  localhost:80
-                </code>
-                . If you&apos;re using IDM, disable the extension.
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: colors.textMuted }}
+              >
+                If you&apos;re using a browser extension like IDM, try disabling
+                it.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -420,10 +487,10 @@ export default function DocumentEditorPage() {
                 Retry
               </button>
               <a
-                href="http://localhost/healthcheck"
+                href="http://flowing-sharp-martin.ngrok-free.app/healthcheck"
                 target="_blank"
                 rel="noopener"
-                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
                 style={{ color: colors.textMuted }}
               >
                 <WifiIcon className="w-3.5 h-3.5" />
@@ -439,6 +506,10 @@ export default function DocumentEditorPage() {
             fileKey={`doc-${documentId}-${document.storageId?.slice(-8) ?? document._creationTime}`}
             documentId={documentId}
             storageId={document.storageId}
+            // ── Pass Clerk user info ──────────────────────────────────────────
+            userId={user?.id}
+            userName={user?.fullName ?? user?.firstName ?? undefined}
+            userAvatar={user?.imageUrl}
             onReady={() => setEditorReady(true)}
             onError={() => {
               setEditorError(true);

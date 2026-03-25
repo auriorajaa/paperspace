@@ -8,14 +8,13 @@ export const getAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
     const collections = await ctx.db
       .query("collections")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .collect();
 
-    // Get document counts
     const withCounts = await Promise.all(
       collections.map(async (col) => {
         const junctions = await ctx.db
@@ -26,7 +25,6 @@ export const getAll = query({
       })
     );
 
-    // Sort: favorites first, then by sortOrder, then by creation time
     return withCounts.sort((a, b) => {
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
@@ -41,7 +39,7 @@ export const getRecent = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
     const collections = await ctx.db
       .query("collections")
@@ -49,7 +47,6 @@ export const getRecent = query({
       .order("desc")
       .take(args.limit ?? 4);
 
-    // Same as getAll — compute document counts
     const withCounts = await Promise.all(
       collections.map(async (col) => {
         const junctions = await ctx.db
@@ -68,7 +65,7 @@ export const getById = query({
   args: { id: v.id("collections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return null;
 
     return ctx.db.get(args.id);
   },
@@ -78,7 +75,7 @@ export const getDocuments = query({
   args: { collectionId: v.id("collections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
     const junctions = await ctx.db
       .query("documentCollections")
@@ -97,7 +94,7 @@ export const getDocuments = query({
   },
 });
 
-// ── Mutations ─────────────────────────────────────────────────────────────────
+// ── Mutations — tetap throw ───────────────────────────────────────────────────
 
 export const create = mutation({
   args: {
@@ -113,7 +110,6 @@ export const create = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // Check for duplicate name
     const existing = await ctx.db
       .query("collections")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
@@ -158,7 +154,6 @@ export const update = mutation({
     if (col.ownerId !== identity.subject)
       throw new ConvexError("You don't have access to this collection");
 
-    // Check duplicate name (excluding self)
     if (args.name && args.name !== col.name) {
       const existing = await ctx.db
         .query("collections")
@@ -211,7 +206,6 @@ export const remove = mutation({
     if (col.ownerId !== identity.subject)
       throw new ConvexError("You don't have access to this collection");
 
-    // Remove all junctions (do NOT delete the documents)
     const junctions = await ctx.db
       .query("documentCollections")
       .withIndex("by_collection_id", (q) => q.eq("collectionId", args.id))
@@ -231,7 +225,6 @@ export const addDocument = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // Check duplicate
     const existing = await ctx.db
       .query("documentCollections")
       .withIndex("by_document_and_collection", (q) =>

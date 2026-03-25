@@ -30,7 +30,7 @@ export const getAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
     return ctx.db
       .query("templates")
@@ -44,7 +44,7 @@ export const getRecent = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
 
     return ctx.db
       .query("templates")
@@ -58,13 +58,27 @@ export const getById = query({
   args: { id: v.id("templates") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return null;
 
     return ctx.db.get(args.id);
   },
 });
 
-// ── Mutations ─────────────────────────────────────────────────────────────────
+export const getGeneratedCount = query({
+  args: { templateId: v.id("templates") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return 0;
+
+    const docs = await ctx.db
+      .query("generatedDocuments")
+      .withIndex("by_template_id", (q) => q.eq("templateId", args.templateId))
+      .collect();
+    return docs.length;
+  },
+});
+
+// ── Mutations — tetap throw ───────────────────────────────────────────────────
 
 export const create = mutation({
   args: {
@@ -182,8 +196,6 @@ export const saveGeneratedDocument = mutation({
   },
 });
 
-// ── Internal mutations (dipanggil dari HTTP actions, tanpa auth) ──────────────
-
 export const updateFileStorageInternal = internalMutation({
   args: {
     id: v.id("templates"),
@@ -195,18 +207,5 @@ export const updateFileStorageInternal = internalMutation({
       storageId: args.storageId,
       fileUrl: args.fileUrl,
     });
-  },
-});
-
-export const getGeneratedCount = query({
-  args: { templateId: v.id("templates") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
-    const docs = await ctx.db
-      .query("generatedDocuments")
-      .withIndex("by_template_id", (q) => q.eq("templateId", args.templateId))
-      .collect();
-    return docs.length;
   },
 });

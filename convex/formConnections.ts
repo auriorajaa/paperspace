@@ -22,7 +22,7 @@ export const getAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     const connections = await ctx.db
       .query("formConnections")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
@@ -42,7 +42,7 @@ export const getById = query({
   args: { id: v.id("formConnections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     return ctx.db.get(args.id);
   },
 });
@@ -51,7 +51,7 @@ export const getByTemplateId = query({
   args: { templateId: v.id("templates") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     return ctx.db
       .query("formConnections")
       .withIndex("by_template_id", (q) => q.eq("templateId", args.templateId))
@@ -73,7 +73,7 @@ export const getSubmissions = query({
   args: { connectionId: v.id("formConnections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     return ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_id", (q) =>
@@ -88,7 +88,7 @@ export const getAllSubmissions = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     return ctx.db
       .query("formSubmissions")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
@@ -118,7 +118,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     const scriptToken = generateToken();
     return ctx.db.insert("formConnections", {
       ownerId: identity.subject,
@@ -153,7 +153,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
@@ -170,7 +170,7 @@ export const remove = mutation({
   args: { id: v.id("formConnections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    if (!identity) return [];
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");

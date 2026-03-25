@@ -1015,7 +1015,10 @@ export default function ConnectFormPage() {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const templateId = params.templateId as Id<"templates">;
 
-  const template = useQuery(api.templates.getById, { id: templateId });
+  const template = useQuery(
+    api.templates.getById,
+    isLoaded && isSignedIn ? { id: templateId } : "skip" // ← guard
+  );
   const connections = useQuery(
     api.formConnections.getByTemplateId,
     isLoaded && isSignedIn ? { templateId } : "skip"

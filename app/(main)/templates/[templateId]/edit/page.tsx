@@ -23,6 +23,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import { detectPlaceholders } from "@/lib/placeholder-detector";
 import { colors } from "@/lib/design-tokens";
+import { useAuth } from "@clerk/nextjs";
 
 async function extractAllText(buffer: ArrayBuffer): Promise<string> {
   const JSZip = (await import("jszip")).default;
@@ -617,7 +618,12 @@ export default function TemplateEditPage() {
   const router = useRouter();
   const templateId = params.templateId as Id<"templates">;
 
-  const template = useQuery(api.templates.getById, { id: templateId });
+  const { isLoaded, isSignedIn } = useAuth();
+
+  const template = useQuery(
+    api.templates.getById,
+    isLoaded && isSignedIn ? { id: templateId } : "skip" // ← guard
+  );
   const updateTemplate = useMutation(api.templates.update);
 
   const [editorError, setEditorError] = useState(false);
@@ -851,7 +857,7 @@ export default function TemplateEditPage() {
                 Editor couldn&apos;t load
               </p>
               <p className="text-xs" style={{ color: colors.textMuted }}>
-                Make sure ONLYOFFICE is running at{" "}
+                Trying to connect to{" "}
                 <code
                   className="font-mono px-1 rounded text-[11px]"
                   style={{
@@ -859,7 +865,7 @@ export default function TemplateEditPage() {
                     color: colors.accentLight,
                   }}
                 >
-                  localhost:80
+                  server
                 </code>
               </p>
             </div>
@@ -880,7 +886,7 @@ export default function TemplateEditPage() {
                 Retry
               </button>
               <a
-                href="http://localhost/healthcheck"
+                href="http://flowing-sharp-martin.ngrok-free.app/healthcheck"
                 target="_blank"
                 rel="noopener"
                 className="text-xs font-medium px-3 py-2 rounded-xl"
