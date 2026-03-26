@@ -44,6 +44,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Link from "next/link";
+import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
+
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 
@@ -328,7 +330,17 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
                     border: `1px solid ${col.color ? `${col.color}35` : "rgba(255,255,255,0.08)"}`,
                   }}
                 >
-                  <span>{col.icon}</span>
+                  <span>
+                    {(() => {
+                      const Icon = getIconComponent(col.icon ?? "folder");
+                      return (
+                        <Icon
+                          className="w-3 h-3"
+                          style={{ color: col.color ?? "#6366f1" }}
+                        />
+                      );
+                    })()}
+                  </span>
                   <span>{col.name}</span>
                 </span>
               ))
@@ -414,7 +426,16 @@ function CollectionRow({
           className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
           style={{ background: `${accentColor}18` }}
         >
-          {col.icon ?? "📁"}
+          {/* {col.icon ?? "📁"} */}
+          {(() => {
+            const Icon = getIconComponent(col.icon ?? "folder");
+            return (
+              <Icon
+                className="w-4 h-4"
+                style={{ color: col.color ?? "#6366f1" }}
+              />
+            );
+          })()}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
