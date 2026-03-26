@@ -885,15 +885,15 @@ export default function TemplateEditPage() {
                 <RefreshCwIcon className="w-3.5 h-3.5" />
                 Retry
               </button>
-              <a
-                href="http://flowing-sharp-martin.ngrok-free.app/healthcheck"
+              {/* <a
+                href="https://onlyoffice.safenetindo.site/healthcheck"
                 target="_blank"
                 rel="noopener"
                 className="text-xs font-medium px-3 py-2 rounded-xl"
                 style={{ color: colors.textMuted }}
               >
                 Check server
-              </a>
+              </a> */}
             </div>
           </div>
         ) : (

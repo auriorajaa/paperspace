@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useOrganization, useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   PlusIcon,
   FileTextIcon,
@@ -20,16 +20,18 @@ import {
   ChevronDownIcon,
   ArchiveRestoreIcon,
   FolderPlusIcon,
-  ClockIcon,
-  BuildingIcon,
   CheckIcon,
   XIcon,
   ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
   PencilIcon,
+  UsersIcon,
+  FileIcon,
+  MinusIcon,
+  CheckSquareIcon,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, differenceInHours } from "date-fns";
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -57,7 +59,23 @@ import {
 import { useDebounce } from "@/lib/useDebounce";
 import { colors, shadows } from "@/lib/design-tokens";
 
-// ── Add to Collection Dialog ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** <24h → "2 hours ago", ≥24h → "Mar 26, 2:30 PM" */
+function smartDate(ts: number): string {
+  if (differenceInHours(Date.now(), ts) < 24) {
+    return formatDistanceToNow(new Date(ts), { addSuffix: true });
+  }
+  return format(new Date(ts), "MMM d, h:mm a");
+}
+
+const PAGE_SIZE = 15;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Add-to-collection dialog
+// ─────────────────────────────────────────────────────────────────────────────
 
 function AddToCollectionDialog({
   open,
@@ -80,7 +98,6 @@ function AddToCollectionDialog({
     documentId,
   });
   const [loading, setLoading] = useState<string | null>(null);
-
   const existingIds = new Set(
     (docCollections ?? []).map((c) => (c as Doc<"collections">)._id)
   );
@@ -91,7 +108,7 @@ function AddToCollectionDialog({
       await addDocument({ collectionId, documentId });
       toast.success("Added to collection");
     } catch (err: any) {
-      toast.error(err?.message ?? "Couldn't add. Try again.");
+      toast.error(err?.message ?? "Couldn't add.");
     } finally {
       setLoading(null);
     }
@@ -104,14 +121,14 @@ function AddToCollectionDialog({
           <DialogTitle>Add to collection</DialogTitle>
         </DialogHeader>
         <p
-          className="text-xs mb-3 truncate"
+          className="text-[12px] mb-3 truncate"
           style={{ color: colors.textMuted }}
         >
           {documentTitle}
         </p>
-        <div className="space-y-1.5 max-h-60 overflow-y-auto">
+        <div className="space-y-1.5 max-h-64 overflow-y-auto">
           {collections === undefined ? (
-            <div className="flex items-center justify-center py-6">
+            <div className="flex justify-center py-8">
               <div
                 className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
                 style={{ borderColor: colors.accentLight }}
@@ -119,10 +136,10 @@ function AddToCollectionDialog({
             </div>
           ) : collections.length === 0 ? (
             <p
-              className="text-xs text-center py-6"
+              className="text-[12px] text-center py-8"
               style={{ color: colors.textDim }}
             >
-              No collections yet. Create one first.
+              No collections yet.
             </p>
           ) : (
             (
@@ -141,8 +158,7 @@ function AddToCollectionDialog({
                       ? `${col.color ?? colors.accent}12`
                       : "rgba(255,255,255,0.02)",
                     border: `1px solid ${isIn ? `${col.color ?? colors.accent}30` : colors.border}`,
-                    cursor: isIn ? "default" : "pointer",
-                    opacity: loading && !isLoading ? 0.5 : 1,
+                    minHeight: 48,
                   }}
                   onMouseEnter={(e) => {
                     if (!isIn && !loading)
@@ -156,23 +172,23 @@ function AddToCollectionDialog({
                   }}
                 >
                   <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
                     style={{ background: `${col.color ?? colors.accent}18` }}
                   >
                     {col.icon ?? "📁"}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
-                      className="text-xs font-medium truncate"
+                      className="text-[13px] font-medium truncate"
                       style={{ color: colors.text }}
                     >
                       {col.name}
                     </p>
                     <p
-                      className="text-[10px]"
+                      className="text-[11px]"
                       style={{ color: colors.textDim }}
                     >
-                      {col.documentCount ?? 0} docs
+                      {col.documentCount ?? 0} papers
                     </p>
                   </div>
                   {isLoading ? (
@@ -182,7 +198,7 @@ function AddToCollectionDialog({
                     />
                   ) : isIn ? (
                     <CheckIcon
-                      className="w-3.5 h-3.5 shrink-0"
+                      className="w-4 h-4 shrink-0"
                       style={{ color: col.color ?? colors.accentLight }}
                     />
                   ) : null}
@@ -196,7 +212,9 @@ function AddToCollectionDialog({
   );
 }
 
-// ── Rename Dialog ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Rename dialog
+// ─────────────────────────────────────────────────────────────────────────────
 
 function RenameDialog({
   open,
@@ -236,7 +254,7 @@ function RenameDialog({
       toast.success("Renamed");
       onOpenChange(false);
     } catch {
-      toast.error("Couldn't rename. Try again.");
+      toast.error("Couldn't rename.");
     } finally {
       setSaving(false);
     }
@@ -246,7 +264,7 @@ function RenameDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Rename document</DialogTitle>
+          <DialogTitle>Rename paper</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
           <input
@@ -263,12 +281,12 @@ function RenameDialog({
               border: `1px solid ${colors.accentBorder}`,
               color: colors.text,
             }}
-            placeholder="Document name"
+            placeholder="Paper name"
           />
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => onOpenChange(false)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium"
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium"
               style={{
                 color: colors.textMuted,
                 background: "rgba(255,255,255,0.04)",
@@ -280,7 +298,7 @@ function RenameDialog({
             <button
               onClick={handleSave}
               disabled={saving || !value.trim()}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium"
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium"
               style={{
                 background: colors.accentBg,
                 color: colors.accentLight,
@@ -297,7 +315,50 @@ function RenameDialog({
   );
 }
 
-// ── Collections Panel ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk delete confirm
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BulkDeleteDialog({
+  open,
+  count,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  count: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(v) => !v && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Delete {count} paper{count !== 1 ? "s" : ""}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently deletes {count} paper{count !== 1 ? "s" : ""}. This
+            cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={onConfirm}
+          >
+            Delete {count} paper{count !== 1 ? "s" : ""}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Collections panel — desktop side / mobile bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
 
 function CollectionsPanel({
   open,
@@ -314,334 +375,516 @@ function CollectionsPanel({
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  return (
-    <div
-      className="shrink-0 flex flex-col transition-all duration-200 overflow-hidden"
-      style={{
-        width: open ? 280 : 0,
-        borderLeft: open ? `1px solid ${colors.borderSubtle}` : "none",
-        background: colors.bgSidebar,
-      }}
-    >
-      {open && (
-        <>
-          <div
-            className="flex items-center justify-between px-4 py-3 shrink-0"
-            style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+  const inner = (
+    <>
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0"
+        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+      >
+        <div className="flex items-center gap-2">
+          <FolderIcon
+            className="w-3.5 h-3.5"
+            style={{ color: colors.accentLight }}
+          />
+          <span
+            className="text-[13px] font-semibold"
+            style={{ color: colors.textSecondary }}
           >
-            <div className="flex items-center gap-2">
-              <FolderIcon
-                className="w-3.5 h-3.5"
-                style={{ color: colors.accentLight }}
-              />
-              <span
-                className="text-xs font-semibold"
-                style={{ color: colors.textSecondary }}
-              >
-                Collections
-              </span>
-              {collections && (
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded-md"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: colors.textDim,
-                  }}
-                >
-                  {collections.length}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="w-6 h-6 rounded-md flex items-center justify-center transition-colors"
-              style={{ color: colors.textDim }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color = colors.textMuted)
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = colors.textDim)
-              }
+            Collections
+          </span>
+          {collections && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-md"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: colors.textDim,
+              }}
             >
-              <XIcon className="w-3.5 h-3.5" />
-            </button>
+              {collections.length}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{
+            color: colors.textDim,
+            background: "rgba(255,255,255,0.04)",
+          }}
+        >
+          <XIcon className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto py-2">
+        {collections === undefined ? (
+          <div className="space-y-1.5 px-3 py-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-11 rounded-xl animate-pulse"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              />
+            ))}
           </div>
-
-          <div className="flex-1 overflow-y-auto py-2">
-            {collections === undefined ? (
-              <div className="space-y-1.5 px-3 py-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-10 rounded-xl animate-pulse"
-                    style={{ background: "rgba(255,255,255,0.04)" }}
-                  />
-                ))}
-              </div>
-            ) : collections.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <FolderIcon
-                  className="w-8 h-8 mb-2"
-                  style={{ color: colors.textDim }}
-                />
-                <p className="text-xs" style={{ color: colors.textMuted }}>
-                  No collections yet
-                </p>
-                <button
-                  onClick={() => router.push("/collections")}
-                  className="mt-3 text-[11px] font-medium"
-                  style={{ color: colors.accentLight }}
-                >
-                  Create one →
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-0.5 px-2">
-                {(
-                  collections as (Doc<"collections"> & {
-                    documentCount?: number;
-                  })[]
-                ).map((col) => (
-                  <CollectionPanelItem
-                    key={col._id}
-                    col={col}
-                    expanded={expandedId === col._id}
-                    onToggle={() =>
-                      setExpandedId(expandedId === col._id ? null : col._id)
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div
-            className="px-4 py-3 shrink-0"
-            style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
-          >
+        ) : collections.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <FolderIcon
+              className="w-7 h-7 mb-2"
+              style={{ color: colors.textDim }}
+            />
+            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+              No collections yet
+            </p>
             <button
               onClick={() => router.push("/collections")}
-              className="w-full text-[11px] font-medium py-2 rounded-lg transition-colors text-center"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                color: colors.textMuted,
-                border: `1px solid ${colors.border}`,
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color = colors.textSecondary)
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = colors.textMuted)
-              }
+              className="mt-2 text-[11px] font-medium"
+              style={{ color: colors.accentLight }}
             >
-              Manage all collections →
+              Create one →
             </button>
           </div>
-        </>
+        ) : (
+          <div className="space-y-0.5 px-2">
+            {(
+              collections as (Doc<"collections"> & { documentCount?: number })[]
+            ).map((col) => {
+              const accentColor = col.color ?? colors.accent;
+              return (
+                <div key={col._id}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => router.push(`/collections/${col._id}`)}
+                      className="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left"
+                      style={{ minHeight: 44 }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255,255,255,0.03)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = "transparent")
+                      }
+                    >
+                      <div
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: accentColor }}
+                      />
+                      <span className="text-sm shrink-0">
+                        {col.icon ?? "📁"}
+                      </span>
+                      <span
+                        className="flex-1 text-[12px] font-medium truncate"
+                        style={{ color: colors.textSecondary }}
+                      >
+                        {col.name}
+                      </span>
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
+                        style={{
+                          background: "rgba(255,255,255,0.06)",
+                          color: colors.textDim,
+                        }}
+                      >
+                        {col.documentCount ?? 0}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        setExpandedId(expandedId === col._id ? null : col._id)
+                      }
+                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ color: colors.textDim }}
+                    >
+                      <ChevronRightIcon
+                        className="w-3 h-3 transition-transform duration-150"
+                        style={{
+                          transform:
+                            expandedId === col._id ? "rotate(90deg)" : "none",
+                        }}
+                      />
+                    </button>
+                  </div>
+                  {expandedId === col._id && (
+                    <CollectionExpandedDocs
+                      collectionId={col._id}
+                      accentColor={accentColor}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div
+        className="px-4 py-3 shrink-0"
+        style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+      >
+        <button
+          onClick={() => router.push("/collections")}
+          className="w-full text-[12px] font-medium py-2.5 rounded-xl text-center transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: colors.textMuted,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          Manage collections →
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop */}
+      <div
+        className="hidden md:flex shrink-0 flex-col transition-all duration-200 overflow-hidden"
+        style={{
+          width: open ? 268 : 0,
+          borderLeft: open ? `1px solid ${colors.borderSubtle}` : "none",
+          background: colors.bgSidebar,
+        }}
+      >
+        {open && inner}
+      </div>
+      {/* Mobile bottom sheet */}
+      <div
+        className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
+        style={{
+          background: "rgba(0,0,0,0.6)",
+          backdropFilter: "blur(4px)",
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+        }}
+        onClick={onClose}
+      />
+      <div
+        className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl flex flex-col"
+        style={{
+          background: "#15151e",
+          border: "1px solid rgba(255,255,255,0.08)",
+          transform: open ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
+          maxHeight: "80vh",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div
+            className="w-9 h-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          />
+        </div>
+        {inner}
+      </div>
+    </>
+  );
+}
+
+function CollectionExpandedDocs({
+  collectionId,
+  accentColor,
+}: {
+  collectionId: Id<"collections">;
+  accentColor: string;
+}) {
+  const router = useRouter();
+  const docs = useQuery(api.collections.getDocuments, { collectionId });
+  if (docs === undefined)
+    return (
+      <div className="ml-6 px-3 py-2">
+        <div
+          className="h-7 rounded-lg animate-pulse"
+          style={{ background: "rgba(255,255,255,0.04)" }}
+        />
+      </div>
+    );
+  if (docs.length === 0)
+    return (
+      <p
+        className="ml-6 text-[11px] px-3 py-1.5"
+        style={{ color: colors.textDim }}
+      >
+        Empty collection
+      </p>
+    );
+  return (
+    <div className="ml-6 space-y-0.5 mb-1">
+      {docs.slice(0, 5).map((doc) => (
+        <button
+          key={doc._id}
+          onClick={() => router.push(`/documents/${doc._id}`)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
+          style={{ minHeight: 36 }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "transparent")
+          }
+        >
+          <span className="text-sm shrink-0">{doc.icon ?? "📄"}</span>
+          <span
+            className="flex-1 text-[11px] font-medium truncate"
+            style={{ color: colors.textMuted }}
+          >
+            {doc.title}
+          </span>
+        </button>
+      ))}
+      {docs.length > 5 && (
+        <p className="px-3 py-1 text-[10px]" style={{ color: colors.textDim }}>
+          +{docs.length - 5} more
+        </p>
       )}
+      <button
+        onClick={() => router.push(`/collections/${collectionId}`)}
+        className="w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
+        style={{ color: colors.textDim }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+        onMouseLeave={(e) => (e.currentTarget.style.color = colors.textDim)}
+      >
+        <FolderOpenIcon className="w-3 h-3" /> Open collection →
+      </button>
     </div>
   );
 }
 
-function CollectionPanelItem({
-  col,
-  expanded,
-  onToggle,
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared primitives
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SelectCheckbox({
+  checked,
+  indeterminate,
+  onChange,
 }: {
-  col: Doc<"collections"> & { documentCount?: number };
-  expanded: boolean;
-  onToggle: () => void;
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (v: boolean) => void;
 }) {
-  const router = useRouter();
-  const docs = useQuery(
-    api.collections.getDocuments,
-    expanded ? { collectionId: col._id } : "skip"
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
+      }}
+      className="rounded-md flex items-center justify-center shrink-0 transition-all"
+      style={{
+        width: 16,
+        height: 16,
+        background:
+          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
+        border: `1.5px solid ${checked || indeterminate ? colors.accent : "rgba(255,255,255,0.2)"}`,
+      }}
+    >
+      {indeterminate ? (
+        <MinusIcon style={{ width: 9, height: 9, color: "#fff" }} />
+      ) : checked ? (
+        <CheckIcon style={{ width: 9, height: 9, color: "#fff" }} />
+      ) : null}
+    </button>
   );
-  const accentColor = col.color ?? colors.accent;
+}
+
+function AIDot({ status }: { status?: string }) {
+  if (status === "done")
+    return (
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: colors.accentLight }}
+        title="AI summary ready"
+      />
+    );
+  if (status === "pending")
+    return (
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+        style={{ background: colors.warning }}
+        title="Generating…"
+      />
+    );
+  return null;
+}
+
+/** Up to maxVisible badges, then a "+N" pill */
+function CollectionBadges({
+  collections,
+  maxVisible = 2,
+}: {
+  collections: Doc<"collections">[];
+  maxVisible?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? collections : collections.slice(0, maxVisible);
+  const overflow = collections.length - maxVisible;
 
   return (
-    <div>
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left group"
-        style={{
-          background: expanded ? `${accentColor}10` : "transparent",
-          border: `1px solid ${expanded ? `${accentColor}25` : "transparent"}`,
-        }}
-        onMouseEnter={(e) => {
-          if (!expanded)
-            e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-        }}
-        onMouseLeave={(e) => {
-          if (!expanded) e.currentTarget.style.background = "transparent";
-        }}
-      >
-        <div
-          className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ background: accentColor }}
-        />
-        <span className="text-sm shrink-0">{col.icon ?? "📁"}</span>
+    <div className="flex items-center gap-1 flex-wrap">
+      {visible.map((col) => (
         <span
-          className="flex-1 text-xs font-medium truncate"
-          style={{ color: expanded ? colors.text : colors.textSecondary }}
+          key={col._id}
+          className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium whitespace-nowrap"
+          style={{
+            background: col.color ? `${col.color}18` : "rgba(255,255,255,0.06)",
+            color: col.color ?? colors.textMuted,
+            border: `1px solid ${col.color ? `${col.color}28` : colors.border}`,
+          }}
         >
-          {col.name}
+          {col.icon} {col.name}
         </span>
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
+      ))}
+      {!expanded && overflow > 0 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
+          className="text-[10px] px-1.5 py-px rounded-md font-medium transition-colors"
           style={{
             background: "rgba(255,255,255,0.06)",
             color: colors.textDim,
+            border: `1px solid ${colors.border}`,
           }}
         >
-          {col.documentCount ?? 0}
-        </span>
-        <ChevronRightIcon
-          className="w-3 h-3 shrink-0 transition-transform duration-150"
-          style={{
-            color: colors.textDim,
-            transform: expanded ? "rotate(90deg)" : "none",
-          }}
-        />
-      </button>
-
-      {expanded && (
-        <div className="ml-4 mb-1 space-y-0.5">
-          {docs === undefined ? (
-            <div className="space-y-1 px-2 py-1">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-7 rounded-lg animate-pulse"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
-                />
-              ))}
-            </div>
-          ) : docs.length === 0 ? (
-            <p
-              className="text-[11px] px-3 py-2"
-              style={{ color: colors.textDim }}
-            >
-              No documents in this collection
-            </p>
-          ) : (
-            docs.map((doc) => (
-              <button
-                key={doc._id}
-                onClick={() => router.push(`/documents/${doc._id}`)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left group"
-                style={{ color: colors.textMuted }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                  e.currentTarget.style.color = colors.text;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = colors.textMuted;
-                }}
-              >
-                <span className="text-sm shrink-0">{doc.icon ?? "📄"}</span>
-                <span className="flex-1 text-[11px] font-medium truncate">
-                  {doc.title}
-                </span>
-                <ChevronRightIcon
-                  className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ color: colors.textDim }}
-                />
-              </button>
-            ))
-          )}
-          <button
-            onClick={() => router.push(`/collections/${col._id}`)}
-            className="w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-colors"
-            style={{ color: colors.textDim }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = colors.textDim)}
-          >
-            <FolderOpenIcon className="w-3 h-3" />
-            Open collection page →
-          </button>
-        </div>
+          +{overflow}
+        </button>
       )}
     </div>
   );
 }
 
-// ── Skeletons ─────────────────────────────────────────────────────────────────
-
-function GridSkeleton() {
-  return (
-    <div
-      className="rounded-2xl p-4 space-y-3 animate-pulse"
-      style={{
-        background: colors.bgCard,
-        border: `1px solid ${colors.border}`,
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-xl shrink-0"
-          style={{ background: "rgba(255,255,255,0.07)" }}
-        />
-        <div className="flex-1 space-y-2">
-          <div
-            className="h-3.5 rounded-md w-3/4"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          />
-          <div
-            className="h-2.5 rounded-md w-1/3"
-            style={{ background: "rgba(255,255,255,0.05)" }}
-          />
-        </div>
-      </div>
-      <div
-        className="h-10 rounded-xl"
-        style={{ background: "rgba(255,255,255,0.04)" }}
-      />
-      <div
-        className="h-3 rounded w-1/2"
-        style={{ background: "rgba(255,255,255,0.04)" }}
-      />
-    </div>
-  );
-}
-
-function RowSkeleton() {
-  return (
-    <div
-      className="flex items-center gap-3 px-5 py-3.5 animate-pulse"
-      style={{ borderBottom: `1px solid ${colors.border}` }}
-    >
-      <div
-        className="w-7 h-7 rounded-lg shrink-0"
-        style={{ background: "rgba(255,255,255,0.07)" }}
-      />
-      <div className="flex-1 space-y-1.5">
-        <div
-          className="h-3.5 rounded w-1/3"
-          style={{ background: "rgba(255,255,255,0.08)" }}
-        />
-        <div
-          className="h-2.5 rounded w-1/5"
-          style={{ background: "rgba(255,255,255,0.05)" }}
-        />
-      </div>
-      <div
-        className="h-3 rounded w-20"
-        style={{ background: "rgba(255,255,255,0.05)" }}
-      />
-    </div>
-  );
-}
-
-// ── Document Grid Card ────────────────────────────────────────────────────────
-
-function DocumentGridCard({
+function PaperMenu({
   document,
+  onAddToCollection,
+  onRename,
+  onDuplicate,
+  onArchive,
+  onRestore,
+  onDelete,
+}: {
+  document: Doc<"documents">;
+  onAddToCollection: () => void;
+  onRename: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: `1px solid ${colors.border}`,
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+          }
+        >
+          <MoreHorizontalIcon
+            className="w-3.5 h-3.5"
+            style={{ color: colors.textMuted }}
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/documents/${document._id}`);
+          }}
+        >
+          <FileTextIcon className="w-3.5 h-3.5 mr-2" />
+          Open
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onDuplicate();
+          }}
+        >
+          <CopyIcon className="w-3.5 h-3.5 mr-2" />
+          Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+        >
+          <PencilIcon className="w-3.5 h-3.5 mr-2" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddToCollection();
+          }}
+        >
+          <FolderPlusIcon className="w-3.5 h-3.5 mr-2" />
+          Add to collection
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {document.isArchived ? (
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore();
+            }}
+          >
+            <ArchiveRestoreIcon className="w-3.5 h-3.5 mr-2" />
+            Restore
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive();
+            }}
+          >
+            <ArchiveIcon className="w-3.5 h-3.5 mr-2" />
+            Archive
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2Icon className="w-3.5 h-3.5 mr-2 text-destructive" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Grid card — compact, information-dense
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GridCard({
+  document,
+  selected,
+  selectMode,
+  onSelect,
   onAddToCollection,
   onRename,
 }: {
   document: Doc<"documents">;
+  selected: boolean;
+  selectMode: boolean;
+  onSelect: (id: string, shift: boolean) => void;
   onAddToCollection: (id: Id<"documents">, title: string) => void;
   onRename: (id: Id<"documents">, title: string) => void;
 }) {
@@ -656,268 +899,213 @@ function DocumentGridCard({
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
-
-  const handleDuplicate = async () => {
-    try {
-      const newId = await duplicate({ id: document._id });
-      toast.success("Duplicated");
-      router.push(`/documents/${newId}`);
-    } catch {
-      toast.error("Couldn't duplicate. Try again.");
-    }
-  };
-  const handleArchive = async () => {
-    try {
-      await archive({ id: document._id });
-      toast.success("Archived");
-    } catch {
-      toast.error("Couldn't archive. Try again.");
-    }
-  };
-  const handleRestore = async () => {
-    try {
-      await restore({ id: document._id });
-      toast.success("Restored");
-    } catch {
-      toast.error("Couldn't restore. Try again.");
-    }
-  };
-  const handleDelete = async () => {
-    try {
-      await remove({ id: document._id });
-      toast.success("Deleted");
-    } catch (err: any) {
-      toast.error(err?.data ?? "Couldn't delete. Try again.");
-    }
-  };
-
-  // Org badge label
   const orgLabel = document.organizationId
     ? organization?.id === document.organizationId
       ? organization.name
       : "Shared"
     : null;
+  const cols = (collections ?? []) as Doc<"collections">[];
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (selectMode) {
+      onSelect(document._id, e.shiftKey);
+      return;
+    }
+    router.push(`/documents/${document._id}`);
+  };
 
   return (
     <>
       <div
-        className="rounded-2xl p-4 flex flex-col gap-3 cursor-pointer group transition-all duration-200"
+        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200 h-full overflow-hidden"
         style={{
-          background: hovered ? colors.bgCardHover : colors.bgCard,
-          border: `1px solid ${hovered ? colors.borderHover : colors.border}`,
-          boxShadow: hovered ? shadows.cardHover : "none",
+          background: selected
+            ? "rgba(99,102,241,0.09)"
+            : hovered
+              ? colors.bgCardHover
+              : colors.bgCard,
+          border: `1px solid ${selected ? colors.accentBorder : hovered ? colors.borderHover : colors.border}`,
+          boxShadow: selected
+            ? `0 0 0 2px ${colors.accent}28`
+            : hovered
+              ? shadows.cardHover
+              : "none",
         }}
-        onClick={() => router.push(`/documents/${document._id}`)}
+        onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <div className="flex items-start gap-3">
-          <div
-            className="text-lg shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
-            style={{ background: "rgba(255,255,255,0.07)" }}
-          >
-            {document.icon ?? "📄"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p
-              className="text-sm font-medium truncate"
-              style={{ color: colors.text }}
-            >
-              {document.title}
-            </p>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <ClockIcon
-                className="w-2.5 h-2.5"
-                style={{ color: colors.textDim }}
-              />
-              <p className="text-[11px]" style={{ color: colors.textMuted }}>
-                {formatDistanceToNow(new Date(document._creationTime), {
-                  addSuffix: true,
-                })}
-              </p>
-              {orgLabel && (
-                <>
-                  <span style={{ color: colors.textDim }}>·</span>
-                  <BuildingIcon
-                    className="w-2.5 h-2.5"
-                    style={{ color: colors.textDim }}
-                  />
-                  <p
-                    className="text-[11px]"
-                    style={{ color: colors.textMuted }}
-                  >
-                    {orgLabel}
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                onClick={(e) => e.stopPropagation()}
-                className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              >
-                <MoreHorizontalIcon
-                  className="w-3.5 h-3.5"
-                  style={{ color: colors.textMuted }}
-                />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/documents/${document._id}`);
-                }}
-              >
-                <FileTextIcon className="w-3.5 h-3.5 mr-2" />
-                Open
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDuplicate();
-                }}
-              >
-                <CopyIcon className="w-3.5 h-3.5 mr-2" />
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename(document._id, document.title);
-                }}
-              >
-                <PencilIcon className="w-3.5 h-3.5 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddToCollection(document._id, document.title);
-                }}
-              >
-                <FolderPlusIcon className="w-3.5 h-3.5 mr-2" />
-                Add to collection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {document.isArchived ? (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRestore();
-                  }}
-                >
-                  <ArchiveRestoreIcon className="w-3.5 h-3.5 mr-2" />
-                  Restore
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleArchive();
-                  }}
-                >
-                  <ArchiveIcon className="w-3.5 h-3.5 mr-2" />
-                  Archive
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmDelete(true);
-                }}
-              >
-                <Trash2Icon className="w-3.5 h-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {document.isArchived && (
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium w-fit"
-            style={{
-              background: colors.warningBg,
-              color: colors.warning,
-              border: `1px solid rgba(251,191,36,0.2)`,
-            }}
-          >
-            <ArchiveIcon className="w-2.5 h-2.5" />
-            Archived
-          </span>
-        )}
-
+        {/* Top accent line matching first collection color */}
         <div
-          className="rounded-xl px-3 py-2.5 flex items-start gap-2 min-h-[44px]"
+          className="h-0.5 w-full shrink-0"
           style={{
-            background: colors.accentBg,
-            border: `1px solid ${colors.accentBorder}`,
+            background:
+              cols[0]?.color ??
+              (document.organizationId
+                ? colors.accent
+                : "rgba(255,255,255,0.06)"),
           }}
-        >
-          <SparklesIcon
-            className="w-3 h-3 shrink-0 mt-0.5"
-            style={{ color: colors.accentLight }}
-          />
-          {document.aiSummaryStatus === "done" && document.aiSummary ? (
-            <p
-              className="text-[11px] leading-relaxed line-clamp-2"
-              style={{ color: colors.textSecondary }}
-            >
-              {document.aiSummary}
-            </p>
-          ) : document.aiSummaryStatus === "pending" ? (
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin"
-                style={{ color: colors.accentLight }}
-              />
-              <p className="text-[11px]" style={{ color: colors.textMuted }}>
-                Generating summary…
-              </p>
-            </div>
-          ) : (
-            <p className="text-[11px] italic" style={{ color: colors.textDim }}>
-              AI summary not yet generated
-            </p>
-          )}
-        </div>
+        />
 
-        {collections && collections.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(collections as Doc<"collections">[]).slice(0, 2).map((col) => (
-              <span
-                key={col._id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
-                style={{
-                  background: col.color
-                    ? `${col.color}20`
-                    : "rgba(255,255,255,0.06)",
-                  color: col.color ?? colors.textMuted,
-                  border: `1px solid ${col.color ? `${col.color}30` : colors.border}`,
+        <div className="p-3.5 flex flex-col gap-2.5 flex-1">
+          {/* Header: icon + title + select/menu */}
+          <div className="flex items-start gap-2.5">
+            {/* Select checkbox — only in select mode */}
+            {selectMode && (
+              <div
+                className="mt-0.5 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(document._id, e.shiftKey);
                 }}
               >
-                <span>{col.icon}</span>
-                <span>{col.name}</span>
-              </span>
-            ))}
-            {collections.length > 2 && (
-              <span className="text-[10px]" style={{ color: colors.textDim }}>
-                +{collections.length - 2}
-              </span>
+                <SelectCheckbox
+                  checked={selected}
+                  onChange={() => onSelect(document._id, false)}
+                />
+              </div>
+            )}
+
+            <div
+              className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
+              style={{ background: "rgba(255,255,255,0.07)" }}
+            >
+              {document.icon ?? "📄"}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-[13px] font-semibold leading-snug line-clamp-2"
+                style={{ color: colors.text }}
+              >
+                {document.title}
+              </p>
+              {/* Date + status inline */}
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span
+                  className="text-[11px]"
+                  style={{ color: "rgba(255,255,255,0.45)" }}
+                >
+                  {smartDate(document._creationTime)}
+                </span>
+                <AIDot status={document.aiSummaryStatus} />
+                {document.isArchived && (
+                  <span
+                    className="text-[9px] font-semibold px-1.5 py-px rounded"
+                    style={{
+                      background: colors.warningBg,
+                      color: colors.warning,
+                    }}
+                  >
+                    ARCHIVED
+                  </span>
+                )}
+                {orgLabel && (
+                  <span
+                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded"
+                    style={{
+                      background: colors.accentBg,
+                      color: colors.accentLight,
+                    }}
+                  >
+                    <UsersIcon style={{ width: 9, height: 9 }} />
+                    {orgLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <PaperMenu
+                document={document}
+                onAddToCollection={() =>
+                  onAddToCollection(document._id, document.title)
+                }
+                onRename={() => onRename(document._id, document.title)}
+                onDuplicate={async () => {
+                  try {
+                    const id = await duplicate({ id: document._id });
+                    toast.success("Duplicated");
+                    router.push(`/documents/${id}`);
+                  } catch {
+                    toast.error("Couldn't duplicate.");
+                  }
+                }}
+                onArchive={async () => {
+                  try {
+                    await archive({ id: document._id });
+                    toast.success("Archived");
+                  } catch {
+                    toast.error("Couldn't archive.");
+                  }
+                }}
+                onRestore={async () => {
+                  try {
+                    await restore({ id: document._id });
+                    toast.success("Restored");
+                  } catch {
+                    toast.error("Couldn't restore.");
+                  }
+                }}
+                onDelete={() => setConfirmDelete(true)}
+              />
+            </div>
+          </div>
+
+          {/* AI summary — compact, no framed box */}
+          <div className="flex items-start gap-1.5 flex-1 min-h-[36px]">
+            <SparklesIcon
+              className="w-2.5 h-2.5 shrink-0 mt-0.5"
+              style={{
+                color:
+                  document.aiSummaryStatus === "done"
+                    ? colors.accentLight
+                    : "rgba(255,255,255,0.2)",
+              }}
+            />
+            {document.aiSummaryStatus === "done" && document.aiSummary ? (
+              <p
+                className="text-[11px] leading-relaxed line-clamp-3"
+                style={{ color: "rgba(255,255,255,0.5)" }}
+              >
+                {document.aiSummary}
+              </p>
+            ) : document.aiSummaryStatus === "pending" ? (
+              <div className="flex items-center gap-1">
+                <div
+                  className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
+                  style={{ color: colors.accentLight }}
+                />
+                <p
+                  className="text-[11px]"
+                  style={{ color: "rgba(255,255,255,0.3)" }}
+                >
+                  Generating summary…
+                </p>
+              </div>
+            ) : (
+              <p
+                className="text-[11px] italic"
+                style={{ color: "rgba(255,255,255,0.18)" }}
+              >
+                No summary yet
+              </p>
             )}
           </div>
-        )}
+
+          {/* Collections — only if any */}
+          {cols.length > 0 && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <CollectionBadges collections={cols} maxVisible={2} />
+            </div>
+          )}
+        </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>Delete paper?</AlertDialogTitle>
             <AlertDialogDescription>
               &ldquo;{document.title}&rdquo; will be permanently deleted.
             </AlertDialogDescription>
@@ -926,7 +1114,14 @@ function DocumentGridCard({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
+              onClick={async () => {
+                try {
+                  await remove({ id: document._id });
+                  toast.success("Deleted");
+                } catch (err: any) {
+                  toast.error(err?.data ?? "Couldn't delete.");
+                }
+              }}
             >
               Delete
             </AlertDialogAction>
@@ -937,14 +1132,22 @@ function DocumentGridCard({
   );
 }
 
-// ── Document List Row ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// List row — two-line layout with AI summary visible
+// ─────────────────────────────────────────────────────────────────────────────
 
-function DocumentListRow({
+function ListRow({
   document,
+  selected,
+  selectMode,
+  onSelect,
   onAddToCollection,
   onRename,
 }: {
   document: Doc<"documents">;
+  selected: boolean;
+  selectMode: boolean;
+  onSelect: (id: string, shift: boolean) => void;
   onAddToCollection: (id: Id<"documents">, title: string) => void;
   onRename: (id: Id<"documents">, title: string) => void;
 }) {
@@ -959,133 +1162,162 @@ function DocumentListRow({
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
-
-  const handleDuplicate = async () => {
-    try {
-      const newId = await duplicate({ id: document._id });
-      toast.success("Duplicated");
-      router.push(`/documents/${newId}`);
-    } catch {
-      toast.error("Couldn't duplicate.");
-    }
-  };
-  const handleArchive = async () => {
-    try {
-      await archive({ id: document._id });
-      toast.success("Archived");
-    } catch {
-      toast.error("Couldn't archive.");
-    }
-  };
-  const handleRestore = async () => {
-    try {
-      await restore({ id: document._id });
-      toast.success("Restored");
-    } catch {
-      toast.error("Couldn't restore.");
-    }
-  };
-  const handleDelete = async () => {
-    try {
-      await remove({ id: document._id });
-      toast.success("Deleted");
-    } catch (err: any) {
-      toast.error(err?.data ?? "Couldn't delete.");
-    }
-  };
-
+  const cols = (collections ?? []) as Doc<"collections">[];
   const orgLabel = document.organizationId
     ? organization?.id === document.organizationId
       ? organization.name
       : "Shared"
     : null;
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (selectMode) {
+      onSelect(document._id, e.shiftKey);
+      return;
+    }
+    router.push(`/documents/${document._id}`);
+  };
+
   return (
     <>
       <div
-        className="flex items-center gap-3 px-5 py-3.5 cursor-pointer group transition-all duration-150"
+        className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150 group"
         style={{
           borderBottom: `1px solid ${colors.border}`,
-          background: hovered ? "rgba(255,255,255,0.02)" : "transparent",
+          background: selected
+            ? "rgba(99,102,241,0.06)"
+            : hovered
+              ? "rgba(255,255,255,0.02)"
+              : "transparent",
         }}
-        onClick={() => router.push(`/documents/${document._id}`)}
+        onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        {/* Select checkbox — only in select mode */}
+        {selectMode && (
+          <div
+            className="mt-1 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(document._id, e.shiftKey);
+            }}
+          >
+            <SelectCheckbox
+              checked={selected}
+              onChange={() => onSelect(document._id, false)}
+            />
+          </div>
+        )}
+
+        {/* Paper icon */}
         <span
-          className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0"
+          className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0 mt-0.5"
           style={{ background: "rgba(255,255,255,0.06)" }}
         >
           {document.icon ?? "📄"}
         </span>
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-[13px] font-medium truncate"
-            style={{ color: colors.text }}
-          >
-            {document.title}
-          </p>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              {formatDistanceToNow(new Date(document._creationTime), {
-                addSuffix: true,
-              })}
-            </span>
+
+        {/* Content block */}
+        <div className="flex-1 min-w-0 space-y-1">
+          {/* Row 1: title + meta */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <p
+              className="text-[13px] font-semibold"
+              style={{ color: colors.text }}
+            >
+              {document.title}
+            </p>
+
+            {/* Status chips inline */}
             {document.isArchived && (
               <span
-                className="text-[10px] font-medium px-1.5 py-px rounded-md"
+                className="text-[9px] font-semibold px-1.5 py-px rounded shrink-0"
                 style={{ background: colors.warningBg, color: colors.warning }}
               >
-                Archived
+                ARCHIVED
               </span>
             )}
             {orgLabel && (
               <span
-                className="text-[10px] font-medium px-1.5 py-px rounded-md"
+                className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded shrink-0"
                 style={{
                   background: colors.accentBg,
                   color: colors.accentLight,
                 }}
               >
+                <UsersIcon style={{ width: 9, height: 9 }} />
                 {orgLabel}
               </span>
             )}
-            {collections &&
-              (collections as Doc<"collections">[]).slice(0, 2).map((col) => (
-                <span
-                  key={col._id}
-                  className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium"
-                  style={{
-                    background: col.color
-                      ? `${col.color}18`
-                      : "rgba(255,255,255,0.06)",
-                    color: col.color ?? colors.textMuted,
-                    border: `1px solid ${col.color ? `${col.color}28` : colors.border}`,
-                  }}
+          </div>
+
+          {/* Row 2: AI summary */}
+          <div className="flex items-start gap-1.5">
+            <SparklesIcon
+              className="w-2.5 h-2.5 shrink-0 mt-px"
+              style={{
+                color:
+                  document.aiSummaryStatus === "done"
+                    ? colors.accentLight
+                    : "rgba(255,255,255,0.15)",
+              }}
+            />
+            {document.aiSummaryStatus === "done" && document.aiSummary ? (
+              <p
+                className="text-[11px] leading-relaxed line-clamp-2"
+                style={{ color: "rgba(255,255,255,0.45)" }}
+              >
+                {document.aiSummary}
+              </p>
+            ) : document.aiSummaryStatus === "pending" ? (
+              <div className="flex items-center gap-1">
+                <div
+                  className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
+                  style={{ color: colors.accentLight }}
+                />
+                <p
+                  className="text-[11px]"
+                  style={{ color: "rgba(255,255,255,0.3)" }}
                 >
-                  {col.icon} {col.name}
-                </span>
-              ))}
+                  Generating summary…
+                </p>
+              </div>
+            ) : (
+              <p
+                className="text-[11px] italic"
+                style={{ color: "rgba(255,255,255,0.2)" }}
+              >
+                No summary yet
+              </p>
+            )}
+          </div>
+
+          {/* Row 3: collections + date */}
+          <div
+            className="flex items-center gap-2 pt-0.5 flex-wrap"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {cols.length > 0 && (
+              <CollectionBadges collections={cols} maxVisible={2} />
+            )}
+            <span
+              className="text-[11px] ml-auto shrink-0 tabular-nums"
+              style={{ color: "rgba(255,255,255,0.38)" }}
+            >
+              {smartDate(document._creationTime)}
+            </span>
           </div>
         </div>
 
-        {document.aiSummaryStatus === "done" && document.aiSummary && (
-          <p
-            className="hidden lg:block text-[11px] max-w-[200px] truncate shrink-0"
-            style={{ color: colors.textMuted }}
-          >
-            {document.aiSummary}
-          </p>
-        )}
-
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        {/* Right actions — always visible */}
+        <div
+          className="flex items-center gap-1 shrink-0 mt-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToCollection(document._id, document.title);
-            }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-            style={{ color: colors.textMuted }}
+            onClick={() => onAddToCollection(document._id, document.title)}
+            className="hidden sm:flex w-7 h-7 rounded-lg items-center justify-center transition-colors"
+            style={{ color: colors.textDim }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
             }
@@ -1096,91 +1328,46 @@ function DocumentListRow({
           >
             <FolderPlusIcon className="w-3.5 h-3.5" />
           </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                onClick={(e) => e.stopPropagation()}
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-                style={{ color: colors.textMuted }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                <MoreHorizontalIcon className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/documents/${document._id}`);
-                }}
-              >
-                <FileTextIcon className="w-3.5 h-3.5 mr-2" />
-                Open
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDuplicate();
-                }}
-              >
-                <CopyIcon className="w-3.5 h-3.5 mr-2" />
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRename(document._id, document.title);
-                }}
-              >
-                <PencilIcon className="w-3.5 h-3.5 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {document.isArchived ? (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRestore();
-                  }}
-                >
-                  <ArchiveRestoreIcon className="w-3.5 h-3.5 mr-2" />
-                  Restore
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleArchive();
-                  }}
-                >
-                  <ArchiveIcon className="w-3.5 h-3.5 mr-2" />
-                  Archive
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmDelete(true);
-                }}
-              >
-                <Trash2Icon className="w-3.5 h-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <PaperMenu
+            document={document}
+            onAddToCollection={() =>
+              onAddToCollection(document._id, document.title)
+            }
+            onRename={() => onRename(document._id, document.title)}
+            onDuplicate={async () => {
+              try {
+                const id = await duplicate({ id: document._id });
+                toast.success("Duplicated");
+                router.push(`/documents/${id}`);
+              } catch {
+                toast.error("Couldn't duplicate.");
+              }
+            }}
+            onArchive={async () => {
+              try {
+                await archive({ id: document._id });
+                toast.success("Archived");
+              } catch {
+                toast.error("Couldn't archive.");
+              }
+            }}
+            onRestore={async () => {
+              try {
+                await restore({ id: document._id });
+                toast.success("Restored");
+              } catch {
+                toast.error("Couldn't restore.");
+              }
+            }}
+            onDelete={() => setConfirmDelete(true)}
+          />
         </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>Delete paper?</AlertDialogTitle>
             <AlertDialogDescription>
               &ldquo;{document.title}&rdquo; will be permanently deleted.
             </AlertDialogDescription>
@@ -1189,7 +1376,14 @@ function DocumentListRow({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
+              onClick={async () => {
+                try {
+                  await remove({ id: document._id });
+                  toast.success("Deleted");
+                } catch (err: any) {
+                  toast.error(err?.data ?? "Couldn't delete.");
+                }
+              }}
             >
               Delete
             </AlertDialogAction>
@@ -1200,70 +1394,420 @@ function DocumentListRow({
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk action floating bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BulkBar({
+  count,
+  total,
+  onArchive,
+  onDelete,
+  onClear,
+  onAddToCollection,
+  onSelectAll,
+}: {
+  count: number;
+  total: number;
+  onArchive: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+  onAddToCollection: () => void;
+  onSelectAll: () => void;
+}) {
+  return (
+    <div
+      className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
+      style={{
+        transform: "translateX(-50%)",
+        background: "#1c1c28",
+        border: "1px solid rgba(99,102,241,0.3)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
+        backdropFilter: "blur(16px)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        className="text-[12px] font-semibold tabular-nums"
+        style={{ color: colors.accentPale }}
+      >
+        {count} selected
+      </span>
+      {count < total && (
+        <button
+          onClick={onSelectAll}
+          className="text-[11px] font-medium"
+          style={{ color: colors.textMuted }}
+        >
+          Select all {total}
+        </button>
+      )}
+      <div
+        className="w-px h-4 mx-0.5"
+        style={{ background: "rgba(255,255,255,0.1)" }}
+      />
+      <button
+        onClick={onAddToCollection}
+        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          color: colors.textSecondary,
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+        }
+      >
+        <FolderPlusIcon className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Collection</span>
+      </button>
+      <button
+        onClick={onArchive}
+        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+        style={{
+          background: "rgba(251,191,36,0.08)",
+          color: colors.warning,
+          border: "1px solid rgba(251,191,36,0.2)",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "rgba(251,191,36,0.14)")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.background = "rgba(251,191,36,0.08)")
+        }
+      >
+        <ArchiveIcon className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Archive</span>
+      </button>
+      <button
+        onClick={onDelete}
+        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+        style={{
+          background: "rgba(248,113,113,0.08)",
+          color: colors.danger,
+          border: "1px solid rgba(248,113,113,0.2)",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
+        }
+      >
+        <Trash2Icon className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Delete</span>
+      </button>
+      <button
+        onClick={onClear}
+        className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          color: colors.textMuted,
+        }}
+      >
+        <XIcon className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagination bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+}) {
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  const pages = useMemo(() => {
+    const arr: (number | "…")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) arr.push(i);
+      return arr;
+    }
+    if (page <= 4) {
+      arr.push(1, 2, 3, 4, 5, "…", totalPages);
+    } else if (page >= totalPages - 3) {
+      arr.push(
+        1,
+        "…",
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages
+      );
+    } else {
+      arr.push(1, "…", page - 1, page, page + 1, "…", totalPages);
+    }
+    return arr;
+  }, [page, totalPages]);
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div
+      className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
+      style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+    >
+      <span
+        className="text-[11px] tabular-nums"
+        style={{ color: colors.textDim }}
+      >
+        {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: page === 1 ? colors.textDim : colors.textMuted,
+            border: `1px solid ${colors.border}`,
+            opacity: page === 1 ? 0.4 : 1,
+          }}
+        >
+          ←
+        </button>
+        {pages.map((p, i) =>
+          p === "…" ? (
+            <span
+              key={`ellipsis-${i}`}
+              className="text-[11px] px-1"
+              style={{ color: colors.textDim }}
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p as number)}
+              className="h-7 min-w-[28px] px-2 rounded-lg text-[11px] font-medium transition-all"
+              style={{
+                background:
+                  p === page
+                    ? "rgba(99,102,241,0.2)"
+                    : "rgba(255,255,255,0.03)",
+                color: p === page ? colors.accentLight : colors.textMuted,
+                border: `1px solid ${p === page ? colors.accentBorder : colors.border}`,
+              }}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: page === totalPages ? colors.textDim : colors.textMuted,
+            border: `1px solid ${colors.border}`,
+            opacity: page === totalPages ? 0.4 : 1,
+          }}
+        >
+          →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeletons
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GridSkeleton() {
+  return (
+    <div
+      className="rounded-2xl overflow-hidden animate-pulse"
+      style={{
+        background: colors.bgCard,
+        border: `1px solid ${colors.border}`,
+      }}
+    >
+      <div
+        className="h-0.5 w-full"
+        style={{ background: "rgba(255,255,255,0.06)" }}
+      />
+      <div className="p-3.5 space-y-2.5">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-lg shrink-0"
+            style={{ background: "rgba(255,255,255,0.07)" }}
+          />
+          <div className="flex-1 space-y-1.5">
+            <div
+              className="h-3.5 rounded-md w-3/4"
+              style={{ background: "rgba(255,255,255,0.08)" }}
+            />
+            <div
+              className="h-2.5 rounded-md w-1/3"
+              style={{ background: "rgba(255,255,255,0.05)" }}
+            />
+          </div>
+          <div
+            className="w-7 h-7 rounded-lg shrink-0"
+            style={{ background: "rgba(255,255,255,0.05)" }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <div
+            className="h-2.5 rounded w-full"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          />
+          <div
+            className="h-2.5 rounded w-4/5"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          />
+          <div
+            className="h-2.5 rounded w-2/3"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          />
+        </div>
+        <div className="flex gap-1.5">
+          <div
+            className="h-4 w-16 rounded-md"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          />
+          <div
+            className="h-4 w-12 rounded-md"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div
+      className="flex items-start gap-3 px-4 sm:px-5 py-3 animate-pulse"
+      style={{ borderBottom: `1px solid ${colors.border}` }}
+    >
+      <div
+        className="w-8 h-8 rounded-lg shrink-0 mt-0.5"
+        style={{ background: "rgba(255,255,255,0.07)" }}
+      />
+      <div className="flex-1 space-y-2">
+        <div
+          className="h-3.5 rounded w-1/2"
+          style={{ background: "rgba(255,255,255,0.08)" }}
+        />
+        <div
+          className="h-2.5 rounded w-3/4"
+          style={{ background: "rgba(255,255,255,0.05)" }}
+        />
+        <div className="flex gap-1.5">
+          <div
+            className="h-4 w-14 rounded-md"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          />
+          <div
+            className="h-4 w-10 rounded-md"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          />
+        </div>
+      </div>
+      <div
+        className="w-7 h-7 rounded-lg shrink-0"
+        style={{ background: "rgba(255,255,255,0.05)" }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────────────────────
 
 type Filter = "all" | "mine" | "org";
 type SortKey = "newest" | "oldest" | "name_asc" | "name_desc";
 type ViewMode = "grid" | "list";
 
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  name_asc: "A → Z",
+  name_desc: "Z → A",
+};
+
 export default function DocumentsPage() {
   const router = useRouter();
   const { organization } = useOrganization();
   const { isLoaded, isSignedIn } = useAuth();
-
   const createDocument = useMutation(api.documents.create);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const updateDocument = useMutation(api.documents.update);
+  const archiveMutation = useMutation(api.documents.archive);
+  const removeMutation = useMutation(api.documents.remove);
 
   const [renameDialog, setRenameDialog] = useState<{
     id: Id<"documents">;
     title: string;
   } | null>(null);
-  const [collectionsPanelOpen, setCollectionsPanelOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<SortKey>("newest");
-  const [view, setView] = useState<ViewMode>("grid");
-  const [showArchived, setShowArchived] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [addColDialog, setAddColDialog] = useState<{
     id: Id<"documents">;
     title: string;
   } | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [collectionsPanelOpen, setCollectionsPanelOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 250);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [view, setView] = useState<ViewMode>("list");
+  const [showArchived, setShowArchived] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const lastSelectedIdx = useRef<number>(-1);
+  const contentRef = useRef<HTMLDivElement>(null);
 
+  const skip = !(isLoaded && isSignedIn);
   const allDocs = useQuery(
     api.documents.getAll,
-    isLoaded && isSignedIn ? { includeArchived: false } : "skip"
+    skip ? "skip" : { includeArchived: false }
   );
-  const archivedDocs = useQuery(
-    api.documents.getArchived,
-    isLoaded && isSignedIn ? {} : "skip"
-  );
+  const archivedDocs = useQuery(api.documents.getArchived, skip ? "skip" : {});
 
-  const displayDocs = useMemo(() => {
-    const activeDocs = allDocs ?? [];
-    const archived = showArchived ? (archivedDocs ?? []) : [];
-    const combined = [...activeDocs, ...archived];
+  // Full filtered+sorted list (no pagination yet)
+  const filteredDocs = useMemo(() => {
+    const base = [
+      ...(allDocs ?? []),
+      ...(showArchived ? (archivedDocs ?? []) : []),
+    ];
     const seen = new Set<string>();
-    const source = combined.filter((d) => {
+    const deduped = base.filter((d) => {
       if (seen.has(d._id)) return false;
       seen.add(d._id);
       return true;
     });
-
-    const searchLower = debouncedSearch.trim().toLowerCase();
-    let filtered = searchLower
-      ? source.filter((d) => d.title.toLowerCase().includes(searchLower))
-      : source;
-
-    filtered = filtered.filter((d) => {
-      if (filter === "mine") return !d.organizationId;
-      if (filter === "org")
-        return !!(organization && d.organizationId === organization.id);
-      return true;
-    });
-
+    const q = debouncedSearch.trim().toLowerCase();
+    let filtered = q
+      ? deduped.filter((d) => d.title.toLowerCase().includes(q))
+      : deduped;
+    if (filter === "mine") filtered = filtered.filter((d) => !d.organizationId);
+    else if (filter === "org" && organization)
+      filtered = filtered.filter((d) => d.organizationId === organization.id);
     return [...filtered].sort((a, b) => {
       switch (sort) {
         case "newest":
@@ -1288,16 +1832,93 @@ export default function DocumentsPage() {
     organization,
   ]);
 
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+  const displayDocs = filteredDocs.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filter, sort, showArchived]);
+
+  // Clear selection when page changes or filters change
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, debouncedSearch, filter, sort]);
+
+  // Exit select mode when nothing is selected
+  useEffect(() => {
+    if (selected.size === 0 && selectMode) setSelectMode(false);
+  }, [selected.size]);
+
   const isLoading =
     allDocs === undefined || (showArchived && archivedDocs === undefined);
   const totalDocs = allDocs?.length ?? 0;
-  const archivedCount = useQuery(
-    api.documents.getArchived,
-    isLoaded && isSignedIn ? {} : "skip"
-  );
+  const archivedCount = archivedDocs?.length ?? 0;
   const sharedCount = allDocs?.filter((d) => d.organizationId).length ?? 0;
 
-  const handleNewDocument = async () => {
+  const handleSelect = useCallback(
+    (id: string, shift: boolean) => {
+      if (!selectMode) setSelectMode(true);
+      const idx = displayDocs.findIndex((d) => d._id === id);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (shift && lastSelectedIdx.current >= 0) {
+          const lo = Math.min(idx, lastSelectedIdx.current);
+          const hi = Math.max(idx, lastSelectedIdx.current);
+          for (let i = lo; i <= hi; i++) next.add(displayDocs[i]._id);
+        } else {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        }
+        return next;
+      });
+      lastSelectedIdx.current = idx;
+    },
+    [displayDocs, selectMode]
+  );
+
+  const handleSelectAll = useCallback(() => {
+    setSelected(new Set(filteredDocs.map((d) => d._id)));
+  }, [filteredDocs]);
+
+  const someSelected = selected.size > 0;
+  const allPageSelected =
+    displayDocs.length > 0 && displayDocs.every((d) => selected.has(d._id));
+  const somePageSelected =
+    displayDocs.some((d) => selected.has(d._id)) && !allPageSelected;
+
+  const handleBulkArchive = async () => {
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(
+      ids.map((id) => archiveMutation({ id: id as Id<"documents"> }))
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    failed
+      ? toast.error(`${failed} papers couldn't be archived.`)
+      : toast.success(`${ids.length} papers archived`);
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(
+      ids.map((id) => removeMutation({ id: id as Id<"documents"> }))
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    failed
+      ? toast.error(`${failed} papers couldn't be deleted.`)
+      : toast.success(`${ids.length} papers deleted`);
+    setSelected(new Set());
+    setSelectMode(false);
+    setBulkDeleteOpen(false);
+  };
+
+  const handleNewPaper = async () => {
     setIsCreating(true);
     try {
       const { default: JSZip } = await import("jszip");
@@ -1335,78 +1956,86 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error("Upload failed");
       const { storageId } = await res.json();
       const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
-      const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
       const docId = await createDocument({
-        title: "Untitled document",
+        title: "Untitled paper",
         organizationId: organization?.id,
         storageId,
       });
-      await updateDocument({ id: docId, fileUrl });
+      await updateDocument({
+        id: docId,
+        fileUrl: `${convexSiteUrl}/getFile?storageId=${storageId}`,
+      });
       router.push(`/documents/${docId}`);
-      toast.success("Document created");
-    } catch (err) {
-      console.error(err);
-      toast.error("Couldn't create document.");
+      toast.success("Paper created");
+    } catch {
+      toast.error("Couldn't create paper.");
     } finally {
       setIsCreating(false);
     }
   };
 
-  const SORT_LABELS: Record<SortKey, string> = {
-    newest: "Newest first",
-    oldest: "Oldest first",
-    name_asc: "Name A–Z",
-    name_desc: "Name Z–A",
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // ── Filter label — pakai nama org kalau ada ───────────────────────────────
   const orgFilterLabel = organization?.name ?? "Org";
+  const hasActiveFilters = !!(
+    debouncedSearch ||
+    filter !== "all" ||
+    showArchived
+  );
 
   return (
     <div className="flex flex-col h-full" style={{ background: colors.bg }}>
-      {/* Header */}
+      {/* ── Header ── */}
       <div
-        className="flex items-center justify-between px-6 py-5 shrink-0"
+        className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
         style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
       >
         <div>
           <h1
-            className="text-[15px] font-semibold"
+            className="text-[15px] sm:text-base font-semibold"
             style={{ color: colors.text }}
           >
-            Documents
+            Papers
           </h1>
           {!isLoading && (
             <p
-              className="text-[11px] mt-0.5"
+              className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
               style={{ color: colors.textMuted }}
             >
-              {totalDocs} active
+              <span>
+                {totalDocs} {totalDocs === 1 ? "paper" : "papers"}
+              </span>
               {sharedCount > 0 && (
-                <span style={{ color: colors.accentLight }}>
-                  {" "}
-                  · {sharedCount} shared
-                </span>
-              )}
-              {showArchived &&
-                archivedDocs !== undefined &&
-                archivedDocs.length > 0 && (
-                  <span style={{ color: colors.warning }}>
-                    {" "}
-                    · {archivedDocs.length} archived shown
+                <>
+                  <span style={{ color: colors.textDim }}>·</span>
+                  <span style={{ color: colors.accentLight }}>
+                    {sharedCount} shared
                   </span>
-                )}
+                </>
+              )}
+              {showArchived && archivedCount > 0 && (
+                <>
+                  <span style={{ color: colors.textDim }}>·</span>
+                  <span style={{ color: colors.warning }}>
+                    {archivedCount} archived shown
+                  </span>
+                </>
+              )}
             </p>
           )}
         </div>
         <button
-          onClick={handleNewDocument}
+          onClick={handleNewPaper}
           disabled={isCreating}
-          className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150"
+          className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
           style={{
             background: colors.accentBg,
             color: colors.accentPale,
             border: `1px solid ${colors.accentBorder}`,
+            whiteSpace: "nowrap",
           }}
           onMouseEnter={(e) => {
             if (!isCreating) {
@@ -1424,66 +2053,122 @@ export default function DocumentsPage() {
           ) : (
             <PlusIcon className="w-3.5 h-3.5" />
           )}
-          {isCreating ? "Creating…" : "New document"}
+          {isCreating ? "Creating…" : "New paper"}
         </button>
       </div>
 
-      {/* Toolbar */}
+      {/* ── Toolbar ── */}
       <div
-        className="flex flex-wrap items-center gap-2 px-6 py-3 shrink-0"
+        className="shrink-0"
         style={{
           borderBottom: `1px solid ${colors.borderSubtle}`,
           background: "rgba(255,255,255,0.01)",
         }}
       >
-        {/* Search */}
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <SearchIcon
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-            style={{ color: colors.textDim }}
-          />
-          <input
-            placeholder="Search documents…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-lg outline-none transition-colors"
+        {/* Row 1: search + view + select mode */}
+        <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5">
+          <div className="relative flex-1 max-w-md">
+            <SearchIcon
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
+              style={{ color: colors.textDim }}
+            />
+            <input
+              placeholder="Search papers…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+              }}
+              onFocus={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+              }
+              onBlur={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+              }
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                style={{ color: colors.textDim }}
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* View toggle */}
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: `1px solid ${colors.border}`,
-              color: colors.text,
             }}
-            onFocus={(e) =>
-              (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-            }
-            onBlur={(e) =>
-              (e.currentTarget.style.border = `1px solid ${colors.border}`)
-            }
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              style={{ color: colors.textDim }}
-            >
-              <XIcon className="w-3 h-3" />
-            </button>
-          )}
+          >
+            {[
+              { v: "list" as ViewMode, Icon: ListIcon, t: "List" },
+              { v: "grid" as ViewMode, Icon: LayoutGridIcon, t: "Grid" },
+            ].map(({ v, Icon, t }) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                title={t}
+                className="p-1.5 rounded-lg transition-all"
+                style={{
+                  background:
+                    view === v ? "rgba(99,102,241,0.2)" : "transparent",
+                  color: view === v ? colors.accentLight : colors.textDim,
+                }}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            ))}
+          </div>
+
+          {/* Select mode toggle */}
+          <button
+            onClick={() => {
+              setSelectMode((v) => {
+                if (v) setSelected(new Set());
+                return !v;
+              });
+            }}
+            className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
+            style={{
+              background: selectMode
+                ? colors.accentBg
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
+              color: selectMode ? colors.accentLight : colors.textMuted,
+            }}
+          >
+            <CheckSquareIcon className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Select</span>
+          </button>
         </div>
 
-        {/* Filter pills */}
+        {/* Row 2: filters — scrollable */}
         <div
-          className="flex items-center gap-0.5 p-0.5 rounded-lg"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
-          }}
+          className="flex items-center gap-2 px-4 sm:px-6 pb-2.5 overflow-x-auto"
+          style={{ scrollbarWidth: "none" }}
         >
-          {(["all", "mine", ...(organization ? ["org"] : [])] as Filter[]).map(
-            (f) => (
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            {(
+              ["all", "mine", ...(organization ? ["org"] : [])] as Filter[]
+            ).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className="px-3 py-1 rounded-md text-[11px] font-medium transition-all"
+                className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap"
                 style={{
                   background:
                     filter === f ? "rgba(99,102,241,0.2)" : "transparent",
@@ -1492,190 +2177,273 @@ export default function DocumentsPage() {
               >
                 {f === "all" ? "All" : f === "mine" ? "Mine" : orgFilterLabel}
               </button>
-            )
-          )}
-        </div>
-
-        {/* Sort */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium transition-colors"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${colors.border}`,
-                color: colors.textMuted,
-              }}
-            >
-              {SORT_LABELS[sort]}
-              <ChevronDownIcon className="w-3 h-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-              <DropdownMenuItem key={key} onClick={() => setSort(key)}>
-                {SORT_LABELS[key]}
-              </DropdownMenuItem>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </div>
 
-        {/* Archive toggle */}
-        <button
-          onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium transition-all"
-          style={{
-            background: showArchived
-              ? colors.warningBg
-              : "rgba(255,255,255,0.04)",
-            border: `1px solid ${showArchived ? "rgba(251,191,36,0.25)" : colors.border}`,
-            color: showArchived ? colors.warning : colors.textMuted,
-          }}
-        >
-          <ArchiveIcon className="w-3 h-3" />
-          {showArchived ? "Hide archived" : "Archived"}
-          {archivedCount !== undefined && archivedCount.length > 0 && (
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
-              style={{
-                background: showArchived
-                  ? "rgba(251,191,36,0.2)"
-                  : "rgba(255,255,255,0.08)",
-                color: showArchived ? colors.warning : colors.textDim,
-              }}
-            >
-              {archivedCount.length}
-            </span>
-          )}
-        </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${colors.border}`,
+                  color: colors.textMuted,
+                }}
+              >
+                {SORT_LABELS[sort]}
+                <ChevronDownIcon className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                <DropdownMenuItem key={key} onClick={() => setSort(key)}>
+                  {sort === key && (
+                    <CheckIcon
+                      className="w-3 h-3 mr-2"
+                      style={{ color: colors.accentLight }}
+                    />
+                  )}
+                  {SORT_LABELS[key]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* Collections panel toggle */}
-        <button
-          onClick={() => setCollectionsPanelOpen((v) => !v)}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium transition-all"
-          style={{
-            background: collectionsPanelOpen
-              ? colors.accentBg
-              : "rgba(255,255,255,0.04)",
-            border: `1px solid ${collectionsPanelOpen ? colors.accentBorder : colors.border}`,
-            color: collectionsPanelOpen ? colors.accentLight : colors.textMuted,
-          }}
-        >
-          <FolderIcon className="w-3 h-3" />
-          Collections
-        </button>
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
+            style={{
+              background: showArchived
+                ? colors.warningBg
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${showArchived ? "rgba(251,191,36,0.25)" : colors.border}`,
+              color: showArchived ? colors.warning : colors.textMuted,
+            }}
+          >
+            <ArchiveIcon className="w-3.5 h-3.5" />
+            Archived
+            {archivedCount > 0 && (
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+                style={{
+                  background: showArchived
+                    ? "rgba(251,191,36,0.2)"
+                    : "rgba(255,255,255,0.08)",
+                  color: showArchived ? colors.warning : colors.textDim,
+                }}
+              >
+                {archivedCount}
+              </span>
+            )}
+          </button>
 
-        {/* View toggle */}
-        <div
-          className="flex items-center gap-0.5 p-0.5 rounded-lg ml-auto"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
-          }}
-        >
-          {[
-            { mode: "grid" as ViewMode, icon: LayoutGridIcon },
-            { mode: "list" as ViewMode, icon: ListIcon },
-          ].map(({ mode, icon: Icon }) => (
-            <button
-              key={mode}
-              onClick={() => setView(mode)}
-              className="p-1.5 rounded-md transition-all"
-              style={{
-                background:
-                  view === mode ? "rgba(99,102,241,0.2)" : "transparent",
-                color: view === mode ? colors.accentLight : colors.textDim,
-              }}
-            >
-              <Icon className="w-3.5 h-3.5" />
-            </button>
-          ))}
+          <button
+            onClick={() => setCollectionsPanelOpen((v) => !v)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
+            style={{
+              background: collectionsPanelOpen
+                ? colors.accentBg
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${collectionsPanelOpen ? colors.accentBorder : colors.border}`,
+              color: collectionsPanelOpen
+                ? colors.accentLight
+                : colors.textMuted,
+            }}
+          >
+            <FolderIcon className="w-3.5 h-3.5" />
+            Collections
+          </button>
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Active filter strip ── */}
+      {hasActiveFilters && !isLoading && (
+        <div
+          className="flex items-center gap-2 px-4 sm:px-6 py-2 shrink-0 flex-wrap"
+          style={{
+            borderBottom: `1px solid ${colors.border}`,
+            background: "rgba(255,255,255,0.01)",
+          }}
+        >
+          <span className="text-[11px]" style={{ color: colors.textDim }}>
+            {filteredDocs.length} result{filteredDocs.length !== 1 ? "s" : ""}
+          </span>
+          {debouncedSearch && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: colors.textMuted,
+              }}
+            >
+              &ldquo;{debouncedSearch}&rdquo;
+              <button onClick={() => setSearch("")}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filter !== "all" && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{ background: colors.accentBg, color: colors.accentLight }}
+            >
+              {filter === "mine" ? "Mine only" : orgFilterLabel}
+              <button onClick={() => setFilter("all")}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilter("all");
+              setShowArchived(false);
+            }}
+            className="text-[11px] ml-auto"
+            style={{ color: colors.textDim }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* ── Select mode header ── */}
+      {selectMode && !someSelected && (
+        <div
+          className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
+          style={{
+            background: colors.bgSidebar,
+            borderBottom: `1px solid ${colors.borderSubtle}`,
+          }}
+        >
+          <SelectCheckbox
+            checked={allPageSelected}
+            indeterminate={somePageSelected}
+            onChange={(v) => {
+              if (v) setSelected(new Set(displayDocs.map((d) => d._id)));
+              else setSelected(new Set());
+            }}
+          />
+          <span className="text-[11px]" style={{ color: colors.textDim }}>
+            Click papers to select
+          </span>
+          <button
+            onClick={() => {
+              setSelectMode(false);
+              setSelected(new Set());
+            }}
+            className="ml-auto text-[11px]"
+            style={{ color: colors.textDim }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* ── Content ── */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            view === "grid" ? (
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <GridSkeleton key={i} />
+        <div ref={contentRef} className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            {isLoading ? (
+              view === "grid" ? (
+                <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <GridSkeleton key={i} />
+                  ))}
+                </div>
+              ) : (
+                <div className="pt-1">
+                  {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <ListSkeleton key={i} />
+                  ))}
+                </div>
+              )
+            ) : displayDocs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                  style={{ background: "rgba(255,255,255,0.04)" }}
+                >
+                  <FileIcon
+                    className="w-6 h-6"
+                    style={{ color: colors.textDim }}
+                  />
+                </div>
+                <p
+                  className="text-[14px] font-semibold mb-1.5"
+                  style={{ color: colors.textSecondary }}
+                >
+                  {search ? "No papers found" : "No papers yet"}
+                </p>
+                <p
+                  className="text-[12px] mb-6 max-w-[240px] leading-relaxed"
+                  style={{ color: colors.textDim }}
+                >
+                  {search
+                    ? `No results for "${search}".`
+                    : "Create your first paper to get started."}
+                </p>
+                {!search && (
+                  <button
+                    onClick={handleNewPaper}
+                    disabled={isCreating}
+                    className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
+                    style={{
+                      background: colors.accentBg,
+                      color: colors.accentPale,
+                      border: `1px solid ${colors.accentBorder}`,
+                    }}
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" />
+                    New paper
+                  </button>
+                )}
+              </div>
+            ) : view === "grid" ? (
+              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
+                {displayDocs.map((doc) => (
+                  <GridCard
+                    key={doc._id}
+                    document={doc}
+                    selected={selected.has(doc._id)}
+                    selectMode={selectMode}
+                    onSelect={handleSelect}
+                    onAddToCollection={(id, title) =>
+                      setAddColDialog({ id, title })
+                    }
+                    onRename={(id, title) => setRenameDialog({ id, title })}
+                  />
                 ))}
               </div>
             ) : (
-              <div>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <RowSkeleton key={i} />
+              <div className="pb-2">
+                {displayDocs.map((doc) => (
+                  <ListRow
+                    key={doc._id}
+                    document={doc}
+                    selected={selected.has(doc._id)}
+                    selectMode={selectMode}
+                    onSelect={handleSelect}
+                    onAddToCollection={(id, title) =>
+                      setAddColDialog({ id, title })
+                    }
+                    onRename={(id, title) => setRenameDialog({ id, title })}
+                  />
                 ))}
               </div>
-            )
-          ) : displayDocs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-                style={{ background: "rgba(255,255,255,0.04)" }}
-              >
-                <FileTextIcon
-                  className="w-6 h-6"
-                  style={{ color: colors.textDim }}
-                />
-              </div>
-              <p
-                className="text-sm font-semibold mb-1"
-                style={{ color: colors.textSecondary }}
-              >
-                {search ? "No documents found" : "No documents yet"}
-              </p>
-              <p
-                className="text-[11px] mb-5 max-w-xs"
-                style={{ color: colors.textDim }}
-              >
-                {search
-                  ? `No results for "${search}". Try a different term.`
-                  : "Create your first document to get started."}
-              </p>
-              {!search && (
-                <button
-                  onClick={handleNewDocument}
-                  disabled={isCreating}
-                  className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-xl transition-all"
-                  style={{
-                    background: colors.accentBg,
-                    color: colors.accentPale,
-                    border: `1px solid ${colors.accentBorder}`,
-                  }}
-                >
-                  <PlusIcon className="w-3.5 h-3.5" />
-                  New document
-                </button>
-              )}
-            </div>
-          ) : view === "grid" ? (
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {displayDocs.map((doc) => (
-                <DocumentGridCard
-                  key={doc._id}
-                  document={doc}
-                  onAddToCollection={(id, title) =>
-                    setAddColDialog({ id, title })
-                  }
-                  onRename={(id, title) => setRenameDialog({ id, title })}
-                />
-              ))}
-            </div>
-          ) : (
-            <div>
-              {displayDocs.map((doc) => (
-                <DocumentListRow
-                  key={doc._id}
-                  document={doc}
-                  onAddToCollection={(id, title) =>
-                    setAddColDialog({ id, title })
-                  }
-                  onRename={(id, title) => setRenameDialog({ id, title })}
-                />
-              ))}
+            )}
+          </div>
+
+          {/* Pagination */}
+          {!isLoading && filteredDocs.length > PAGE_SIZE && (
+            <div className="pb-[calc(env(safe-area-inset-bottom)+52px)] md:pb-0">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={filteredDocs.length}
+                pageSize={PAGE_SIZE}
+                onChange={handlePageChange}
+              />
             </div>
           )}
         </div>
@@ -1686,6 +2454,26 @@ export default function DocumentsPage() {
         />
       </div>
 
+      {/* Bulk bar */}
+      {someSelected && (
+        <BulkBar
+          count={selected.size}
+          total={filteredDocs.length}
+          onArchive={handleBulkArchive}
+          onDelete={() => setBulkDeleteOpen(true)}
+          onClear={() => {
+            setSelected(new Set());
+            setSelectMode(false);
+          }}
+          onSelectAll={handleSelectAll}
+          onAddToCollection={() => {
+            const firstId = Array.from(selected)[0] as Id<"documents">;
+            setAddColDialog({ id: firstId, title: `${selected.size} papers` });
+          }}
+        />
+      )}
+
+      {/* Dialogs */}
       {addColDialog && (
         <AddToCollectionDialog
           open={!!addColDialog}
@@ -1702,6 +2490,12 @@ export default function DocumentsPage() {
           currentTitle={renameDialog.title}
         />
       )}
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        count={selected.size}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDeleteOpen(false)}
+      />
     </div>
   );
 }
