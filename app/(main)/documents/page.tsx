@@ -58,6 +58,8 @@ import {
 } from "@/components/ui/dialog";
 import { useDebounce } from "@/lib/useDebounce";
 import { colors, shadows } from "@/lib/design-tokens";
+import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -175,7 +177,15 @@ function AddToCollectionDialog({
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
                     style={{ background: `${col.color ?? colors.accent}18` }}
                   >
-                    {col.icon ?? "📁"}
+                    {(() => {
+                      const Icon = getIconComponent(col.icon ?? "folder");
+                      return (
+                        <Icon
+                          className="w-3 h-3"
+                          style={{ color: col.color ?? "#6366f1" }}
+                        />
+                      );
+                    })()}{" "}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
@@ -469,7 +479,15 @@ function CollectionsPanel({
                         style={{ background: accentColor }}
                       />
                       <span className="text-sm shrink-0">
-                        {col.icon ?? "📁"}
+                        {(() => {
+                          const Icon = getIconComponent(col.icon ?? "folder");
+                          return (
+                            <Icon
+                              className="w-3 h-3"
+                              style={{ color: col.color ?? "#6366f1" }}
+                            />
+                          );
+                        })()}{" "}
                       </span>
                       <span
                         className="flex-1 text-[12px] font-medium truncate"
@@ -731,7 +749,16 @@ function CollectionBadges({
             border: `1px solid ${col.color ? `${col.color}28` : colors.border}`,
           }}
         >
-          {col.icon} {col.name}
+          {(() => {
+            const Icon = getIconComponent(col.icon ?? "folder");
+            return (
+              <Icon
+                className="w-3 h-3"
+                style={{ color: col.color ?? "#6366f1" }}
+              />
+            );
+          })()}{" "}
+          {col.name}
         </span>
       ))}
       {!expanded && overflow > 0 && (
