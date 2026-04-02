@@ -6,18 +6,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { status, url, key } = body;
 
-    console.log("[onlyoffice-callback] status:", status, "key:", key);
+    // console.log("[onlyoffice-callback] status:", status, "key:", key);
 
     if ((status === 2 || status === 6) && url) {
       const documentId = req.nextUrl.searchParams.get("documentId");
       const templateId = req.nextUrl.searchParams.get("templateId");
       const storageId = req.nextUrl.searchParams.get("storageId");
 
-      console.log("[onlyoffice-callback] saving for", {
-        documentId,
-        templateId,
-        storageId,
-      });
+      // console.log("[onlyoffice-callback] saving for", {
+      //   documentId,
+      //   templateId,
+      //   storageId,
+      // });
 
       try {
         // 1. Download edited file from ONLYOFFICE
@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
         const fileBuffer = await fileRes.arrayBuffer();
-        console.log(
-          "[onlyoffice-callback] downloaded",
-          fileBuffer.byteLength,
-          "bytes"
-        );
+        // console.log(
+        //   "[onlyoffice-callback] downloaded",
+        //   fileBuffer.byteLength,
+        //   "bytes"
+        // );
 
         const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
         if (!convexSiteUrl) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
         const { uploadUrl } = await uploadUrlRes.json();
-        console.log("[onlyoffice-callback] got upload URL");
+        // console.log("[onlyoffice-callback] got upload URL");
 
         // 3. Upload file to Convex storage
         const uploadRes = await fetch(uploadUrl, {
@@ -77,10 +77,10 @@ export async function POST(req: NextRequest) {
 
         const uploadResult = await uploadRes.json();
         const savedStorageId = uploadResult.storageId;
-        console.log(
-          "[onlyoffice-callback] uploaded storageId:",
-          savedStorageId
-        );
+        // console.log(
+        //   "[onlyoffice-callback] uploaded storageId:",
+        //   savedStorageId
+        // );
 
         if (!savedStorageId) {
           console.error(
@@ -110,10 +110,9 @@ export async function POST(req: NextRequest) {
             errText
           );
         } else {
-          console.log(
-            "[onlyoffice-callback] ✓ saved successfully:",
-            savedStorageId
-          );
+          // console.log(
+          //   "[onlyoffice-callback] ✓ saved successfully:"
+          // );
         }
       } catch (saveErr) {
         console.error("[onlyoffice-callback] save error:", saveErr);
