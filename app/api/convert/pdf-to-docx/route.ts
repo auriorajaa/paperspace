@@ -1,8 +1,6 @@
 // app/api/convert/pdf-to-docx/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { randomUUID } from "crypto";
-import { storePdf, deletePdf } from "@/lib/pdf-temp-store";
 
 export const runtime = "nodejs";
 
@@ -17,9 +15,7 @@ function decodeXmlEntities(str: string): string {
     .replace(/&#39;/g, "'");
 }
 
-// Helper: cek apakah buffer adalah file DOCX yang valid (magic number)
 function isValidDocx(buffer: Buffer): boolean {
-  // DOCX adalah ZIP, magic number 0x50 0x4B 0x03 0x04
   if (buffer.length < 4) return false;
   return (
     buffer[0] === 0x50 &&
@@ -30,29 +26,18 @@ function isValidDocx(buffer: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const token = randomUUID();
-
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
+    // ── Terima pdfUrl dari body (bukan file upload) ──────────────────────────
+    const body = await req.json();
+    const pdfUrl: string | undefined = body.pdfUrl;
 
-    if (!file) {
-      return new NextResponse("Missing PDF file.", { status: 400 });
+    if (!pdfUrl) {
+      return new NextResponse("Missing pdfUrl.", { status: 400 });
     }
 
-    // 1. Store PDF
-    const pdfBuffer = Buffer.from(await file.arrayBuffer());
-    storePdf(token, pdfBuffer);
+    // console.log("[pdf-to-docx] PDF URL yang dikirim ke OnlyOffice:", pdfUrl);
 
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-    const pdfUrl = `${appUrl.replace(/\/$/, "")}/api/pdf/serve/${token}`;
-
-    // Log untuk debug: pastikan URL dapat diakses dari luar
-    // console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
-
-    // 2. OnlyOffice conversion
+    // ── OnlyOffice conversion ────────────────────────────────────────────────
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
     if (!ooServerUrl) {
       console.error("[pdf-to-docx] ONLYOFFICE_SERVER_URL not set");
@@ -117,7 +102,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse URL hasil konversi
+    // ── Parse URL hasil konversi ─────────────────────────────────────────────
     let docxUrl: string | null = null;
 
     if (
@@ -164,7 +149,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Download the converted DOCX
+    // ── Download DOCX hasil konversi ─────────────────────────────────────────
     const docxRes = await fetch(docxUrl);
     if (!docxRes.ok) {
       console.error("[pdf-to-docx] failed to download DOCX:", docxRes.status);
@@ -176,16 +161,12 @@ export async function POST(req: NextRequest) {
 
     const docxBuffer = Buffer.from(await docxRes.arrayBuffer());
 
-    // VALIDASI: cek apakah file benar-benar DOCX (bukan HTML error)
     if (!isValidDocx(docxBuffer)) {
-      // Coba baca sebagai text untuk melihat apakah itu HTML error
       const sample = docxBuffer.slice(0, 200).toString();
       console.error(
         "[pdf-to-docx] Downloaded file is not a valid DOCX. First 200 chars:",
         sample
       );
-
-      // Jika mengandung HTML, kemungkinan error dari OnlyOffice
       if (
         sample.toLowerCase().includes("<html") ||
         sample.toLowerCase().includes("error")
@@ -206,8 +187,6 @@ export async function POST(req: NextRequest) {
     //   docxBuffer.length
     // );
 
-    // console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
-
     return new NextResponse(docxBuffer, {
       status: 200,
       headers: {
@@ -223,7 +202,5 @@ export async function POST(req: NextRequest) {
       "Something went wrong while preparing your document. Please try again.",
       { status: 500 }
     );
-  } finally {
-    deletePdf(token);
   }
 }

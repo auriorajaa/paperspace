@@ -423,6 +423,7 @@ export default function TemplateNewPage() {
   const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
   const createTemplate = useMutation(api.templates.create);
   const allTemplates = useQuery(api.templates.getAll); // untuk saran labels
+  const deleteTempStorage = useMutation(api.templates.deleteTempStorage);
 
   // File state
   const [file, setFile] = useState<File | null>(null);
@@ -692,6 +693,7 @@ export default function TemplateNewPage() {
   };
 
   const handleSavePdf = async () => {
+    // ── Step 1: Split halaman yang dipilih ──────────────────────────────────
     setStage("splitting");
     const splitForm = new FormData();
     splitForm.append("file", file!);
@@ -710,25 +712,64 @@ export default function TemplateNewPage() {
       );
     }
     const splitBlob = await splitRes.blob();
-    const splitFile = new File([splitBlob], "pages.pdf", {
-      type: "application/pdf",
-    });
 
+    // ── Step 2: Upload split PDF ke Convex untuk dapat URL publik ───────────
+    // Vercel serverless = tidak ada shared memory antar request.
+    // Convex storage URL selalu publik dan bisa diakses OnlyOffice dari server.
     setStage("converting");
-    const convertForm = new FormData();
-    convertForm.append("file", splitFile);
-    const convertRes = await fetch("/api/convert/pdf-to-docx", {
+    const tempUploadUrl = await generateUploadUrl();
+    const tempUploadRes = await fetch(tempUploadUrl, {
       method: "POST",
-      body: convertForm,
+      headers: { "Content-Type": "application/pdf" }, // penting: harus PDF bukan DOCX
+      body: splitBlob,
     });
+    if (!tempUploadRes.ok) {
+      throw new Error("Failed to upload PDF for conversion.");
+    }
+    const { storageId: tempStorageId } = await tempUploadRes.json();
+
+    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+    const publicPdfUrl = `${convexSiteUrl}/getFile?storageId=${tempStorageId}`;
+
+    console.log("[handleSavePdf] PDF public URL (Convex):", publicPdfUrl);
+
+    // ── Step 3: Kirim URL ke OnlyOffice untuk konversi ke DOCX ──────────────
+    let convertRes: Response;
+    try {
+      convertRes = await fetch("/api/convert/pdf-to-docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdfUrl: publicPdfUrl }),
+      });
+    } catch (err) {
+      // Cleanup temp file sebelum throw
+      try {
+        await deleteTempStorage({ storageId: tempStorageId });
+      } catch {}
+      throw err;
+    }
+
     if (!convertRes.ok) {
+      try {
+        await deleteTempStorage({ storageId: tempStorageId });
+      } catch {}
       const msg = await convertRes.text();
       throw new Error(
         msg ||
           "Something went wrong while converting your PDF. Please try again."
       );
     }
+
     const docxBlob = await convertRes.blob();
+
+    // Hapus temp PDF — tidak dibutuhkan lagi setelah konversi selesai
+    try {
+      await deleteTempStorage({ storageId: tempStorageId });
+    } catch {
+      console.warn("[handleSavePdf] Cleanup temp PDF gagal — tidak kritis");
+    }
+
+    // ── Validasi magic bytes DOCX ────────────────────────────────────────────
     const first4Bytes = await docxBlob.slice(0, 4).arrayBuffer();
     const header = new Uint8Array(first4Bytes);
     const isValidDocx =
@@ -738,17 +779,18 @@ export default function TemplateNewPage() {
       header[3] === 0x04;
 
     if (!isValidDocx) {
-      // Coba baca sebagai text untuk melihat error
       const textSample = await docxBlob.slice(0, 500).text();
       console.error("[PDF conversion] Invalid DOCX, sample:", textSample);
       throw new Error(
         "The converted document is invalid. The PDF might be corrupted or the conversion service failed."
       );
     }
+
     const docxFile = new File([docxBlob], `${name.trim()}.docx`, {
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
 
+    // ── Step 4: Upload DOCX final ke Convex sebagai template ────────────────
     await processDocx(docxFile);
   };
 
