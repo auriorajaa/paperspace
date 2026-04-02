@@ -5,9 +5,10 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
-  const buffer = getPdf(params.token);
+  const { token } = await params;
+  const buffer = getPdf(token);
 
   if (!buffer) {
     return new NextResponse("File not found or link has expired.", {
