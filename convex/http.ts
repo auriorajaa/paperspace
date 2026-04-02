@@ -21,10 +21,13 @@ http.route({
       return new Response("File not found", { status: 404 });
     }
 
+    // Deteksi content type dari blob — jangan hardcode DOCX
+    // Convex storage menyimpan content type saat upload
+    const contentType = blob.type || "application/octet-stream";
+
     return new Response(blob, {
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Type": contentType,
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "no-store",
       },

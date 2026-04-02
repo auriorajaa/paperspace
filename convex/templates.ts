@@ -78,7 +78,7 @@ export const getGeneratedCount = query({
   },
 });
 
-// ── Mutations — tetap throw ───────────────────────────────────────────────────
+// ── Mutations ─────────────────────────────────────────────────────────────────
 
 export const create = mutation({
   args: {
@@ -166,6 +166,21 @@ export const generateUploadUrl = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Hapus file sementara dari storage (dipakai setelah konversi PDF selesai)
+export const deleteTempStorage = mutation({
+  args: { storageId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+    try {
+      await ctx.storage.delete(args.storageId as any);
+    } catch (e) {
+      // Non-critical — jangan throw, cukup log
+      console.warn("[deleteTempStorage] failed:", e);
+    }
   },
 });
 
