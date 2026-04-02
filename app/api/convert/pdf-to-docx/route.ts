@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const pdfUrl = `${appUrl.replace(/\/$/, "")}/api/pdf/serve/${token}`;
 
     // Log untuk debug: pastikan URL dapat diakses dari luar
-    console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
+    // console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
 
     // 2. OnlyOffice conversion
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       requestBody.token = jwt.sign(payload, jwtSecret, { algorithm: "HS256" });
     }
 
-    console.log("[pdf-to-docx] converting via:", convertUrl);
+    // console.log("[pdf-to-docx] converting via:", convertUrl);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), CONVERT_TIMEOUT_MS);
@@ -201,12 +201,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(
-      "[pdf-to-docx] Conversion successful, DOCX size:",
-      docxBuffer.length
-    );
+    // console.log(
+    //   "[pdf-to-docx] Conversion successful, DOCX size:",
+    //   docxBuffer.length
+    // );
 
-    console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
+    // console.log("[pdf-to-docx] PDF public URL:", pdfUrl);
 
     return new NextResponse(docxBuffer, {
       status: 200,

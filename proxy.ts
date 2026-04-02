@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/onlyoffice-file(.*)",
   "/api/onlyoffice-callback(.*)",
+  "/api/pdf/serve/(.*)",
   "/api/google/callback(.*)", // Google OAuth callback — browser redirect, needs to be public
 ]);
 
