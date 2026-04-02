@@ -931,7 +931,7 @@ export default function HomePage() {
                   style={{ background: bg, border: `1px solid ${border}` }}
                 >
                   <span
-                    className="text-[18px] font-bold tabular-nums leading-none"
+                    className="text-[15px] md:text-[18px] font-bold tabular-nums leading-none"
                     style={{ color }}
                   >
                     {value}

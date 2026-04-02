@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   PlusIcon,
   LayoutTemplateIcon,
@@ -19,11 +19,18 @@ import {
   ChevronDownIcon,
   LayoutGridIcon,
   ListIcon,
-  FileTextIcon,
-  CopyIcon,
   LinkIcon,
+  CheckIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  DownloadIcon,
+  FileTextIcon,
+  MinusIcon,
+  CheckSquareIcon,
+  FolderInputIcon,
+  AlignLeftIcon,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { Doc } from "@/convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -42,479 +49,1834 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import Link from "next/link";
-import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { colors } from "@/lib/design-tokens";
 
-type SortKey = "newest" | "oldest" | "name_asc" | "name_desc" | "most_fields";
-type ViewMode = "grid" | "list";
+// ─────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function FieldTypeDots({ fields }: { fields: { type: string }[] }) {
-  const types = [...new Set(fields.map((f) => f.type))].slice(0, 5);
-  return (
-    <div className="flex items-center gap-1">
-      {types.map((type) => (
-        <span
-          key={type}
-          className="w-2 h-2 rounded-full"
-          style={{ background: fieldTypeColors[type] ?? "#6b7280" }}
-          title={type}
-        />
-      ))}
-    </div>
-  );
+function smartDate(ts: number): string {
+  if (differenceInHours(Date.now(), ts) < 24)
+    return formatDistanceToNow(new Date(ts), { addSuffix: true });
+  return format(new Date(ts), "MMM d, yyyy");
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 20;
 
-function TemplateSkeleton({ view }: { view: ViewMode }) {
-  if (view === "list") {
-    return (
-      <div
-        className="flex items-center gap-3 px-5 py-3.5 animate-pulse"
-        style={{ borderBottom: `1px solid ${colors.border}` }}
-      >
-        <div
-          className="w-8 h-8 rounded-lg shrink-0"
-          style={{ background: "rgba(99,102,241,0.12)" }}
-        />
-        <div className="flex-1 space-y-1.5">
-          <div
-            className="h-3.5 rounded w-1/3"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          />
-          <div
-            className="h-2.5 rounded w-1/5"
-            style={{ background: "rgba(255,255,255,0.05)" }}
-          />
-        </div>
-        <div
-          className="h-6 rounded-lg w-16"
-          style={{ background: "rgba(255,255,255,0.05)" }}
-        />
-      </div>
-    );
+/** First tag = folder, rest = labels */
+function extractFolder(tags: string[] | undefined): string | null {
+  return tags?.[0] ?? null;
+}
+function extractLabels(tags: string[] | undefined): string[] {
+  return tags?.slice(1) ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleExport(template: Doc<"templates">, fmt: "docx" | "pdf") {
+  if (!template.fileUrl) {
+    toast.error("No file available for this template.");
+    return;
   }
+  if (fmt === "docx") {
+    const res = await fetch(template.fileUrl);
+    if (!res.ok) {
+      toast.error("Failed to fetch file.");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${template.name}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Downloading template file…");
+  } else {
+    const id = toast.loading("Converting to PDF…");
+    try {
+      const res = await fetch("/api/onlyoffice-convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileUrl: template.fileUrl,
+          fileName: template.name,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${template.name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.dismiss(id);
+      toast.success("PDF downloaded");
+    } catch {
+      toast.dismiss(id);
+      toast.error("PDF export failed. Check OnlyOffice setup.");
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Checkbox
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SelectCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <div
-      className="rounded-2xl p-4 space-y-3 animate-pulse"
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!checked);
+      }}
+      className="rounded-md flex items-center justify-center shrink-0 transition-all"
       style={{
-        background: "rgba(99,102,241,0.04)",
-        border: "1px solid rgba(99,102,241,0.1)",
+        width: 16,
+        height: 16,
+        background:
+          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
+        border: `1.5px solid ${checked || indeterminate ? colors.accent : "rgba(255,255,255,0.2)"}`,
       }}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-xl shrink-0"
-          style={{ background: "rgba(99,102,241,0.12)" }}
-        />
-        <div className="flex-1 space-y-1.5">
-          <div
-            className="h-3.5 rounded w-3/4"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          />
-          <div
-            className="h-2.5 rounded w-1/2"
-            style={{ background: "rgba(255,255,255,0.05)" }}
-          />
-        </div>
-      </div>
-      <div
-        className="h-3 rounded w-full"
-        style={{ background: "rgba(255,255,255,0.04)" }}
-      />
-      <div className="flex gap-1.5">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-5 rounded-md w-14"
-            style={{ background: "rgba(255,255,255,0.06)" }}
-          />
-        ))}
-      </div>
-      <div className="flex gap-2 pt-1">
-        <div
-          className="h-8 rounded-xl flex-1"
-          style={{ background: "rgba(255,255,255,0.05)" }}
-        />
-        <div
-          className="h-8 rounded-xl flex-1"
-          style={{ background: "rgba(99,102,241,0.1)" }}
-        />
-      </div>
-    </div>
+      {indeterminate ? (
+        <MinusIcon style={{ width: 9, height: 9, color: "#fff" }} />
+      ) : checked ? (
+        <CheckIcon style={{ width: 9, height: 9, color: "#fff" }} />
+      ) : null}
+    </button>
   );
 }
 
-// ── Template Grid Card ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Rename Dialog  — modal, not inline
+// ─────────────────────────────────────────────────────────────────────────────
 
-function TemplateGridCard({
-  template,
-  onDelete,
+function RenameDialog({
+  id,
+  currentName,
+  open,
+  onClose,
 }: {
-  template: Doc<"templates"> & { tags?: string[] };
-  onDelete: () => void;
+  id: Doc<"templates">["_id"];
+  currentName: string;
+  open: boolean;
+  onClose: () => void;
 }) {
-  const router = useRouter();
-  const [hovered, setHovered] = useState(false);
+  const updateTemplate = useMutation(api.templates.update);
+  const [val, setVal] = useState(currentName);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const fieldTypeBreakdown = template.fields.reduce<Record<string, number>>(
-    (acc, f) => {
-      acc[f.type] = (acc[f.type] ?? 0) + 1;
-      return acc;
-    },
-    {}
+  useEffect(() => {
+    if (open) {
+      setVal(currentName);
+      // slight delay so Dialog animation completes before focus
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 80);
+      return () => clearTimeout(t);
+    }
+  }, [open, currentName]);
+
+  const save = async () => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    if (trimmed === currentName) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateTemplate({ id, name: trimmed });
+      toast.success("Template renamed");
+      onClose();
+    } catch {
+      toast.error("Couldn't rename. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        style={{
+          background: "#1a1a26",
+          border: "1px solid rgba(99,102,241,0.2)",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle style={{ color: colors.text, fontSize: 14 }}>
+            Rename template
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="py-2">
+          <input
+            ref={inputRef}
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") onClose();
+            }}
+            placeholder="Template name"
+            className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${colors.accentBorder}`,
+              color: colors.text,
+            }}
+            onFocus={(e) =>
+              (e.currentTarget.style.border = `1px solid rgba(129,140,248,0.6)`)
+            }
+            onBlur={(e) =>
+              (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+            }
+          />
+        </div>
+
+        <DialogFooter className="gap-2 flex-row justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-[12px] font-medium transition-colors"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              color: colors.textMuted,
+              border: `1px solid ${colors.border}`,
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+            }
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={!val.trim() || saving}
+            className="px-4 py-2 rounded-xl text-[12px] font-medium transition-all"
+            style={{
+              background:
+                val.trim() && !saving
+                  ? colors.accentBg
+                  : "rgba(99,102,241,0.05)",
+              color: val.trim() && !saving ? colors.accentPale : colors.textDim,
+              border: `1px solid ${val.trim() && !saving ? colors.accentBorder : "transparent"}`,
+              opacity: saving ? 0.7 : 1,
+              cursor: !val.trim() || saving ? "not-allowed" : "pointer",
+            }}
+            onMouseEnter={(e) => {
+              if (val.trim() && !saving)
+                e.currentTarget.style.background = colors.accentBgHover;
+            }}
+            onMouseLeave={(e) => {
+              if (val.trim() && !saving)
+                e.currentTarget.style.background = colors.accentBg;
+            }}
+          >
+            {saving ? "Saving…" : "Rename"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline Description Editor  — click-to-edit textarea
+// ─────────────────────────────────────────────────────────────────────────────
+
+function InlineDescriptionEdit({
+  id,
+  currentDescription,
+  onDone,
+}: {
+  id: Doc<"templates">["_id"];
+  currentDescription: string;
+  onDone: () => void;
+}) {
+  const updateTemplate = useMutation(api.templates.update);
+  const [val, setVal] = useState(currentDescription);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+    const len = val.length;
+    ref.current?.setSelectionRange(len, len);
+  }, []);
+
+  const save = async () => {
+    const trimmed = val.trim();
+    if (trimmed === (currentDescription ?? "").trim()) {
+      onDone();
+      return;
+    }
+    try {
+      await updateTemplate({ id, description: trimmed || undefined });
+      toast.success("Description updated");
+    } catch {
+      toast.error("Couldn't update description.");
+    }
+    onDone();
+  };
+
+  return (
+    <textarea
+      ref={ref}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onDone();
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+      }}
+      onBlur={save}
+      rows={3}
+      placeholder="Add a description…"
+      className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none resize-none leading-relaxed"
+      style={{
+        background: "rgba(255,255,255,0.06)",
+        border: `1px solid ${colors.accentBorder}`,
+        color: colors.text,
+      }}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Folder + Label Editor
+// UX: Folder = first tag (one home), Labels = remaining tags (for filtering).
+// This makes the distinction explicit in the UI instead of relying on
+// the "first tag = folder" convention being invisible to users.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FolderAndLabelEditor({
+  id,
+  currentTags,
+  allExistingFolders,
+  onDone,
+}: {
+  id: Doc<"templates">["_id"];
+  currentTags: string[];
+  allExistingFolders: string[];
+  onDone: () => void;
+}) {
+  const updateTemplate = useMutation(api.templates.update);
+
+  const [folderInput, setFolderInput] = useState(currentTags[0] ?? "");
+  const [labels, setLabels] = useState<string[]>(currentTags.slice(1));
+  const [labelInput, setLabelInput] = useState("");
+  const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const folderSuggestions = allExistingFolders.filter(
+    (f) =>
+      f.toLowerCase().includes(folderInput.toLowerCase()) && f !== folderInput
+  );
+
+  const addLabel = (raw: string) => {
+    const newLabels = raw
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(
+        (t) => t && !labels.includes(t) && t !== folderInput.toLowerCase()
+      );
+    if (newLabels.length) setLabels((p) => [...p, ...newLabels]);
+  };
+
+  const removeLabel = (label: string) =>
+    setLabels((p) => p.filter((t) => t !== label));
+
+  const save = async () => {
+    if (labelInput.trim()) addLabel(labelInput);
+    const cleanFolder = folderInput.trim().toLowerCase();
+    // Re-read labels after possible addLabel call
+    const allTags = [cleanFolder, ...labels].filter(Boolean);
+    setSaving(true);
+    try {
+      await updateTemplate({ id, tags: allTags });
+      toast.success("Saved");
+      onDone();
+    } catch {
+      toast.error("Couldn't save.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div
-      className="rounded-2xl p-4 flex flex-col gap-3 group transition-all duration-200"
+      onClick={(e) => e.stopPropagation()}
+      className="rounded-xl p-3 space-y-3"
       style={{
-        background: hovered ? "rgba(99,102,241,0.07)" : "rgba(99,102,241,0.03)",
-        border: `1px solid ${hovered ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.12)"}`,
-        boxShadow: hovered
-          ? "0 0 0 1px rgba(99,102,241,0.1), 0 8px 24px rgba(0,0,0,0.25)"
-          : "none",
+        background: "rgba(15,15,25,0.8)",
+        border: `1px solid ${colors.accentBorder}`,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{
-            background: "rgba(99,102,241,0.15)",
-            border: "1px solid rgba(99,102,241,0.25)",
-          }}
+      {/* Folder */}
+      <div className="space-y-1.5">
+        <label
+          className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest"
+          style={{ color: colors.textDim }}
         >
-          <LayoutTemplateIcon
-            className="w-4.5 h-4.5"
-            style={{ color: "#818cf8" }}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-sm font-semibold truncate"
-            style={{ color: colors.text }}
+          <FolderIcon className="w-2.5 h-2.5" />
+          Folder
+          <span
+            style={{
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
           >
-            {template.name}
-          </p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              {template.fields.length} field
-              {template.fields.length !== 1 ? "s" : ""}
-            </span>
-            <span style={{ color: colors.textDim }}>·</span>
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              {formatDistanceToNow(new Date(template._creationTime), {
-                addSuffix: true,
-              })}
-            </span>
-            <FieldTypeDots fields={template.fields} />
-          </div>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ color: colors.textMuted }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
+            — one home for this template
+          </span>
+        </label>
+        <div className="relative">
+          <input
+            value={folderInput}
+            onChange={(e) => {
+              setFolderInput(e.target.value);
+              setShowFolderSuggestions(true);
+            }}
+            onFocus={(e) => {
+              setShowFolderSuggestions(true);
+              // Border highlight
+              e.currentTarget.style.border = `1px solid ${colors.accentBorder}`;
+            }}
+            onBlur={(e) => {
+              setTimeout(() => setShowFolderSuggestions(false), 160);
+              // Reset border
+              e.currentTarget.style.border = `1px solid ${colors.border}`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setShowFolderSuggestions(false);
+                (e.target as HTMLInputElement).blur();
               }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
-              }
-            >
-              <MoreHorizontalIcon className="w-3.5 h-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem
-              onClick={() => router.push(`/templates/${template._id}/edit`)}
-            >
-              <PencilIcon className="w-3.5 h-3.5 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => router.push(`/templates/${template._id}/fill`)}
-            >
-              <PlayIcon className="w-3.5 h-3.5 mr-2" />
-              Use
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={onDelete}
-            >
-              <Trash2Icon className="w-3.5 h-3.5 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Description */}
-      {template.description && (
-        <p
-          className="text-[11px] leading-relaxed line-clamp-2"
-          style={{ color: colors.textMuted }}
-        >
-          {template.description}
-        </p>
-      )}
-
-      {/* Field type breakdown */}
-      {template.fields.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(fieldTypeBreakdown).map(([type, count]) => (
-            <span
-              key={type}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium"
+              if (e.key === "Escape") onDone();
+            }}
+            placeholder="Type or select a folder…"
+            className="w-full rounded-lg px-2.5 py-1.5 text-[11px] outline-none"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: `1px solid ${colors.border}`,
+              color: colors.text,
+            }}
+          />
+          {showFolderSuggestions && folderSuggestions.length > 0 && (
+            <div
+              className="absolute top-full left-0 right-0 mt-1 rounded-lg overflow-hidden z-20"
               style={{
-                background: `${fieldTypeColors[type] ?? "#6b7280"}18`,
-                color: fieldTypeColors[type] ?? "#6b7280",
-                border: `1px solid ${fieldTypeColors[type] ?? "#6b7280"}25`,
+                background: "#18182a",
+                border: `1px solid ${colors.border}`,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
               }}
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: fieldTypeColors[type] ?? "#6b7280" }}
-              />
-              {count} {type}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Tags */}
-      {template.tags && template.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {template.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="text-[10px] px-1.5 py-px rounded-md font-medium"
-              style={{
-                background: "rgba(129,140,248,0.12)",
-                color: "#818cf8",
-                border: "1px solid rgba(129,140,248,0.2)",
-              }}
-            >
-              {tag}
-            </span>
-          ))}
-          {template.tags.length > 3 && (
-            <span
-              className="text-[10px] px-1"
-              style={{ color: colors.textDim }}
-            >
-              +{template.tags.length - 3}
-            </span>
+              {folderSuggestions.map((f) => (
+                <button
+                  key={f}
+                  onMouseDown={() => {
+                    setFolderInput(f);
+                    setShowFolderSuggestions(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left transition-colors"
+                  style={{ color: colors.textSecondary }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                >
+                  <FolderIcon
+                    className="w-3 h-3"
+                    style={{ color: "#818cf8" }}
+                  />
+                  {f}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      )}
+      </div>
+
+      {/* Labels */}
+      <div className="space-y-1.5">
+        <label
+          className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest"
+          style={{ color: colors.textDim }}
+        >
+          <TagIcon className="w-2.5 h-2.5" />
+          Labels
+          <span
+            style={{
+              color: "rgba(255,255,255,0.2)",
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
+          >
+            — for filtering &amp; search
+          </span>
+        </label>
+        <div
+          className="flex flex-wrap gap-1 min-h-[32px] rounded-lg px-2 py-1.5 cursor-text"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${colors.border}`,
+          }}
+          onClick={() => document.getElementById(`label-input-${id}`)?.focus()}
+        >
+          {labels.map((label) => (
+            <span
+              key={label}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium"
+              style={{
+                background: "rgba(129,140,248,0.15)",
+                color: "#818cf8",
+                border: "1px solid rgba(129,140,248,0.25)",
+              }}
+            >
+              {label}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeLabel(label);
+                }}
+                className="hover:opacity-60 transition-opacity"
+              >
+                <XIcon className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+          <input
+            id={`label-input-${id}`}
+            value={labelInput}
+            onChange={(e) => setLabelInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                if (labelInput.trim()) {
+                  addLabel(labelInput);
+                  setLabelInput("");
+                }
+              }
+              if (e.key === "Backspace" && !labelInput && labels.length)
+                removeLabel(labels[labels.length - 1]);
+              if (e.key === "Escape") onDone();
+            }}
+            placeholder={labels.length === 0 ? "Add labels…" : ""}
+            className="flex-1 min-w-[80px] text-[11px] bg-transparent outline-none"
+            style={{ color: colors.text }}
+          />
+        </div>
+        <p className="text-[9px]" style={{ color: colors.textDim }}>
+          Press Enter or comma to add · Backspace to remove last
+        </p>
+      </div>
 
       {/* Actions */}
-      <div className="flex gap-2 pt-1">
+      <div className="flex gap-2 pt-0.5">
         <button
-          onClick={() => router.push(`/templates/${template._id}/edit`)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all"
+          onClick={onDone}
+          className="flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.05)",
-            color: colors.textSecondary,
+            background: "rgba(255,255,255,0.04)",
+            color: colors.textMuted,
             border: `1px solid ${colors.border}`,
           }}
           onMouseEnter={(e) =>
             (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
           }
         >
-          <PencilIcon className="w-3 h-3" />
-          Edit
+          Cancel
         </button>
         <button
-          onClick={() => router.push(`/templates/${template._id}/fill`)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all"
+          onClick={save}
+          disabled={saving}
+          className="flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all"
           style={{
-            background: "rgba(99,102,241,0.18)",
-            color: "#a5b4fc",
-            border: "1px solid rgba(99,102,241,0.28)",
+            background: colors.accentBg,
+            color: colors.accentPale,
+            border: `1px solid ${colors.accentBorder}`,
+            opacity: saving ? 0.7 : 1,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(99,102,241,0.28)";
-            e.currentTarget.style.boxShadow = "0 0 12px rgba(99,102,241,0.2)";
+            if (!saving)
+              e.currentTarget.style.background = colors.accentBgHover;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(99,102,241,0.18)";
-            e.currentTarget.style.boxShadow = "none";
+            if (!saving) e.currentTarget.style.background = colors.accentBg;
           }}
         >
-          <PlayIcon className="w-3 h-3" />
-          Use
+          {saving ? "Saving…" : "Save"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Template actions menu
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TemplateMenu({
+  template,
+  onDelete,
+  onRename,
+  onEditFolderLabels,
+}: {
+  template: Doc<"templates">;
+  onDelete: () => void;
+  onRename: () => void;
+  onEditFolderLabels: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <button
+          onClick={(e) => e.stopPropagation()}
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: `1px solid ${colors.border}`,
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+          }
+        >
+          <MoreHorizontalIcon
+            className="w-3.5 h-3.5"
+            style={{ color: colors.textMuted }}
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/templates/${template._id}/fill`);
+          }}
+        >
+          <PlayIcon className="w-3.5 h-3.5 mr-2" /> Use template
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+        >
+          <PencilIcon className="w-3.5 h-3.5 mr-2" /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/templates/${template._id}/edit`);
+          }}
+        >
+          <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Edit fields
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditFolderLabels();
+          }}
+        >
+          <FolderIcon className="w-3.5 h-3.5 mr-2" /> Edit folder &amp; labels
+        </DropdownMenuItem>
+        <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
             router.push(`/templates/${template._id}/connect`);
           }}
-          className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all"
+        >
+          <LinkIcon className="w-3.5 h-3.5 mr-2" /> Connect form
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            handleExport(template, "docx");
+          }}
+        >
+          <DownloadIcon className="w-3.5 h-3.5 mr-2" /> Export as .docx
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            handleExport(template, "pdf");
+          }}
+        >
+          <FileTextIcon className="w-3.5 h-3.5 mr-2" /> Export as PDF
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2Icon className="w-3.5 h-3.5 mr-2 text-destructive" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Folder + Label badges  — visual display (not editing)
+// Shows folder (first tag) with a folder icon, then label chips separately.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FolderLabelBadges({
+  tags,
+  onEditClick,
+  compact = false,
+}: {
+  tags: string[];
+  onEditClick: () => void;
+  compact?: boolean;
+}) {
+  const folder = extractFolder(tags);
+  const labels = extractLabels(tags);
+  const visibleLabels = compact ? labels.slice(0, 2) : labels;
+  const overflow = compact ? labels.length - 2 : 0;
+
+  return (
+    <div
+      className="flex flex-wrap gap-1 items-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {folder && (
+        <span
+          className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[10px] font-medium"
           style={{
-            background: "rgba(52,211,153,0.07)",
+            background: "rgba(99,102,241,0.12)",
+            color: "#818cf8",
+            border: "1px solid rgba(99,102,241,0.22)",
+          }}
+        >
+          <FolderIcon className="w-2.5 h-2.5" />
+          {folder}
+        </span>
+      )}
+      {visibleLabels.map((label) => (
+        <span
+          key={label}
+          className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium"
+          style={{
+            background: "rgba(52,211,153,0.08)",
             color: "#34d399",
-            border: "1px solid rgba(52,211,153,0.15)",
+            border: "1px solid rgba(52,211,153,0.18)",
+          }}
+        >
+          <TagIcon className="w-2 h-2" />
+          {label}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span
+          className="text-[10px] px-1.5 py-px rounded-md"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            color: colors.textDim,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          +{overflow}
+        </span>
+      )}
+      {tags.length === 0 && (
+        <button
+          onClick={onEditClick}
+          className="text-[10px] px-1.5 py-px rounded-md font-medium transition-colors"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: colors.textDim,
+            border: `1px solid ${colors.border}`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(52,211,153,0.14)")
+            (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(52,211,153,0.07)")
+            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
           }
         >
-          <LinkIcon className="w-3 h-3" />
-          Connect
+          + folder / label
         </button>
-      </div>
+      )}
     </div>
   );
 }
 
-// ── Template List Row ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Grid card
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TemplateGridCard({
+  template,
+  onDelete,
+  selected,
+  selectMode,
+  onSelect,
+  allExistingFolders,
+}: {
+  template: Doc<"templates">;
+  onDelete: () => void;
+  selected: boolean;
+  selectMode: boolean;
+  onSelect: (shift: boolean) => void;
+  allExistingFolders: string[];
+}) {
+  const router = useRouter();
+  const [hovered, setHovered] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [editingFolderLabels, setEditingFolderLabels] = useState(false);
+  const tags = template.tags ?? [];
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (editingDesc || editingFolderLabels || renameOpen) return;
+    if (selectMode) {
+      onSelect(e.shiftKey);
+      return;
+    }
+    router.push(`/templates/${template._id}/fill`);
+  };
+
+  return (
+    <>
+      <div
+        className="rounded-2xl flex flex-col overflow-hidden transition-all duration-200 h-full cursor-pointer"
+        style={{
+          background: selected
+            ? "rgba(99,102,241,0.1)"
+            : hovered
+              ? "rgba(99,102,241,0.07)"
+              : "rgba(99,102,241,0.03)",
+          border: `1px solid ${
+            selected
+              ? "rgba(99,102,241,0.35)"
+              : hovered
+                ? "rgba(99,102,241,0.28)"
+                : "rgba(99,102,241,0.12)"
+          }`,
+          boxShadow: selected
+            ? "0 0 0 2px rgba(99,102,241,0.25)"
+            : hovered
+              ? "0 0 0 1px rgba(99,102,241,0.1), 0 8px 24px rgba(0,0,0,0.25)"
+              : "none",
+          transform: hovered && !selected ? "translateY(-1px)" : "none",
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={handleClick}
+      >
+        <div
+          className="h-0.5 w-full shrink-0"
+          style={{ background: "rgba(99,102,241,0.7)" }}
+        />
+
+        <div className="flex flex-col gap-3 p-3.5 flex-1">
+          {/* Header */}
+          <div className="flex items-start gap-2.5">
+            {selectMode && (
+              <div
+                className="mt-0.5 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(e.shiftKey);
+                }}
+              >
+                <SelectCheckbox
+                  checked={selected}
+                  onChange={() => onSelect(false)}
+                />
+              </div>
+            )}
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background: "rgba(99,102,241,0.15)",
+                border: "1px solid rgba(99,102,241,0.25)",
+              }}
+            >
+              <LayoutTemplateIcon
+                className="w-4 h-4"
+                style={{ color: "#818cf8" }}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-[13px] font-semibold leading-snug line-clamp-2"
+                style={{ color: colors.text }}
+              >
+                {template.name}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span
+                  className="text-[11px]"
+                  style={{ color: colors.textMuted }}
+                >
+                  {template.fields.length} field
+                  {template.fields.length !== 1 ? "s" : ""}
+                </span>
+                <span style={{ color: colors.textDim }}>·</span>
+                <span
+                  className="text-[11px]"
+                  style={{ color: "rgba(255,255,255,0.38)" }}
+                >
+                  {smartDate(template._creationTime)}
+                </span>
+              </div>
+            </div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <TemplateMenu
+                template={template}
+                onDelete={onDelete}
+                onRename={() => setRenameOpen(true)}
+                onEditFolderLabels={() => setEditingFolderLabels(true)}
+              />
+            </div>
+          </div>
+
+          {/* Description — click to edit */}
+          <div
+            className="flex-1 min-h-[28px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!selectMode) setEditingDesc(true);
+            }}
+          >
+            {editingDesc ? (
+              <InlineDescriptionEdit
+                id={template._id}
+                currentDescription={template.description ?? ""}
+                onDone={() => setEditingDesc(false)}
+              />
+            ) : (
+              <div className="group flex items-start gap-1.5">
+                <p
+                  className="text-[11px] leading-relaxed line-clamp-2 flex-1"
+                  style={{
+                    color: template.description
+                      ? colors.textMuted
+                      : "rgba(255,255,255,0.18)",
+                    fontStyle: template.description ? "normal" : "italic",
+                  }}
+                >
+                  {template.description || "Click to add description…"}
+                </p>
+                {template.description && !selectMode && (
+                  <AlignLeftIcon
+                    className="w-3 h-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity"
+                    style={{ color: colors.textDim }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Folder + Label editor or display */}
+          {editingFolderLabels ? (
+            <FolderAndLabelEditor
+              id={template._id}
+              currentTags={tags}
+              allExistingFolders={allExistingFolders}
+              onDone={() => setEditingFolderLabels(false)}
+            />
+          ) : (
+            <FolderLabelBadges
+              tags={tags}
+              compact
+              onEditClick={() => setEditingFolderLabels(true)}
+            />
+          )}
+
+          {/* Action buttons */}
+          {!selectMode && (
+            <div className="flex gap-2 pt-0.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/templates/${template._id}/edit`);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] font-medium transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.border}`,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+                }
+              >
+                <PencilIcon className="w-3 h-3" /> Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/templates/${template._id}/fill`);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] font-medium transition-all"
+                style={{
+                  background: "rgba(99,102,241,0.18)",
+                  color: "#a5b4fc",
+                  border: "1px solid rgba(99,102,241,0.28)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(99,102,241,0.28)";
+                  e.currentTarget.style.boxShadow =
+                    "0 0 12px rgba(99,102,241,0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(99,102,241,0.18)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                <PlayIcon className="w-3 h-3" /> Use
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/templates/${template._id}/connect`);
+                }}
+                className="flex items-center justify-center py-1.5 px-2.5 rounded-xl text-[11px] font-medium transition-all"
+                style={{
+                  background: "rgba(52,211,153,0.07)",
+                  color: "#34d399",
+                  border: "1px solid rgba(52,211,153,0.15)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(52,211,153,0.14)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "rgba(52,211,153,0.07)")
+                }
+              >
+                <LinkIcon className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Rename dialog rendered outside the card to avoid clipping */}
+      <RenameDialog
+        id={template._id}
+        currentName={template.name}
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+      />
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// List row
+// ─────────────────────────────────────────────────────────────────────────────
 
 function TemplateListRow({
   template,
   onDelete,
+  selected,
+  selectMode,
+  onSelect,
+  allExistingFolders,
 }: {
-  template: Doc<"templates"> & { tags?: string[] };
+  template: Doc<"templates">;
   onDelete: () => void;
+  selected: boolean;
+  selectMode: boolean;
+  onSelect: (shift: boolean) => void;
+  allExistingFolders: string[];
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [editingFolderLabels, setEditingFolderLabels] = useState(false);
+  const tags = template.tags ?? [];
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (editingFolderLabels || renameOpen) return;
+    if (selectMode) {
+      onSelect(e.shiftKey);
+      return;
+    }
+    router.push(`/templates/${template._id}/fill`);
+  };
 
   return (
-    <div
-      className="flex items-center gap-3 px-5 py-3.5 cursor-pointer group transition-all duration-150"
-      style={{
-        borderBottom: `1px solid ${colors.border}`,
-        background: hovered ? "rgba(99,102,241,0.04)" : "transparent",
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <>
       <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150"
         style={{
-          background: "rgba(99,102,241,0.15)",
-          border: "1px solid rgba(99,102,241,0.2)",
+          borderBottom: `1px solid ${colors.border}`,
+          background: selected
+            ? "rgba(99,102,241,0.07)"
+            : hovered
+              ? "rgba(99,102,241,0.04)"
+              : "transparent",
         }}
+        onClick={handleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <LayoutTemplateIcon
-          className="w-3.5 h-3.5"
-          style={{ color: "#818cf8" }}
-        />
-      </div>
+        {selectMode && (
+          <div
+            className="mt-1 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(e.shiftKey);
+            }}
+          >
+            <SelectCheckbox
+              checked={selected}
+              onChange={() => onSelect(false)}
+            />
+          </div>
+        )}
 
-      <div className="flex-1 min-w-0">
-        <p
-          className="text-[13px] font-medium truncate"
-          style={{ color: colors.text }}
-        >
-          {template.name}
-        </p>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-[11px]" style={{ color: colors.textMuted }}>
-            {template.fields.length} field
-            {template.fields.length !== 1 ? "s" : ""}
-          </span>
-          <span style={{ color: colors.textDim }}>·</span>
-          <FieldTypeDots fields={template.fields} />
-          {template.description && (
-            <>
-              <span style={{ color: colors.textDim }}>·</span>
-              <span
-                className="text-[11px] truncate max-w-[180px]"
-                style={{ color: colors.textDim }}
-              >
-                {template.description}
-              </span>
-            </>
-          )}
-          {template.tags &&
-            template.tags.slice(0, 2).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] px-1.5 py-px rounded-md"
-                style={{
-                  background: "rgba(129,140,248,0.12)",
-                  color: "#818cf8",
-                  border: "1px solid rgba(129,140,248,0.2)",
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-        </div>
-      </div>
-
-      <span className="text-[11px] shrink-0" style={{ color: colors.textDim }}>
-        {formatDistanceToNow(new Date(template._creationTime), {
-          addSuffix: true,
-        })}
-      </span>
-
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={() => router.push(`/templates/${template._id}/fill`)}
-          className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
           style={{
             background: "rgba(99,102,241,0.15)",
-            color: "#818cf8",
             border: "1px solid rgba(99,102,241,0.2)",
           }}
         >
-          <PlayIcon className="w-3 h-3" />
-          Use
+          <LayoutTemplateIcon
+            className="w-3.5 h-3.5"
+            style={{ color: "#818cf8" }}
+          />
+        </div>
+
+        <div className="flex-1 min-w-0 space-y-1">
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: colors.text }}
+          >
+            {template.name}
+          </p>
+          {template.description && (
+            <p
+              className="text-[11px] line-clamp-1"
+              style={{ color: colors.textMuted }}
+            >
+              {template.description}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px]" style={{ color: colors.textMuted }}>
+              {template.fields.length} field
+              {template.fields.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* Folder / Labels */}
+          {editingFolderLabels ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <FolderAndLabelEditor
+                id={template._id}
+                currentTags={tags}
+                allExistingFolders={allExistingFolders}
+                onDone={() => setEditingFolderLabels(false)}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <FolderLabelBadges
+                tags={tags}
+                compact
+                onEditClick={() => setEditingFolderLabels(true)}
+              />
+              {tags.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingFolderLabels(true);
+                  }}
+                  className="text-[10px] px-1.5 py-px rounded-md transition-colors"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    color: colors.textDim,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(255,255,255,0.08)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(255,255,255,0.04)")
+                  }
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <span
+          className="hidden sm:block text-[11px] tabular-nums shrink-0 mt-0.5"
+          style={{ color: colors.textDim }}
+        >
+          {smartDate(template._creationTime)}
+        </span>
+
+        <div
+          className="flex items-center gap-1 shrink-0 mt-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!selectMode && (
+            <button
+              onClick={() => router.push(`/templates/${template._id}/fill`)}
+              className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              style={{
+                background: "rgba(99,102,241,0.15)",
+                color: "#818cf8",
+                border: "1px solid rgba(99,102,241,0.2)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(99,102,241,0.25)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "rgba(99,102,241,0.15)")
+              }
+            >
+              <PlayIcon className="w-3 h-3" /> Use
+            </button>
+          )}
+          <TemplateMenu
+            template={template}
+            onDelete={onDelete}
+            onRename={() => setRenameOpen(true)}
+            onEditFolderLabels={() => setEditingFolderLabels(true)}
+          />
+        </div>
+      </div>
+
+      <RenameDialog
+        id={template._id}
+        currentName={template.name}
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+      />
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk action floating bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BulkBar({
+  count,
+  total,
+  onDelete,
+  onClear,
+  onSelectAll,
+  onMoveToFolder,
+  allFolders,
+}: {
+  count: number;
+  total: number;
+  onDelete: () => void;
+  onClear: () => void;
+  onSelectAll: () => void;
+  onMoveToFolder: (folder: string) => void;
+  allFolders: string[];
+}) {
+  return (
+    <div
+      className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
+      style={{
+        transform: "translateX(-50%)",
+        background: "#1c1c28",
+        border: "1px solid rgba(99,102,241,0.3)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
+        backdropFilter: "blur(16px)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        className="text-[12px] font-semibold tabular-nums"
+        style={{ color: colors.accentPale }}
+      >
+        {count} selected
+      </span>
+      {count < total && (
+        <button
+          onClick={onSelectAll}
+          className="text-[11px] font-medium"
+          style={{ color: colors.textMuted }}
+        >
+          Select all {total}
         </button>
+      )}
+      <div
+        className="w-px h-4 mx-0.5"
+        style={{ background: "rgba(255,255,255,0.1)" }}
+      />
+
+      {allFolders.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: colors.textDim }}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: colors.textSecondary,
+              }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
+                (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "transparent")
+                (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
               }
             >
-              <MoreHorizontalIcon className="w-3.5 h-3.5" />
+              <FolderInputIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Move to folder</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem
-              onClick={() => router.push(`/templates/${template._id}/edit`)}
-            >
-              <PencilIcon className="w-3.5 h-3.5 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={onDelete}
-            >
-              <Trash2Icon className="w-3.5 h-3.5 mr-2" />
-              Delete
-            </DropdownMenuItem>
+          <DropdownMenuContent align="start">
+            {allFolders.map((f) => (
+              <DropdownMenuItem key={f} onClick={() => onMoveToFolder(f)}>
+                <FolderIcon className="w-3.5 h-3.5 mr-2" /> {f}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+
+      <button
+        onClick={onDelete}
+        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+        style={{
+          background: "rgba(248,113,113,0.08)",
+          color: colors.danger,
+          border: "1px solid rgba(248,113,113,0.2)",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
+        }
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
+        }
+      >
+        <Trash2Icon className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Delete</span>
+      </button>
+
+      <button
+        onClick={onClear}
+        className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          color: colors.textMuted,
+        }}
+      >
+        <XIcon className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Folder panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FolderPanel({
+  open,
+  onClose,
+  folders,
+  folderCounts,
+  activeFolder,
+  onSelectFolder,
+}: {
+  open: boolean;
+  onClose: () => void;
+  folders: string[];
+  folderCounts: Record<string, number>;
+  activeFolder: string | null;
+  onSelectFolder: (f: string | null) => void;
+}) {
+  const inner = (
+    <>
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0"
+        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+      >
+        <div className="flex items-center gap-2">
+          <FolderIcon className="w-3.5 h-3.5" style={{ color: "#818cf8" }} />
+          <span
+            className="text-[13px] font-semibold"
+            style={{ color: colors.textSecondary }}
+          >
+            Folders
+          </span>
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-md"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: colors.textDim,
+            }}
+          >
+            {folders.length}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{
+            color: colors.textDim,
+            background: "rgba(255,255,255,0.04)",
+          }}
+        >
+          <XIcon className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-2">
+        <div className="px-2 mb-1">
+          <button
+            onClick={() => onSelectFolder(null)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
+            style={{
+              background:
+                activeFolder === null ? colors.accentBg : "transparent",
+              border: `1px solid ${activeFolder === null ? colors.accentBorder : "transparent"}`,
+              minHeight: 44,
+            }}
+          >
+            <LayoutTemplateIcon
+              className="w-3.5 h-3.5 shrink-0"
+              style={{
+                color: activeFolder === null ? "#818cf8" : colors.textDim,
+              }}
+            />
+            <span
+              className="flex-1 text-[12px] font-medium"
+              style={{
+                color: activeFolder === null ? "#818cf8" : colors.textSecondary,
+              }}
+            >
+              All templates
+            </span>
+          </button>
+        </div>
+
+        {folders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <FolderIcon
+              className="w-7 h-7 mb-2"
+              style={{ color: colors.textDim }}
+            />
+            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+              No folders yet
+            </p>
+            <p
+              className="text-[11px] mt-1 leading-relaxed"
+              style={{ color: colors.textDim }}
+            >
+              Assign a folder to any template via ✎ or the ⋯ menu.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-0.5 px-2">
+            {folders.map((folder) => {
+              const isActive = activeFolder === folder;
+              return (
+                <button
+                  key={folder}
+                  onClick={() => onSelectFolder(isActive ? null : folder)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
+                  style={{
+                    background: isActive
+                      ? "rgba(99,102,241,0.12)"
+                      : "transparent",
+                    border: `1px solid ${isActive ? "rgba(99,102,241,0.28)" : "transparent"}`,
+                    minHeight: 44,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive)
+                      e.currentTarget.style.background =
+                        "rgba(255,255,255,0.03)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive)
+                      e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {isActive ? (
+                    <FolderOpenIcon
+                      className="w-3.5 h-3.5 shrink-0"
+                      style={{ color: "#818cf8" }}
+                    />
+                  ) : (
+                    <FolderIcon
+                      className="w-3.5 h-3.5 shrink-0"
+                      style={{ color: colors.textDim }}
+                    />
+                  )}
+                  <span
+                    className="flex-1 text-[12px] font-medium truncate"
+                    style={{
+                      color: isActive ? "#818cf8" : colors.textSecondary,
+                    }}
+                  >
+                    {folder}
+                  </span>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      color: colors.textDim,
+                    }}
+                  >
+                    {folderCounts[folder] ?? 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div
+        className="px-4 py-3 shrink-0"
+        style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+      >
+        <p
+          className="text-[10px] leading-relaxed"
+          style={{ color: colors.textDim }}
+        >
+          A template belongs to one folder (shown with 📁). Labels (shown in
+          green) are for filtering only.
+        </p>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div
+        className="hidden md:flex shrink-0 flex-col transition-all duration-200 overflow-hidden"
+        style={{
+          width: open ? 252 : 0,
+          borderLeft: open ? `1px solid ${colors.borderSubtle}` : "none",
+          background: colors.bgSidebar,
+        }}
+      >
+        {open && inner}
+      </div>
+      <div
+        className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
+        style={{
+          background: "rgba(0,0,0,0.6)",
+          backdropFilter: "blur(4px)",
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+        }}
+        onClick={onClose}
+      />
+      <div
+        className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl flex flex-col"
+        style={{
+          background: "#15151e",
+          border: "1px solid rgba(255,255,255,0.08)",
+          transform: open ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
+          maxHeight: "75vh",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div
+            className="w-9 h-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          />
+        </div>
+        {inner}
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagination
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+}) {
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  const pages = useMemo(() => {
+    const arr: (number | "…")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) arr.push(i);
+      return arr;
+    }
+    if (page <= 4) arr.push(1, 2, 3, 4, 5, "…", totalPages);
+    else if (page >= totalPages - 3)
+      arr.push(
+        1,
+        "…",
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages
+      );
+    else arr.push(1, "…", page - 1, page, page + 1, "…", totalPages);
+    return arr;
+  }, [page, totalPages]);
+  if (totalPages <= 1) return null;
+  return (
+    <div
+      className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
+      style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+    >
+      <span
+        className="text-[11px] tabular-nums"
+        style={{ color: colors.textDim }}
+      >
+        {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="h-7 px-2.5 rounded-lg text-[11px] font-medium"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: page === 1 ? colors.textDim : colors.textMuted,
+            border: `1px solid ${colors.border}`,
+            opacity: page === 1 ? 0.4 : 1,
+          }}
+        >
+          ←
+        </button>
+        {pages.map((p, i) =>
+          p === "…" ? (
+            <span
+              key={`e${i}`}
+              className="text-[11px] px-1"
+              style={{ color: colors.textDim }}
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p as number)}
+              className="h-7 min-w-[28px] px-2 rounded-lg text-[11px] font-medium transition-all"
+              style={{
+                background:
+                  p === page
+                    ? "rgba(99,102,241,0.2)"
+                    : "rgba(255,255,255,0.03)",
+                color: p === page ? "#818cf8" : colors.textMuted,
+                border: `1px solid ${p === page ? "rgba(99,102,241,0.3)" : colors.border}`,
+              }}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="h-7 px-2.5 rounded-lg text-[11px] font-medium"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            color: page === totalPages ? colors.textDim : colors.textMuted,
+            border: `1px solid ${colors.border}`,
+            opacity: page === totalPages ? 0.4 : 1,
+          }}
+        >
+          →
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeletons
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GridSkeleton() {
+  return (
+    <div
+      className="rounded-2xl overflow-hidden animate-pulse"
+      style={{
+        background: "rgba(99,102,241,0.03)",
+        border: "1px solid rgba(99,102,241,0.1)",
+      }}
+    >
+      <div
+        className="h-0.5 w-full"
+        style={{ background: "rgba(99,102,241,0.25)" }}
+      />
+      <div className="p-3.5 space-y-3">
+        <div className="flex items-start gap-2.5">
+          <div
+            className="w-9 h-9 rounded-xl shrink-0"
+            style={{ background: "rgba(99,102,241,0.12)" }}
+          />
+          <div className="flex-1 space-y-1.5">
+            <div
+              className="h-3.5 rounded w-3/4"
+              style={{ background: "rgba(255,255,255,0.08)" }}
+            />
+            <div
+              className="h-2.5 rounded w-1/3"
+              style={{ background: "rgba(255,255,255,0.05)" }}
+            />
+          </div>
+          <div
+            className="w-7 h-7 rounded-lg shrink-0"
+            style={{ background: "rgba(255,255,255,0.05)" }}
+          />
+        </div>
+        <div
+          className="h-2.5 rounded w-full"
+          style={{ background: "rgba(255,255,255,0.04)" }}
+        />
+        <div className="flex gap-1">
+          <div
+            className="h-4 rounded-md w-20"
+            style={{ background: "rgba(99,102,241,0.1)" }}
+          />
+          <div
+            className="h-4 rounded-md w-14"
+            style={{ background: "rgba(52,211,153,0.08)" }}
+          />
+        </div>
+        <div className="flex gap-2">
+          <div
+            className="h-7 rounded-xl flex-1"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          />
+          <div
+            className="h-7 rounded-xl flex-1"
+            style={{ background: "rgba(99,102,241,0.08)" }}
+          />
+          <div
+            className="h-7 rounded-xl w-10"
+            style={{ background: "rgba(52,211,153,0.06)" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div
+      className="flex items-start gap-3 px-4 sm:px-5 py-3 animate-pulse"
+      style={{ borderBottom: `1px solid ${colors.border}` }}
+    >
+      <div
+        className="w-8 h-8 rounded-lg shrink-0 mt-0.5"
+        style={{ background: "rgba(99,102,241,0.12)" }}
+      />
+      <div className="flex-1 space-y-1.5">
+        <div
+          className="h-3.5 rounded w-1/2"
+          style={{ background: "rgba(255,255,255,0.08)" }}
+        />
+        <div
+          className="h-2.5 rounded w-3/4"
+          style={{ background: "rgba(255,255,255,0.05)" }}
+        />
+        <div className="flex gap-1">
+          <div
+            className="h-4 rounded-md w-20"
+            style={{ background: "rgba(99,102,241,0.1)" }}
+          />
+          <div
+            className="h-4 rounded-md w-14"
+            style={{ background: "rgba(52,211,153,0.08)" }}
+          />
+        </div>
+      </div>
+      <div
+        className="w-7 h-7 rounded-lg shrink-0"
+        style={{ background: "rgba(255,255,255,0.05)" }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SortKey = "newest" | "oldest" | "name_asc" | "name_desc" | "most_fields";
+type ViewMode = "grid" | "list";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  name_asc: "A → Z",
+  name_desc: "Z → A",
+  most_fields: "Most fields",
+};
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -524,43 +1886,72 @@ export default function TemplatesPage() {
     isLoaded && isSignedIn ? {} : "skip"
   );
   const removeTemplate = useMutation(api.templates.remove);
+  const updateTemplate = useMutation(api.templates.update);
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [view, setView] = useState<ViewMode>("grid");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [folderPanelOpen, setFolderPanelOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Doc<"templates"> | null>(
     null
   );
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  const allTags = useMemo(() => {
+  // Selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lastSelectedIdx = useRef<number>(-1);
+
+  /** All unique folder values (first tags) */
+  const allFolders = useMemo(() => {
     if (!templates) return [];
     const set = new Set<string>();
-    templates.forEach((t) =>
-      (t as any).tags?.forEach((tag: string) => set.add(tag))
-    );
+    templates.forEach((t) => {
+      const f = extractFolder(t.tags);
+      if (f) set.add(f);
+    });
     return [...set].sort();
   }, [templates]);
 
-  const displayTemplates = useMemo(() => {
+  /** All unique label values (non-first tags) */
+  const allLabels = useMemo(() => {
     if (!templates) return [];
-    let filtered = [...templates] as (Doc<"templates"> & { tags?: string[] })[];
+    const set = new Set<string>();
+    templates.forEach((t) => extractLabels(t.tags).forEach((l) => set.add(l)));
+    return [...set].sort();
+  }, [templates]);
 
+  const folderCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    (templates ?? []).forEach((t) => {
+      const f = extractFolder(t.tags);
+      if (f) counts[f] = (counts[f] ?? 0) + 1;
+    });
+    return counts;
+  }, [templates]);
+
+  const filteredTemplates = useMemo(() => {
+    if (!templates) return [];
+    let result = [...templates] as Doc<"templates">[];
     if (search.trim()) {
       const q = search.toLowerCase();
-      filtered = filtered.filter(
+      result = result.filter(
         (t) =>
           t.name.toLowerCase().includes(q) ||
           t.description?.toLowerCase().includes(q) ||
-          (t as any).tags?.some((tag: string) => tag.includes(q))
+          t.tags?.some((tag) => tag.includes(q))
       );
     }
-
-    if (activeTag) {
-      filtered = filtered.filter((t) => (t as any).tags?.includes(activeTag));
+    if (activeFolder) {
+      result = result.filter((t) => extractFolder(t.tags) === activeFolder);
+    } else if (activeTag) {
+      result = result.filter((t) => t.tags?.includes(activeTag));
     }
-
-    filtered.sort((a, b) => {
+    result.sort((a, b) => {
       switch (sort) {
         case "newest":
           return b._creationTime - a._creationTime;
@@ -576,9 +1967,89 @@ export default function TemplatesPage() {
           return 0;
       }
     });
+    return result;
+  }, [templates, search, activeTag, activeFolder, sort]);
 
-    return filtered;
-  }, [templates, search, activeTag, sort]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredTemplates.length / PAGE_SIZE)
+  );
+  const displayTemplates = filteredTemplates.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeTag, activeFolder, sort]);
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, search, activeTag, activeFolder, sort]);
+  useEffect(() => {
+    if (selected.size === 0 && selectMode) setSelectMode(false);
+  }, [selected.size]);
+
+  const handleSelect = useCallback(
+    (id: string, shift: boolean) => {
+      if (!selectMode) setSelectMode(true);
+      const idx = displayTemplates.findIndex((t) => t._id === id);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (shift && lastSelectedIdx.current >= 0) {
+          const lo = Math.min(idx, lastSelectedIdx.current);
+          const hi = Math.max(idx, lastSelectedIdx.current);
+          for (let i = lo; i <= hi; i++) next.add(displayTemplates[i]._id);
+        } else {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        }
+        return next;
+      });
+      lastSelectedIdx.current = idx;
+    },
+    [displayTemplates, selectMode]
+  );
+
+  const handleSelectAll = useCallback(() => {
+    setSelected(new Set(filteredTemplates.map((t) => t._id)));
+  }, [filteredTemplates]);
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(
+      ids.map((id) => removeTemplate({ id: id as Doc<"templates">["_id"] }))
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    failed
+      ? toast.error(`${failed} templates couldn't be deleted.`)
+      : toast.success(`${ids.length} templates deleted`);
+    setSelected(new Set());
+    setSelectMode(false);
+    setBulkDeleteOpen(false);
+  };
+
+  const handleMoveToFolder = async (folder: string) => {
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const tmpl = templates?.find((t) => t._id === id);
+        if (!tmpl) return;
+        const rest = (tmpl.tags ?? []).slice(1);
+        await updateTemplate({
+          id: id as Doc<"templates">["_id"],
+          tags: [folder, ...rest],
+        });
+      })
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    failed
+      ? toast.error(`${failed} couldn't be moved.`)
+      : toast.success(
+          `Moved ${ids.length} template${ids.length !== 1 ? "s" : ""} to "${folder}"`
+        );
+    setSelected(new Set());
+    setSelectMode(false);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -592,50 +2063,63 @@ export default function TemplatesPage() {
     }
   };
 
-  const SORT_LABELS: Record<SortKey, string> = {
-    newest: "Newest",
-    oldest: "Oldest",
-    name_asc: "Name A–Z",
-    name_desc: "Name Z–A",
-    most_fields: "Most fields",
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const isLoading = templates === undefined;
-  const totalFields =
-    templates?.reduce((sum, t) => sum + t.fields.length, 0) ?? 0;
+  const hasFilters = !!(search || activeTag || activeFolder);
+  const someSelected = selected.size > 0;
+  const allPageSelected =
+    displayTemplates.length > 0 &&
+    displayTemplates.every((t) => selected.has(t._id));
+  const somePageSelected =
+    displayTemplates.some((t) => selected.has(t._id)) && !allPageSelected;
 
   return (
     <div className="flex flex-col h-full" style={{ background: colors.bg }}>
       {/* Header */}
       <div
-        className="flex items-center justify-between px-6 py-5 shrink-0"
+        className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
         style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
       >
         <div>
           <h1
-            className="text-[15px] font-semibold"
+            className="text-[15px] sm:text-base font-semibold"
             style={{ color: colors.text }}
           >
             Templates
           </h1>
           {!isLoading && (
             <p
-              className="text-[11px] mt-0.5"
+              className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
               style={{ color: colors.textMuted }}
             >
-              {templates?.length ?? 0} template
-              {(templates?.length ?? 0) !== 1 ? "s" : ""}
-              {totalFields > 0 && ` · ${totalFields} fields total`}
+              <span>
+                {templates?.length ?? 0} template
+                {(templates?.length ?? 0) !== 1 ? "s" : ""}
+              </span>
+              {allFolders.length > 0 && (
+                <>
+                  <span style={{ color: colors.textDim }}>·</span>
+                  <span>
+                    {allFolders.length} folder
+                    {allFolders.length !== 1 ? "s" : ""}
+                  </span>
+                </>
+              )}
             </p>
           )}
         </div>
         <button
           onClick={() => router.push("/templates/new")}
-          className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150"
+          className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
           style={{
             background: colors.accentBg,
             color: colors.accentPale,
             border: `1px solid ${colors.accentBorder}`,
+            whiteSpace: "nowrap",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = colors.accentBgHover;
@@ -647,248 +2131,449 @@ export default function TemplatesPage() {
           }}
         >
           <PlusIcon className="w-3.5 h-3.5" />
-          New template
+          <span className="hidden sm:inline">New template</span>
+          <span className="sm:hidden">New</span>
         </button>
       </div>
 
       {/* Toolbar */}
       <div
-        className="flex flex-wrap items-center gap-2 px-6 py-3 shrink-0"
+        className="shrink-0"
         style={{
           borderBottom: `1px solid ${colors.borderSubtle}`,
           background: "rgba(255,255,255,0.01)",
         }}
       >
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <SearchIcon
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-            style={{ color: colors.textDim }}
-          />
-          <input
-            placeholder="Search templates…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-8 pl-8 pr-3 text-xs rounded-lg outline-none"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
-              color: colors.text,
-            }}
-            onFocus={(e) =>
-              (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-            }
-            onBlur={(e) =>
-              (e.currentTarget.style.border = `1px solid ${colors.border}`)
-            }
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2"
+        {/* Row 1 */}
+        <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5">
+          <div className="relative flex-1 max-w-sm">
+            <SearchIcon
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
               style={{ color: colors.textDim }}
-            >
-              <XIcon className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium"
+            />
+            <input
+              placeholder="Search templates…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.04)",
+                background: "rgba(255,255,255,0.05)",
                 border: `1px solid ${colors.border}`,
-                color: colors.textMuted,
+                color: colors.text,
               }}
-            >
-              {SORT_LABELS[sort]}
-              <ChevronDownIcon className="w-3 h-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-              <DropdownMenuItem key={key} onClick={() => setSort(key)}>
-                {SORT_LABELS[key]}
-                {sort === key && (
-                  <span
-                    className="ml-auto text-[10px]"
-                    style={{ color: colors.accentLight }}
-                  >
-                    ✓
-                  </span>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <div
-          className="flex items-center gap-0.5 p-0.5 rounded-lg"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
-          }}
-        >
-          {[
-            { mode: "grid" as ViewMode, icon: LayoutGridIcon },
-            { mode: "list" as ViewMode, icon: ListIcon },
-          ].map(({ mode, icon: Icon }) => (
-            <button
-              key={mode}
-              onClick={() => setView(mode)}
-              className="p-1.5 rounded-md transition-all"
-              style={{
-                background:
-                  view === mode ? "rgba(99,102,241,0.2)" : "transparent",
-                color: view === mode ? colors.accentLight : colors.textDim,
-              }}
-            >
-              <Icon className="w-3.5 h-3.5" />
-            </button>
-          ))}
-        </div>
-
-        {search && (
-          <span className="text-[11px]" style={{ color: colors.textMuted }}>
-            {displayTemplates.length} result
-            {displayTemplates.length !== 1 ? "s" : ""}
-          </span>
-        )}
-      </div>
-
-      {/* Tag filter */}
-      {allTags.length > 0 && (
-        <div
-          className="flex items-center gap-1.5 px-6 py-2 overflow-x-auto shrink-0"
-          style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
-        >
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wide shrink-0"
-            style={{ color: colors.textDim }}
-          >
-            Tags
-          </span>
-          <button
-            onClick={() => setActiveTag(null)}
-            className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-md transition-all"
-            style={{
-              background:
-                activeTag === null
-                  ? "rgba(99,102,241,0.2)"
-                  : "rgba(255,255,255,0.06)",
-              color: activeTag === null ? colors.accentLight : colors.textDim,
-              border: `1px solid ${activeTag === null ? colors.accentBorder : "transparent"}`,
-            }}
-          >
-            All
-          </button>
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-              className="shrink-0 flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md transition-all whitespace-nowrap"
-              style={{
-                background:
-                  activeTag === tag
-                    ? "rgba(99,102,241,0.2)"
-                    : "rgba(255,255,255,0.06)",
-                color: activeTag === tag ? colors.accentLight : colors.textDim,
-                border: `1px solid ${activeTag === tag ? colors.accentBorder : "transparent"}`,
-              }}
-            >
-              <TagIcon className="w-2.5 h-2.5" />
-              {tag}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          view === "grid" ? (
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <TemplateSkeleton key={i} view="grid" />
-              ))}
-            </div>
-          ) : (
-            <div>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <TemplateSkeleton key={i} view="list" />
-              ))}
-            </div>
-          )
-        ) : displayTemplates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-              style={{
-                background: "rgba(99,102,241,0.08)",
-                border: "1px solid rgba(99,102,241,0.15)",
-              }}
-            >
-              <LayoutTemplateIcon
-                className="w-6 h-6"
-                style={{ color: "#818cf8" }}
-              />
-            </div>
-            <p
-              className="text-sm font-semibold mb-1"
-              style={{ color: colors.textSecondary }}
-            >
-              {search || activeTag ? "No templates found" : "No templates yet"}
-            </p>
-            <p
-              className="text-[11px] mb-5 max-w-xs leading-relaxed"
-              style={{ color: colors.textDim }}
-            >
-              {search
-                ? `No results for "${search}".`
-                : activeTag
-                  ? `No templates tagged "${activeTag}".`
-                  : "Upload a .docx file with {{placeholders}} to create your first template."}
-            </p>
-            {!search && !activeTag && (
+              onFocus={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+              }
+              onBlur={(e) =>
+                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+              }
+            />
+            {search && (
               <button
-                onClick={() => router.push("/templates/new")}
-                className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-xl"
-                style={{
-                  background: colors.accentBg,
-                  color: colors.accentPale,
-                  border: `1px solid ${colors.accentBorder}`,
-                }}
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                style={{ color: colors.textDim }}
               >
-                <PlusIcon className="w-3.5 h-3.5" />
-                New template
+                <XIcon className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        ) : view === "grid" ? (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {displayTemplates.map((t) => (
-              <TemplateGridCard
-                key={t._id}
-                template={t}
-                onDelete={() => setDeleteTarget(t)}
-              />
+
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            {[
+              { v: "grid" as ViewMode, I: LayoutGridIcon },
+              { v: "list" as ViewMode, I: ListIcon },
+            ].map(({ v, I }) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className="p-1.5 rounded-lg transition-all"
+                style={{
+                  background:
+                    view === v ? "rgba(99,102,241,0.2)" : "transparent",
+                  color: view === v ? "#818cf8" : colors.textDim,
+                }}
+              >
+                <I className="w-4 h-4" />
+              </button>
             ))}
           </div>
-        ) : (
-          <div>
-            {displayTemplates.map((t) => (
-              <TemplateListRow
-                key={t._id}
-                template={t}
-                onDelete={() => setDeleteTarget(t)}
+
+          <button
+            onClick={() => {
+              setSelectMode((v) => {
+                if (v) setSelected(new Set());
+                return !v;
+              });
+            }}
+            className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
+            style={{
+              background: selectMode
+                ? colors.accentBg
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
+              color: selectMode ? "#818cf8" : colors.textMuted,
+            }}
+          >
+            <CheckSquareIcon className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Select</span>
+          </button>
+        </div>
+
+        {/* Row 2: sort + folder + label filters */}
+        <div
+          className="flex items-center gap-2 px-4 sm:px-6 pb-2.5 overflow-x-auto"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${colors.border}`,
+                  color: colors.textMuted,
+                }}
+              >
+                {SORT_LABELS[sort]} <ChevronDownIcon className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                <DropdownMenuItem key={key} onClick={() => setSort(key)}>
+                  {sort === key && (
+                    <CheckIcon
+                      className="w-3 h-3 mr-2"
+                      style={{ color: "#818cf8" }}
+                    />
+                  )}
+                  {SORT_LABELS[key]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Folder toggle */}
+          <button
+            onClick={() => setFolderPanelOpen((v) => !v)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
+            style={{
+              background: folderPanelOpen
+                ? colors.accentBg
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${folderPanelOpen ? colors.accentBorder : colors.border}`,
+              color: folderPanelOpen ? "#818cf8" : colors.textMuted,
+            }}
+          >
+            <FolderIcon className="w-3.5 h-3.5" />
+            {activeFolder ? (
+              <span className="max-w-[80px] truncate">{activeFolder}</span>
+            ) : (
+              "Folders"
+            )}
+            {activeFolder && (
+              <span
+                role="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveFolder(null);
+                }}
+              >
+                <XIcon className="w-3 h-3 ml-1" />
+              </span>
+            )}
+          </button>
+
+          {/* Label filter chips */}
+          {allLabels.length > 0 && (
+            <>
+              <div
+                className="w-px h-4 shrink-0"
+                style={{ background: "rgba(255,255,255,0.1)" }}
               />
-            ))}
-          </div>
-        )}
+              <button
+                onClick={() => setActiveTag(null)}
+                className="shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-xl transition-all whitespace-nowrap"
+                style={{
+                  background:
+                    activeTag === null && !activeFolder
+                      ? "rgba(99,102,241,0.2)"
+                      : "rgba(255,255,255,0.04)",
+                  color:
+                    activeTag === null && !activeFolder
+                      ? "#818cf8"
+                      : colors.textDim,
+                  border: `1px solid ${activeTag === null && !activeFolder ? colors.accentBorder : "transparent"}`,
+                }}
+              >
+                All
+              </button>
+              {allLabels.map((label) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    setActiveTag(activeTag === label ? null : label);
+                    setActiveFolder(null);
+                  }}
+                  className="shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-xl transition-all whitespace-nowrap"
+                  style={{
+                    background:
+                      activeTag === label
+                        ? "rgba(52,211,153,0.15)"
+                        : "rgba(255,255,255,0.04)",
+                    color: activeTag === label ? "#34d399" : colors.textDim,
+                    border: `1px solid ${activeTag === label ? "rgba(52,211,153,0.3)" : "transparent"}`,
+                  }}
+                >
+                  <TagIcon className="w-2.5 h-2.5" />
+                  {label}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Delete confirm */}
+      {/* Select mode header */}
+      {selectMode && !someSelected && (
+        <div
+          className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
+          style={{
+            background: colors.bgSidebar,
+            borderBottom: `1px solid ${colors.borderSubtle}`,
+          }}
+        >
+          <SelectCheckbox
+            checked={allPageSelected}
+            indeterminate={somePageSelected}
+            onChange={(v) => {
+              if (v) setSelected(new Set(displayTemplates.map((t) => t._id)));
+              else setSelected(new Set());
+            }}
+          />
+          <span className="text-[11px]" style={{ color: colors.textDim }}>
+            Click templates to select
+          </span>
+          <button
+            onClick={() => {
+              setSelectMode(false);
+              setSelected(new Set());
+            }}
+            className="ml-auto text-[11px]"
+            style={{ color: colors.textDim }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Filter strip */}
+      {hasFilters && !isLoading && (
+        <div
+          className="flex items-center gap-2 px-4 sm:px-6 py-2 shrink-0 flex-wrap"
+          style={{
+            borderBottom: `1px solid ${colors.border}`,
+            background: "rgba(255,255,255,0.01)",
+          }}
+        >
+          <span className="text-[11px]" style={{ color: colors.textDim }}>
+            {filteredTemplates.length} result
+            {filteredTemplates.length !== 1 ? "s" : ""}
+          </span>
+          {search && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: colors.textMuted,
+              }}
+            >
+              &ldquo;{search}&rdquo;
+              <button onClick={() => setSearch("")}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {activeFolder && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{ background: colors.accentBg, color: "#818cf8" }}
+            >
+              <FolderIcon className="w-3 h-3" /> {activeFolder}
+              <button onClick={() => setActiveFolder(null)}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {activeTag && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{ background: "rgba(52,211,153,0.1)", color: "#34d399" }}
+            >
+              <TagIcon className="w-3 h-3" /> {activeTag}
+              <button onClick={() => setActiveTag(null)}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setSearch("");
+              setActiveTag(null);
+              setActiveFolder(null);
+            }}
+            className="text-[11px] ml-auto"
+            style={{ color: colors.textDim }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* Content + folder panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <div ref={contentRef} className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            {isLoading ? (
+              view === "grid" ? (
+                <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <GridSkeleton key={i} />
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <ListSkeleton key={i} />
+                  ))}
+                </div>
+              )
+            ) : displayTemplates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                  style={{
+                    background: "rgba(99,102,241,0.08)",
+                    border: "1px solid rgba(99,102,241,0.15)",
+                  }}
+                >
+                  <LayoutTemplateIcon
+                    className="w-6 h-6"
+                    style={{ color: "#818cf8" }}
+                  />
+                </div>
+                <p
+                  className="text-[14px] font-semibold mb-1.5"
+                  style={{ color: colors.textSecondary }}
+                >
+                  {search || activeTag || activeFolder
+                    ? "No templates found"
+                    : "No templates yet"}
+                </p>
+                <p
+                  className="text-[12px] mb-6 max-w-[260px] leading-relaxed"
+                  style={{ color: colors.textDim }}
+                >
+                  {search
+                    ? `No results for "${search}".`
+                    : activeTag
+                      ? `No templates with label "${activeTag}".`
+                      : activeFolder
+                        ? `No templates in folder "${activeFolder}".`
+                        : "Upload a .docx with {{placeholders}} to create a reusable template."}
+                </p>
+                {!search && !activeTag && !activeFolder && (
+                  <button
+                    onClick={() => router.push("/templates/new")}
+                    className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
+                    style={{
+                      background: colors.accentBg,
+                      color: colors.accentPale,
+                      border: `1px solid ${colors.accentBorder}`,
+                    }}
+                  >
+                    <PlusIcon className="w-3.5 h-3.5" /> New template
+                  </button>
+                )}
+              </div>
+            ) : view === "grid" ? (
+              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch pb-[calc(1rem+env(safe-area-inset-bottom)+52px)] md:pb-6">
+                {displayTemplates.map((t) => (
+                  <TemplateGridCard
+                    key={t._id}
+                    template={t}
+                    onDelete={() => setDeleteTarget(t)}
+                    selected={selected.has(t._id)}
+                    selectMode={selectMode}
+                    onSelect={(shift) => handleSelect(t._id, shift)}
+                    allExistingFolders={allFolders}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="pb-[calc(env(safe-area-inset-bottom)+52px)] md:pb-0">
+                {displayTemplates.map((t) => (
+                  <TemplateListRow
+                    key={t._id}
+                    template={t}
+                    onDelete={() => setDeleteTarget(t)}
+                    selected={selected.has(t._id)}
+                    selectMode={selectMode}
+                    onSelect={(shift) => handleSelect(t._id, shift)}
+                    allExistingFolders={allFolders}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {!isLoading && filteredTemplates.length > PAGE_SIZE && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={filteredTemplates.length}
+              pageSize={PAGE_SIZE}
+              onChange={handlePageChange}
+            />
+          )}
+        </div>
+
+        <FolderPanel
+          open={folderPanelOpen}
+          onClose={() => setFolderPanelOpen(false)}
+          folders={allFolders}
+          folderCounts={folderCounts}
+          activeFolder={activeFolder}
+          onSelectFolder={(f) => {
+            setActiveFolder(f);
+            setActiveTag(null);
+          }}
+        />
+      </div>
+
+      {/* Bulk bar */}
+      {someSelected && (
+        <BulkBar
+          count={selected.size}
+          total={filteredTemplates.length}
+          onDelete={() => setBulkDeleteOpen(true)}
+          onClear={() => {
+            setSelected(new Set());
+            setSelectMode(false);
+          }}
+          onSelectAll={handleSelectAll}
+          onMoveToFolder={handleMoveToFolder}
+          allFolders={allFolders}
+        />
+      )}
+
+      {/* Single delete confirm */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(v) => !v && setDeleteTarget(null)}
@@ -908,6 +2593,33 @@ export default function TemplatesPage() {
               onClick={handleDelete}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirm */}
+      <AlertDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(v) => !v && setBulkDeleteOpen(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selected.size} template{selected.size !== 1 ? "s" : ""}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selected.size} template
+              {selected.size !== 1 ? "s" : ""}. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleBulkDelete}
+            >
+              Delete {selected.size} template{selected.size !== 1 ? "s" : ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

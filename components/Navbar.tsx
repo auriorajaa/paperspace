@@ -28,7 +28,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: HomeIcon },
-  { href: "/documents", label: "Documents", icon: FileTextIcon },
+  { href: "/documents", label: "Papers", icon: FileTextIcon },
   { href: "/collections", label: "Collections", icon: FolderIcon },
   { href: "/templates", label: "Templates", icon: LayoutTemplateIcon },
   { href: "/form-results", label: "Results", icon: ZapIcon },
