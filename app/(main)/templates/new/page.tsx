@@ -1614,22 +1614,216 @@ export default function TemplateNewPage() {
         </div>
       </div>
 
-      {/* ── Global processing overlay toast ─────────────────────────────── */}
+      {/* ── Full-screen processing overlay ──────────────────────────────── */}
       {isProcessing && (
         <div
-          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-xl text-xs font-medium"
+          className="fixed inset-0 z-[999] flex items-center justify-center p-4"
           style={{
-            background: "rgba(15,15,25,0.92)",
-            border: "1px solid rgba(99,102,241,0.25)",
-            backdropFilter: "blur(12px)",
-            color: colors.textSecondary,
+            background: "rgba(8,8,18,0.85)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            animation: "fadeIn 0.2s ease-out",
           }}
         >
-          <Loader2Icon
-            className="w-3.5 h-3.5 animate-spin"
-            style={{ color: "#818cf8" }}
-          />
-          {STAGE_LABEL[stage] || "Processing…"}
+          <style>{`
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes spinPulse {
+        0%   { transform: rotate(0deg);   opacity: 1;    }
+        50%  { transform: rotate(180deg); opacity: 0.75; }
+        100% { transform: rotate(360deg); opacity: 1;    }
+      }
+    `}</style>
+
+          <div
+            className="w-full max-w-sm rounded-3xl p-8 flex flex-col items-center gap-6 text-center"
+            style={{
+              background: "rgba(18,18,32,0.98)",
+              border: "1px solid rgba(99,102,241,0.25)",
+              boxShadow:
+                "0 0 0 1px rgba(99,102,241,0.1), 0 24px 64px rgba(0,0,0,0.6), 0 0 80px rgba(99,102,241,0.08)",
+              animation: "slideUp 0.25s ease-out",
+            }}
+          >
+            {/* Spinner */}
+            <div className="relative flex items-center justify-center">
+              {/* Outer glow ring */}
+              <div
+                className="absolute w-20 h-20 rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)",
+                }}
+              />
+              {/* Track ring */}
+              <svg
+                className="w-16 h-16"
+                viewBox="0 0 64 64"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                style={{ animation: "spinPulse 1.4s linear infinite" }}
+              >
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="26"
+                  stroke="rgba(99,102,241,0.12)"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M32 6 A26 26 0 0 1 58 32"
+                  stroke="url(#spinGrad)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="spinGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#818cf8" stopOpacity="1" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              {/* Center icon */}
+              <div
+                className="absolute w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{
+                  background: "rgba(99,102,241,0.15)",
+                  border: "1px solid rgba(99,102,241,0.25)",
+                }}
+              >
+                <Loader2Icon className="w-4 h-4" style={{ color: "#818cf8" }} />
+              </div>
+            </div>
+
+            {/* Label */}
+            <div className="space-y-1.5">
+              <p
+                className="text-base font-semibold"
+                style={{ color: colors.text }}
+              >
+                {STAGE_LABEL[stage] || "Processing…"}
+              </p>
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: colors.textMuted }}
+              >
+                Please wait, this may take a moment.
+                <br />
+                Do not close or refresh this page.
+              </p>
+            </div>
+
+            {/* Progress steps */}
+            {fileKind && (
+              <div
+                className="w-full rounded-2xl p-4 space-y-2"
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {(fileKind === "pdf" ? STAGE_ORDER_PDF : STAGE_ORDER_DOCX).map(
+                  (s, i, arr) => {
+                    const currentIdx = arr.indexOf(stage as Stage);
+                    const isDone = currentIdx > i;
+                    const isActive = stage === s;
+                    return (
+                      <div
+                        key={s}
+                        className="flex items-center gap-3 transition-all duration-300"
+                        style={{ opacity: isDone ? 0.45 : isActive ? 1 : 0.3 }}
+                      >
+                        {/* Step dot */}
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-300"
+                          style={{
+                            background: isDone
+                              ? "rgba(52,211,153,0.15)"
+                              : isActive
+                                ? "rgba(99,102,241,0.25)"
+                                : "rgba(255,255,255,0.05)",
+                            border: `1.5px solid ${
+                              isDone
+                                ? "rgba(52,211,153,0.5)"
+                                : isActive
+                                  ? "rgba(99,102,241,0.6)"
+                                  : "rgba(255,255,255,0.1)"
+                            }`,
+                          }}
+                        >
+                          {isDone ? (
+                            <CheckIcon
+                              className="w-2.5 h-2.5"
+                              style={{ color: "#34d399" }}
+                            />
+                          ) : isActive ? (
+                            <div
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{
+                                background: "#818cf8",
+                                animation: "spinPulse 1s ease-in-out infinite",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.2)" }}
+                            />
+                          )}
+                        </div>
+
+                        {/* Label */}
+                        <span
+                          className="text-[12px] font-medium flex-1 text-left"
+                          style={{
+                            color: isDone
+                              ? "#34d399"
+                              : isActive
+                                ? colors.textSecondary
+                                : colors.textDim,
+                          }}
+                        >
+                          {STAGE_LABEL[s].replace("…", "")}
+                        </span>
+
+                        {/* Active badge */}
+                        {isActive && (
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: "rgba(99,102,241,0.15)",
+                              color: "#818cf8",
+                              border: "1px solid rgba(99,102,241,0.2)",
+                            }}
+                          >
+                            In progress
+                          </span>
+                        )}
+                        {isDone && (
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: "rgba(52,211,153,0.1)",
+                              color: "#34d399",
+                              border: "1px solid rgba(52,211,153,0.15)",
+                            }}
+                          >
+                            Done
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
