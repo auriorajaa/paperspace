@@ -18,11 +18,14 @@ import {
   FileIcon,
   AlertCircleIcon,
   Loader2Icon,
+  AlertTriangleIcon,
+  RefreshCwIcon,
+  InfoIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { colors } from "@/lib/design-tokens";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 type FileKind = "docx" | "pdf";
 type Stage =
   | ""
@@ -37,41 +40,174 @@ const STAGE_LABEL: Record<Stage, string> = {
   previewing: "Preparing preview…",
   splitting: "Processing selected pages…",
   converting: "Converting to editable format…",
-  uploading: "Uploading & scanning for placeholders…",
+  uploading: "Uploading document…",
   scanning: "Detecting placeholders…",
 };
 
-const MAX_PDF_PAGES = 50;
+const STAGE_ORDER_PDF: Stage[] = [
+  "splitting",
+  "converting",
+  "uploading",
+  "scanning",
+];
+const STAGE_ORDER_DOCX: Stage[] = ["uploading", "scanning"];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const MAX_PDF_PAGES = 50;
+const MAX_FILE_MB = 10;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fileSizeMB(bytes: number) {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
 
-// ─── Thumbnail Card ──────────────────────────────────────────────────────────
+// ─── Error Banner ─────────────────────────────────────────────────────────────
+function ErrorBanner({
+  message,
+  onRetry,
+  onDismiss,
+}: {
+  message: string;
+  onRetry?: () => void;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div
+      className="flex items-start gap-3 p-4 rounded-2xl"
+      style={{
+        background: "rgba(239,68,68,0.08)",
+        border: "1px solid rgba(239,68,68,0.25)",
+      }}
+    >
+      <AlertTriangleIcon
+        className="w-4 h-4 shrink-0 mt-0.5"
+        style={{ color: "#f87171" }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm" style={{ color: "#fca5a5" }}>
+          {message}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors active:scale-95"
+            style={{
+              background: "rgba(239,68,68,0.15)",
+              color: "#f87171",
+              border: "1px solid rgba(239,68,68,0.2)",
+            }}
+          >
+            <RefreshCwIcon className="w-3 h-3" />
+            Try again
+          </button>
+        )}
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors hover:bg-white/5 active:scale-90"
+          style={{ color: "rgba(248,113,113,0.6)" }}
+        >
+          <XIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Step Indicator ───────────────────────────────────────────────────────────
+function StepIndicator({
+  steps,
+  current,
+}: {
+  steps: { label: string }[];
+  current: number;
+}) {
+  return (
+    <div className="flex items-center gap-0">
+      {steps.map((step, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={i} className="flex items-center">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 shrink-0"
+                style={{
+                  background: done
+                    ? "rgba(52,211,153,0.15)"
+                    : active
+                      ? "rgba(99,102,241,0.25)"
+                      : "rgba(255,255,255,0.05)",
+                  border: done
+                    ? "1.5px solid rgba(52,211,153,0.4)"
+                    : active
+                      ? "1.5px solid rgba(99,102,241,0.5)"
+                      : "1.5px solid rgba(255,255,255,0.1)",
+                  color: done ? "#34d399" : active ? "#818cf8" : colors.textDim,
+                }}
+              >
+                {done ? <CheckIcon className="w-3 h-3" /> : i + 1}
+              </div>
+              <span
+                className="text-[11px] font-medium hidden sm:block"
+                style={{
+                  color: done
+                    ? "#34d399"
+                    : active
+                      ? colors.textSecondary
+                      : colors.textDim,
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div
+                className="w-6 sm:w-10 h-px mx-2 transition-all duration-300"
+                style={{
+                  background: done
+                    ? "rgba(52,211,153,0.3)"
+                    : "rgba(255,255,255,0.08)",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Thumbnail Card ───────────────────────────────────────────────────────────
 function ThumbnailCard({
   index,
   dataUrl,
   selected,
   onToggle,
+  disabled,
 }: {
   index: number;
   dataUrl: string | null;
   selected: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="relative rounded-xl overflow-hidden transition-all duration-150 text-left w-full focus:outline-none active:scale-[0.98]"
+      disabled={disabled}
+      className="relative rounded-xl overflow-hidden transition-all duration-150 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.97] disabled:pointer-events-none"
       style={{
-        border: `2px solid ${selected ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.08)"}`,
+        border: `2px solid ${selected ? "rgba(99,102,241,0.65)" : "rgba(255,255,255,0.07)"}`,
         background: selected
           ? "rgba(99,102,241,0.07)"
           : "rgba(255,255,255,0.02)",
         boxShadow: selected
-          ? "0 0 0 2px rgba(99,102,241,0.2), 0 4px 16px rgba(99,102,241,0.12)"
+          ? "0 0 0 2px rgba(99,102,241,0.15), 0 4px 12px rgba(99,102,241,0.1)"
           : "none",
         transform: selected ? "scale(1.02)" : "scale(1)",
       }}
@@ -86,12 +222,12 @@ function ThumbnailCard({
       ) : (
         <div
           className="w-full aspect-[3/4] animate-pulse"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "rgba(255,255,255,0.04)" }}
         >
           <div className="w-full h-full flex items-center justify-center">
             <Loader2Icon
               className="w-4 h-4 animate-spin"
-              style={{ color: "rgba(255,255,255,0.15)" }}
+              style={{ color: "rgba(255,255,255,0.12)" }}
             />
           </div>
         </div>
@@ -102,7 +238,7 @@ function ThumbnailCard({
       >
         <span
           className="text-[10px] font-semibold tabular-nums"
-          style={{ color: "rgba(255,255,255,0.7)" }}
+          style={{ color: "rgba(255,255,255,0.6)" }}
         >
           {index + 1}
         </span>
@@ -110,9 +246,8 @@ function ThumbnailCard({
       <div
         className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center transition-all duration-150"
         style={{
-          background: selected ? "#6366f1" : "rgba(0,0,0,0.45)",
-          border: `1.5px solid ${selected ? "#818cf8" : "rgba(255,255,255,0.2)"}`,
-          opacity: selected ? 1 : 0.6,
+          background: selected ? "#6366f1" : "rgba(0,0,0,0.4)",
+          border: `1.5px solid ${selected ? "#818cf8" : "rgba(255,255,255,0.15)"}`,
         }}
       >
         {selected && <CheckIcon className="w-3 h-3 text-white" />}
@@ -121,7 +256,7 @@ function ThumbnailCard({
   );
 }
 
-// ─── Page Selector ───────────────────────────────────────────────────────────
+// ─── Page Selector ────────────────────────────────────────────────────────────
 function PageSelector({
   totalPages,
   thumbnails,
@@ -130,6 +265,7 @@ function PageSelector({
   onToggle,
   onSelectAll,
   onClearAll,
+  disabled,
 }: {
   totalPages: number;
   thumbnails: (string | null)[];
@@ -138,6 +274,7 @@ function PageSelector({
   onToggle: (page: number) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
+  disabled?: boolean;
 }) {
   const loadedCount = thumbnails.filter(Boolean).length;
   const displayLimit = Math.min(totalPages, MAX_PDF_PAGES);
@@ -146,13 +283,14 @@ function PageSelector({
     <div
       className="rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid rgba(99,102,241,0.18)`,
-        background: "rgba(99,102,241,0.03)",
+        border: `1px solid rgba(99,102,241,0.15)`,
+        background: "rgba(99,102,241,0.025)",
       }}
     >
+      {/* Header */}
       <div
         className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-        style={{ borderBottom: "1px solid rgba(99,102,241,0.12)" }}
+        style={{ borderBottom: "1px solid rgba(99,102,241,0.1)" }}
       >
         <div className="flex items-center gap-2">
           <LayoutGridIcon
@@ -163,25 +301,29 @@ function PageSelector({
             className="text-[12px] font-semibold"
             style={{ color: colors.textSecondary }}
           >
-            Select pages to include
+            Select pages
           </span>
           {loading && (
             <span
               className="text-[10px] px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(99,102,241,0.15)", color: "#818cf8" }}
+              style={{
+                background: "rgba(99,102,241,0.12)",
+                color: "#818cf8",
+              }}
             >
               {loadedCount}/{displayLimit} loaded
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="text-[11px]" style={{ color: colors.textMuted }}>
-            {selectedPages.size} of {displayLimit} selected
+            {selectedPages.size}/{displayLimit}
           </span>
           <button
             type="button"
             onClick={onSelectAll}
-            className="text-[11px] font-medium px-2 py-1 rounded-lg transition-colors active:scale-95"
+            disabled={disabled}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors active:scale-95 disabled:opacity-40 min-h-[30px]"
             style={{
               background: "rgba(99,102,241,0.12)",
               color: "#818cf8",
@@ -193,7 +335,8 @@ function PageSelector({
           <button
             type="button"
             onClick={onClearAll}
-            className="text-[11px] font-medium px-2 py-1 rounded-lg transition-colors active:scale-95"
+            disabled={disabled}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors active:scale-95 disabled:opacity-40 min-h-[30px]"
             style={{
               background: "rgba(255,255,255,0.04)",
               color: colors.textMuted,
@@ -207,24 +350,28 @@ function PageSelector({
 
       {totalPages > MAX_PDF_PAGES && (
         <div
-          className="flex items-center gap-2 px-4 py-2"
+          className="flex items-start gap-2.5 px-4 py-2.5"
           style={{
-            background: "rgba(251,191,36,0.06)",
-            borderBottom: "1px solid rgba(251,191,36,0.12)",
+            background: "rgba(251,191,36,0.05)",
+            borderBottom: "1px solid rgba(251,191,36,0.1)",
           }}
         >
-          <AlertCircleIcon
-            className="w-3.5 h-3.5 shrink-0"
+          <InfoIcon
+            className="w-3.5 h-3.5 shrink-0 mt-0.5"
             style={{ color: "#fbbf24" }}
           />
-          <p className="text-[11px]" style={{ color: "#fbbf24" }}>
-            This PDF has {totalPages} pages. Only the first {MAX_PDF_PAGES} are
-            shown for preview. Splitting still applies to the full selection.
+          <p
+            className="text-[11px] leading-relaxed"
+            style={{ color: "#fbbf24" }}
+          >
+            This PDF has {totalPages} pages. Preview shows first {MAX_PDF_PAGES}{" "}
+            pages only.
           </p>
         </div>
       )}
 
-      <div className="p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[480px] overflow-y-auto">
+      {/* Grid */}
+      <div className="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[420px] overflow-y-auto">
         {thumbnails.map((dataUrl, i) => (
           <ThumbnailCard
             key={i}
@@ -232,24 +379,30 @@ function PageSelector({
             dataUrl={dataUrl}
             selected={selectedPages.has(i + 1)}
             onToggle={() => onToggle(i + 1)}
+            disabled={disabled}
           />
         ))}
       </div>
 
+      {/* Footer hint */}
       <div
-        className="px-4 py-2.5"
-        style={{ borderTop: "1px solid rgba(99,102,241,0.1)" }}
+        className="px-4 py-2.5 flex items-center gap-2"
+        style={{ borderTop: "1px solid rgba(99,102,241,0.08)" }}
       >
+        <InfoIcon
+          className="w-3 h-3 shrink-0"
+          style={{ color: colors.textDim }}
+        />
         <p className="text-[10px]" style={{ color: colors.textDim }}>
-          Tap/click pages to toggle · Selected pages will be merged into one
-          document and converted to an editable format.
+          Tap pages to select · Selected pages will be merged and converted to
+          editable format
         </p>
       </div>
     </div>
   );
 }
 
-// ─── TagsInput (Labels only, with suggestions from existing labels) ──────────
+// ─── Tags Input ───────────────────────────────────────────────────────────────
 function TagsInput({
   value,
   onChange,
@@ -269,17 +422,13 @@ function TagsInput({
     (tag: string) => {
       const trimmed = tag.trim().toLowerCase();
       if (!trimmed) return;
-      if (!value.includes(trimmed)) {
-        onChange([...value, trimmed]);
-      }
+      if (!value.includes(trimmed)) onChange([...value, trimmed]);
     },
     [value, onChange]
   );
 
   const removeTag = useCallback(
-    (tag: string) => {
-      onChange(value.filter((t) => t !== tag));
-    },
+    (tag: string) => onChange(value.filter((t) => t !== tag)),
     [value, onChange]
   );
 
@@ -297,12 +446,6 @@ function TagsInput({
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    addTag(suggestion);
-    setInput("");
-    setShowSuggestions(false);
-  };
-
   const filteredSuggestions = useMemo(() => {
     if (!input.trim()) return [];
     return suggestions.filter(
@@ -310,24 +453,22 @@ function TagsInput({
     );
   }, [input, suggestions, value]);
 
-  // Hide suggestions when clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       if (
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
-      ) {
+      )
         setShowSuggestions(false);
-      }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   return (
     <div ref={containerRef} className="relative">
       <div
-        className={`flex flex-wrap gap-1.5 p-2 rounded-xl min-h-[42px] cursor-text transition-colors ${
+        className={`flex flex-wrap gap-1.5 p-2.5 rounded-xl min-h-[44px] cursor-text transition-colors ${
           disabled ? "pointer-events-none opacity-50" : ""
         }`}
         style={{
@@ -339,11 +480,11 @@ function TagsInput({
         {value.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
             style={{
               background: "rgba(52,211,153,0.1)",
               color: "#34d399",
-              border: "1px solid rgba(52,211,153,0.2)",
+              border: "1px solid rgba(52,211,153,0.18)",
             }}
           >
             {tag}
@@ -353,7 +494,7 @@ function TagsInput({
                 e.stopPropagation();
                 removeTag(tag);
               }}
-              className="hover:opacity-60 transition-opacity active:scale-90"
+              className="hover:opacity-60 transition-opacity active:scale-90 -mr-0.5"
             >
               <XIcon className="w-2.5 h-2.5" />
             </button>
@@ -369,23 +510,17 @@ function TagsInput({
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
-          onBlur={() => {
-            // Delay to allow click on suggestion
-            setTimeout(() => setShowSuggestions(false), 150);
-          }}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           disabled={disabled}
-          placeholder={
-            value.length === 0 ? "Add tags like: invoice, hr, contract" : ""
-          }
+          placeholder={value.length === 0 ? "invoice, hr, contract…" : ""}
           className="flex-1 min-w-[80px] text-xs bg-transparent outline-none disabled:opacity-50"
           style={{ color: colors.text }}
         />
       </div>
 
-      {/* Suggestions dropdown */}
       {showSuggestions && filteredSuggestions.length > 0 && !disabled && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20 shadow-lg"
+          className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20 shadow-xl"
           style={{
             background: "#18182a",
             border: `1px solid ${colors.border}`,
@@ -396,10 +531,12 @@ function TagsInput({
               key={sug}
               type="button"
               onMouseDown={(e) => {
-                e.preventDefault(); // prevent blur
-                handleSuggestionClick(sug);
+                e.preventDefault();
+                addTag(sug);
+                setInput("");
+                setShowSuggestions(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-white/5 active:bg-white/10"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-[12px] transition-colors hover:bg-white/5 active:bg-white/10 min-h-[40px]"
               style={{ color: colors.textSecondary }}
             >
               <TagIcon className="w-3 h-3" style={{ color: "#34d399" }} />
@@ -409,9 +546,88 @@ function TagsInput({
         </div>
       )}
 
-      <p className="text-[10px] mt-1" style={{ color: colors.textDim }}>
-        Press Enter or comma to add · Backspace to remove last
+      <p className="text-[10px] mt-1.5" style={{ color: colors.textDim }}>
+        Press Enter or comma to add · Backspace removes last
       </p>
+    </div>
+  );
+}
+
+// ─── Field Error ──────────────────────────────────────────────────────────────
+function FieldError({ message }: { message: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5">
+      <AlertCircleIcon
+        className="w-3 h-3 shrink-0"
+        style={{ color: "#f87171" }}
+      />
+      <p className="text-[11px]" style={{ color: "#f87171" }}>
+        {message}
+      </p>
+    </div>
+  );
+}
+
+// ─── Progress Steps (inline during save) ──────────────────────────────────────
+function ProgressSteps({
+  stages,
+  current,
+}: {
+  stages: Stage[];
+  current: Stage;
+}) {
+  const currentIdx = stages.indexOf(current);
+
+  return (
+    <div className="flex items-center justify-center gap-1 flex-wrap">
+      {stages.map((s, i) => {
+        const isDone = currentIdx > i;
+        const isActive = current === s;
+        return (
+          <div key={s} className="flex items-center gap-1">
+            <div
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300"
+              style={{
+                background: isDone
+                  ? "rgba(52,211,153,0.08)"
+                  : isActive
+                    ? "rgba(99,102,241,0.12)"
+                    : "transparent",
+                opacity: isDone ? 0.5 : isActive ? 1 : 0.25,
+              }}
+            >
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: isDone
+                    ? "#34d399"
+                    : isActive
+                      ? "#818cf8"
+                      : "rgba(255,255,255,0.2)",
+                }}
+              />
+              <span
+                className="text-[10px] font-medium"
+                style={{
+                  color: isDone
+                    ? "#34d399"
+                    : isActive
+                      ? "#818cf8"
+                      : colors.textDim,
+                }}
+              >
+                {STAGE_LABEL[s].replace("…", "")}
+              </span>
+            </div>
+            {i < stages.length - 1 && (
+              <ChevronRightIcon
+                className="w-2.5 h-2.5"
+                style={{ color: "rgba(255,255,255,0.08)" }}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -422,7 +638,7 @@ export default function TemplateNewPage() {
   const { organization } = useOrganization();
   const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
   const createTemplate = useMutation(api.templates.create);
-  const allTemplates = useQuery(api.templates.getAll); // untuk saran labels
+  const allTemplates = useQuery(api.templates.getAll);
   const deleteTempStorage = useMutation(api.templates.deleteTempStorage);
 
   // File state
@@ -434,42 +650,76 @@ export default function TemplateNewPage() {
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [tags, setTags] = useState<string[]>([]); // hanya labels, tanpa folder
+  const [tags, setTags] = useState<string[]>([]);
+
+  // Field-level errors
+  const [nameError, setNameError] = useState("");
+
+  // Critical error banner (for upload/convert failures)
+  const [criticalError, setCriticalError] = useState("");
 
   // PDF state
   const [pdfThumbnails, setPdfThumbnails] = useState<(string | null)[]>([]);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [loadingThumbnails, setLoadingThumbnails] = useState(false);
+  const [pdfError, setPdfError] = useState("");
 
   // Processing state
   const [stage, setStage] = useState<Stage>("");
   const [saving, setSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Existing labels untuk suggestions (dari semua template)
+  // Existing labels for suggestions
   const existingLabels = useMemo(() => {
     if (!allTemplates) return [];
     const lbls = new Set<string>();
-    allTemplates.forEach((t) => {
-      (t.tags || []).forEach((l) => lbls.add(l));
-    });
+    allTemplates.forEach((t) => (t.tags || []).forEach((l) => lbls.add(l)));
     return Array.from(lbls).sort();
   }, [allTemplates]);
 
-  // ── File handling ───────────────────────────────────────────────────────────
+  // Derive current "step" for indicator
+  const currentStep = !file
+    ? 0
+    : fileKind === "pdf" &&
+        !pdfError &&
+        (pdfThumbnails.length > 0 || loadingThumbnails)
+      ? 1
+      : 1;
+  const wizardSteps = [
+    { label: "Upload file" },
+    { label: "Details" },
+    { label: "Save" },
+  ];
+
+  // ── File handling ────────────────────────────────────────────────────────────
   const handleFile = useCallback(
     async (f: File) => {
       if (isProcessing) return;
+      setCriticalError("");
+      setPdfError("");
+
       const isPdf = f.name.toLowerCase().endsWith(".pdf");
       const isDocx = f.name.toLowerCase().endsWith(".docx");
 
       if (!isPdf && !isDocx) {
-        toast.error("Please upload a PDF or DOCX file.");
+        toast.error("Unsupported file type.", {
+          description: "Please upload a .pdf or .docx file.",
+        });
         return;
       }
-      if (f.size > 20 * 1024 * 1024) {
-        toast.error("File is too large. Maximum size is 20 MB.");
+
+      if (f.size > MAX_FILE_BYTES) {
+        toast.error(`File too large — max ${MAX_FILE_MB} MB`, {
+          description: `Your file is ${fileSizeMB(f.size)} MB. Please compress or trim it before uploading.`,
+        });
+        return;
+      }
+
+      if (f.size === 0) {
+        toast.error("This file appears to be empty.", {
+          description: "Please try a different file.",
+        });
         return;
       }
 
@@ -477,9 +727,7 @@ export default function TemplateNewPage() {
       setFileKind(isPdf ? "pdf" : "docx");
       if (!name) setName(f.name.replace(/\.(pdf|docx)$/i, ""));
 
-      if (isPdf) {
-        await loadPdfThumbnails(f);
-      }
+      if (isPdf) await loadPdfThumbnails(f);
     },
     [name, isProcessing]
   );
@@ -489,6 +737,7 @@ export default function TemplateNewPage() {
     setPdfThumbnails([]);
     setPdfTotalPages(0);
     setSelectedPages(new Set());
+    setPdfError("");
     setStage("previewing");
 
     try {
@@ -498,11 +747,12 @@ export default function TemplateNewPage() {
       const pdf = await pdfjsLib.getDocument({
         data: new Uint8Array(arrayBuffer),
       }).promise;
-      const pageCount = pdf.numPages;
 
+      const pageCount = pdf.numPages;
       if (pageCount === 0) {
-        toast.error("This PDF appears to be empty. Please try another file.");
-        resetFile();
+        setPdfError("This PDF appears to be empty. Please try another file.");
+        setFile(null);
+        setFileKind(null);
         return;
       }
 
@@ -529,12 +779,18 @@ export default function TemplateNewPage() {
           return next;
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("[PDF Preview]", err);
-      toast.error(
-        "We couldn't preview your PDF. The file may be corrupted or password-protected."
+      const isPasswordError =
+        err instanceof Error &&
+        (err.message.includes("password") || err.message.includes("encrypted"));
+      setPdfError(
+        isPasswordError
+          ? "This PDF is password-protected and cannot be previewed. Please remove the password and try again."
+          : "Couldn't load PDF preview. The file may be corrupted. Please try another file."
       );
-      resetFile();
+      setFile(null);
+      setFileKind(null);
     } finally {
       setLoadingThumbnails(false);
       setStage("");
@@ -550,9 +806,13 @@ export default function TemplateNewPage() {
     setSelectedPages(new Set());
     setLoadingThumbnails(false);
     setStage("");
+    setCriticalError("");
+    setPdfError("");
+    setNameError("");
+    if (inputRef.current) inputRef.current.value = "";
   };
 
-  // ── Page selection ──────────────────────────────────────────────────────────
+  // ── Page selection ───────────────────────────────────────────────────────────
   const togglePage = useCallback(
     (page: number) => {
       if (isProcessing) return;
@@ -583,15 +843,18 @@ export default function TemplateNewPage() {
     setSelectedPages(new Set());
   }, [isProcessing]);
 
-  // ── Build tags array (only labels) ──────────────────────────────────────────
-  function buildTags(): string[] {
-    return tags;
-  }
-
-  // ── Core DOCX upload + template creation ────────────────────────────────────
+  // ── Core DOCX upload ─────────────────────────────────────────────────────────
   const processDocx = async (docxFile: File): Promise<void> => {
     setStage("uploading");
-    const uploadUrl = await generateUploadUrl();
+    let uploadUrl: string;
+    try {
+      uploadUrl = await generateUploadUrl();
+    } catch {
+      throw new Error(
+        "Couldn't connect to storage. Please check your connection and try again."
+      );
+    }
+
     const uploadRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {
@@ -600,7 +863,9 @@ export default function TemplateNewPage() {
       },
       body: docxFile,
     });
-    if (!uploadRes.ok) throw new Error("Upload failed");
+    if (!uploadRes.ok) {
+      throw new Error(`Upload failed (${uploadRes.status}). Please try again.`);
+    }
     const { storageId } = await uploadRes.json();
 
     const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
@@ -612,7 +877,7 @@ export default function TemplateNewPage() {
     const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
     const { detectPlaceholders } = await import("@/lib/placeholder-detector");
     const fields = detectPlaceholders(textResult.value);
-    const templateTags = buildTags();
+    const templateTags = tags;
 
     const templateId = await createTemplate({
       name: name.trim(),
@@ -648,32 +913,41 @@ export default function TemplateNewPage() {
     router.push(`/templates/${templateId}/edit`);
   };
 
-  // ── Save handlers with error handling ───────────────────────────────────────
+  // ── Save handler ─────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (isProcessing) return;
+    setCriticalError("");
+
+    // Validate
     if (!file) {
-      toast.error("Please upload a PDF or DOCX file first.");
+      toast.error("Please upload a file first.");
       return;
     }
     if (!name.trim()) {
-      toast.error("Template name is required.");
+      setNameError("Template name is required.");
+      document.getElementById("template-name")?.focus();
       return;
     }
     if (fileKind === "pdf" && selectedPages.size === 0) {
-      toast.error("Please select at least one page.");
+      toast.error("Please select at least one page to continue.");
       return;
     }
 
     setIsProcessing(true);
     setSaving(true);
+
     try {
       if (fileKind === "pdf") {
         await handleSavePdf();
       } else {
         await handleSaveDocx();
       }
-    } catch (err) {
-      // Error already toast inside steps
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.";
+      setCriticalError(message);
     } finally {
       setSaving(false);
       setIsProcessing(false);
@@ -682,18 +956,11 @@ export default function TemplateNewPage() {
   };
 
   const handleSaveDocx = async () => {
-    try {
-      await processDocx(file!);
-    } catch (err) {
-      toast.error(
-        "Couldn't create template. Please check your connection and try again."
-      );
-      throw err;
-    }
+    await processDocx(file!);
   };
 
   const handleSavePdf = async () => {
-    // ── Step 1: Split halaman yang dipilih ──────────────────────────────────
+    // Step 1: Split selected pages
     setStage("splitting");
     const splitForm = new FormData();
     splitForm.append("file", file!);
@@ -701,75 +968,64 @@ export default function TemplateNewPage() {
       "pages",
       JSON.stringify(Array.from(selectedPages).sort((a, b) => a - b))
     );
-    const splitRes = await fetch("/api/pdf/split", {
-      method: "POST",
-      body: splitForm,
-    });
+
+    let splitRes: Response;
+    try {
+      splitRes = await fetch("/api/pdf/split", {
+        method: "POST",
+        body: splitForm,
+      });
+    } catch {
+      throw new Error(
+        "Network error while processing your PDF. Please check your connection."
+      );
+    }
+
     if (!splitRes.ok) {
-      const msg = await splitRes.text();
+      const msg = await splitRes.text().catch(() => "");
       throw new Error(
         msg || "We couldn't process your PDF. Please try another file."
       );
     }
+
     const splitBlob = await splitRes.blob();
-
-    // ── Step 2: Upload split PDF ke Convex untuk dapat URL publik ───────────
-    // Vercel serverless = tidak ada shared memory antar request.
-    // Convex storage URL selalu publik dan bisa diakses OnlyOffice dari server.
-    setStage("converting");
-    const tempUploadUrl = await generateUploadUrl();
-    const tempUploadRes = await fetch(tempUploadUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/pdf" }, // penting: harus PDF bukan DOCX
-      body: splitBlob,
+    const splitFile = new File([splitBlob], "pages.pdf", {
+      type: "application/pdf",
     });
-    if (!tempUploadRes.ok) {
-      throw new Error("Failed to upload PDF for conversion.");
-    }
-    const { storageId: tempStorageId } = await tempUploadRes.json();
 
-    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
-    const publicPdfUrl = `${convexSiteUrl}/getFile?storageId=${tempStorageId}`;
+    // Step 2: Convert to DOCX
+    setStage("converting");
+    const convertForm = new FormData();
+    convertForm.append("file", splitFile);
 
-    console.log("[handleSavePdf] PDF public URL (Convex):", publicPdfUrl);
-
-    // ── Step 3: Kirim URL ke OnlyOffice untuk konversi ke DOCX ──────────────
     let convertRes: Response;
     try {
       convertRes = await fetch("/api/convert/pdf-to-docx", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfUrl: publicPdfUrl }),
+        body: convertForm,
       });
-    } catch (err) {
-      // Cleanup temp file sebelum throw
-      try {
-        await deleteTempStorage({ storageId: tempStorageId });
-      } catch {}
-      throw err;
+    } catch {
+      throw new Error(
+        "Network error during PDF conversion. Please check your connection."
+      );
     }
 
     if (!convertRes.ok) {
-      try {
-        await deleteTempStorage({ storageId: tempStorageId });
-      } catch {}
-      const msg = await convertRes.text();
+      const msg = await convertRes.text().catch(() => "");
+      if (convertRes.status === 504) {
+        throw new Error(
+          "PDF conversion timed out. Try selecting fewer pages or using a simpler PDF."
+        );
+      }
       throw new Error(
         msg ||
-          "Something went wrong while converting your PDF. Please try again."
+          "PDF conversion failed. Plain text PDFs work best — try another file."
       );
     }
 
     const docxBlob = await convertRes.blob();
 
-    // Hapus temp PDF — tidak dibutuhkan lagi setelah konversi selesai
-    try {
-      await deleteTempStorage({ storageId: tempStorageId });
-    } catch {
-      console.warn("[handleSavePdf] Cleanup temp PDF gagal — tidak kritis");
-    }
-
-    // ── Validasi magic bytes DOCX ────────────────────────────────────────────
+    // Validate magic bytes
     const first4Bytes = await docxBlob.slice(0, 4).arrayBuffer();
     const header = new Uint8Array(first4Bytes);
     const isValidDocx =
@@ -779,10 +1035,8 @@ export default function TemplateNewPage() {
       header[3] === 0x04;
 
     if (!isValidDocx) {
-      const textSample = await docxBlob.slice(0, 500).text();
-      console.error("[PDF conversion] Invalid DOCX, sample:", textSample);
       throw new Error(
-        "The converted document is invalid. The PDF might be corrupted or the conversion service failed."
+        "The converted document is invalid. The PDF might use an unsupported format — try a different file or fewer pages."
       );
     }
 
@@ -790,7 +1044,7 @@ export default function TemplateNewPage() {
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
 
-    // ── Step 4: Upload DOCX final ke Convex sebagai template ────────────────
+    // Step 3: Upload
     await processDocx(docxFile);
   };
 
@@ -802,526 +1056,580 @@ export default function TemplateNewPage() {
     (fileKind !== "pdf" || selectedPages.size > 0) &&
     !isProcessing;
 
-  const currentStageLabel = stage
-    ? STAGE_LABEL[stage]
-    : saving
-      ? "Saving…"
-      : "";
+  const activeStages = fileKind === "pdf" ? STAGE_ORDER_PDF : STAGE_ORDER_DOCX;
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Render
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full" style={{ background: colors.bg }}>
-      {/* Header */}
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div
-        className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
+        className="shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4"
         style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
       >
-        <div className="flex items-center gap-3">
-          <Link
-            href="/templates"
-            className="flex items-center gap-1 text-xs transition-colors"
-            style={{ color: colors.textMuted }}
-          >
-            <ChevronLeftIcon className="w-3.5 h-3.5" />
-            Templates
-          </Link>
-          <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
-          <span
-            className="text-sm font-semibold"
-            style={{ color: colors.text }}
-          >
-            New template
-          </span>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/templates"
+              className="flex items-center gap-1 text-xs transition-colors hover:opacity-80 min-h-[32px]"
+              style={{ color: colors.textMuted }}
+            >
+              <ChevronLeftIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Templates</span>
+            </Link>
+            <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
+            <span
+              className="text-sm font-semibold"
+              style={{ color: colors.text }}
+            >
+              New template
+            </span>
+          </div>
+
+          {/* Step indicator */}
+          <StepIndicator
+            steps={wizardSteps}
+            current={!file ? 0 : saving ? 2 : 1}
+          />
         </div>
       </div>
 
-      {/* Main content */}
+      {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-3xl pl-4 pr-4 sm:pl-6 sm:pr-6 py-3 lg:pl-8">
-          <div className="mb-6">
-            <h2
-              className="text-base font-semibold"
-              style={{ color: colors.text }}
-            >
-              Upload template file
-            </h2>
-            <p
-              className="text-xs mt-1 leading-relaxed"
-              style={{ color: colors.textMuted }}
-            >
-              Upload a{" "}
-              <code
-                className="font-mono px-1 rounded text-[11px]"
-                style={{
-                  background: "rgba(99,102,241,0.12)",
-                  color: "#818cf8",
+        <div className="w-full max-w-2xl px-4 sm:px-6 lg:px-8 py-6 mx-auto lg:mx-0">
+          {/* Critical error banner */}
+          {criticalError && (
+            <div className="mb-5">
+              <ErrorBanner
+                message={criticalError}
+                onRetry={() => {
+                  setCriticalError("");
+                  handleSave();
                 }}
-              >
-                .docx
-              </code>{" "}
-              or{" "}
-              <code
-                className="font-mono px-1 rounded text-[11px]"
-                style={{ background: "rgba(52,211,153,0.1)", color: "#34d399" }}
-              >
-                .pdf
-              </code>{" "}
-              file. PDFs support page selection before conversion.
-            </p>
-          </div>
+                onDismiss={() => setCriticalError("")}
+              />
+            </div>
+          )}
+
+          {/* PDF load error */}
+          {pdfError && (
+            <div className="mb-5">
+              <ErrorBanner
+                message={pdfError}
+                onDismiss={() => setPdfError("")}
+              />
+            </div>
+          )}
 
           <div
-            className={`space-y-8 transition-opacity duration-200 ${
+            className={`space-y-6 transition-opacity duration-200 ${
               isProcessing ? "pointer-events-none opacity-60" : ""
             }`}
           >
-            {/* Upload zone */}
-            {!file ? (
-              <div
-                className={`flex flex-col items-center justify-center p-10 rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
-                  isProcessing ? "cursor-not-allowed" : ""
-                }`}
-                style={{
-                  borderColor: dragOver
-                    ? colors.accent
-                    : "rgba(255,255,255,0.1)",
-                  background: dragOver
-                    ? "rgba(99,102,241,0.06)"
-                    : "rgba(255,255,255,0.02)",
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (!isProcessing) setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  if (!isProcessing) {
-                    const f = e.dataTransfer.files[0];
-                    if (f) handleFile(f);
-                  }
-                }}
-                onClick={() => !isProcessing && inputRef.current?.click()}
-              >
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
-                  style={{
-                    background: "rgba(99,102,241,0.1)",
-                    border: "1px solid rgba(99,102,241,0.2)",
-                  }}
+            {/* ── SECTION 1: Upload ─────────────────────────────────────── */}
+            <section>
+              <div className="mb-3">
+                <h2
+                  className="text-sm font-semibold"
+                  style={{ color: colors.text }}
                 >
-                  <UploadCloudIcon
-                    className="w-6 h-6"
-                    style={{ color: "#818cf8" }}
-                  />
-                </div>
+                  1. Upload file
+                </h2>
                 <p
-                  className="text-sm font-medium mb-1"
-                  style={{ color: colors.textSecondary }}
+                  className="text-xs mt-0.5"
+                  style={{ color: colors.textMuted }}
                 >
-                  Drop a file here, or click to browse
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                  Supports{" "}
+                  <code
+                    className="font-mono text-[11px] px-1 rounded"
                     style={{
-                      background: "rgba(99,102,241,0.1)",
+                      background: "rgba(99,102,241,0.12)",
                       color: "#818cf8",
-                      border: "1px solid rgba(99,102,241,0.18)",
                     }}
                   >
                     .docx
-                  </span>
-                  <span
-                    className="text-[11px]"
-                    style={{ color: colors.textDim }}
-                  >
-                    or
-                  </span>
-                  <span
-                    className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                  </code>{" "}
+                  and{" "}
+                  <code
+                    className="font-mono text-[11px] px-1 rounded"
                     style={{
-                      background: "rgba(52,211,153,0.08)",
+                      background: "rgba(52,211,153,0.1)",
                       color: "#34d399",
-                      border: "1px solid rgba(52,211,153,0.18)",
                     }}
                   >
                     .pdf
-                  </span>
-                </div>
-                <p className="text-xs mt-2" style={{ color: colors.textDim }}>
-                  Max 20 MB
+                  </code>{" "}
+                  · Max {MAX_FILE_MB} MB
                 </p>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept=".docx,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFile(f);
-                  }}
-                  disabled={isProcessing}
-                />
               </div>
-            ) : (
-              <div
-                className="flex items-center gap-3 p-4 rounded-2xl"
-                style={{
-                  background:
-                    fileKind === "pdf"
-                      ? "rgba(52,211,153,0.05)"
-                      : "rgba(99,102,241,0.06)",
-                  border: `1px solid ${
-                    fileKind === "pdf"
-                      ? "rgba(52,211,153,0.18)"
-                      : "rgba(99,102,241,0.18)"
-                  }`,
-                }}
-              >
+
+              {!file ? (
+                /* Drop zone */
                 <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  className={`flex flex-col items-center justify-center p-8 sm:p-12 rounded-2xl border-2 border-dashed transition-all cursor-pointer select-none ${
+                    isProcessing
+                      ? "cursor-not-allowed"
+                      : "hover:border-indigo-500/40"
+                  }`}
                   style={{
-                    background:
-                      fileKind === "pdf"
-                        ? "rgba(52,211,153,0.12)"
-                        : "rgba(99,102,241,0.15)",
+                    borderColor: dragOver
+                      ? colors.accent
+                      : "rgba(255,255,255,0.09)",
+                    background: dragOver
+                      ? "rgba(99,102,241,0.06)"
+                      : "rgba(255,255,255,0.018)",
                   }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!isProcessing) setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    if (!isProcessing) {
+                      const f = e.dataTransfer.files[0];
+                      if (f) handleFile(f);
+                    }
+                  }}
+                  onClick={() => !isProcessing && inputRef.current?.click()}
                 >
-                  {fileKind === "pdf" ? (
-                    <FileIcon
-                      className="w-4 h-4"
-                      style={{ color: "#34d399" }}
-                    />
-                  ) : (
-                    <FileTextIcon
-                      className="w-4 h-4"
+                  <div
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-transform duration-200"
+                    style={{
+                      background: "rgba(99,102,241,0.1)",
+                      border: "1px solid rgba(99,102,241,0.2)",
+                      transform: dragOver ? "scale(1.08)" : "scale(1)",
+                    }}
+                  >
+                    <UploadCloudIcon
+                      className="w-7 h-7"
                       style={{ color: "#818cf8" }}
                     />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
+                  </div>
+
                   <p
-                    className="text-sm font-medium truncate"
-                    style={{ color: colors.text }}
+                    className="text-sm font-semibold mb-1 text-center"
+                    style={{ color: colors.textSecondary }}
                   >
-                    {file.name}
+                    {dragOver ? "Release to upload" : "Drop a file here"}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <p
+                    className="text-xs mb-4 text-center"
+                    style={{ color: colors.textMuted }}
+                  >
+                    or tap to browse your device
+                  </p>
+
+                  <div className="flex items-center gap-2">
                     <span
-                      className="text-[10px] font-semibold px-1.5 py-px rounded uppercase"
+                      className="text-[11px] px-2.5 py-1 rounded-lg font-medium"
                       style={{
-                        background:
-                          fileKind === "pdf"
-                            ? "rgba(52,211,153,0.12)"
-                            : "rgba(99,102,241,0.12)",
-                        color: fileKind === "pdf" ? "#34d399" : "#818cf8",
+                        background: "rgba(99,102,241,0.1)",
+                        color: "#818cf8",
+                        border: "1px solid rgba(99,102,241,0.18)",
                       }}
                     >
-                      {fileKind}
+                      .docx
                     </span>
                     <span
                       className="text-[11px]"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: colors.textDim }}
                     >
-                      {fileSizeMB(file.size)} MB
+                      or
                     </span>
-                    {fileKind === "pdf" && pdfTotalPages > 0 && (
-                      <>
-                        <span style={{ color: colors.textDim }}>·</span>
-                        <span
-                          className="text-[11px]"
-                          style={{ color: colors.textMuted }}
-                        >
-                          {pdfTotalPages} page{pdfTotalPages !== 1 ? "s" : ""}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={resetFile}
-                  disabled={isProcessing}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors active:bg-white/10"
-                  style={{ color: colors.textMuted }}
-                >
-                  <XIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* PDF page selection */}
-            {fileKind === "pdf" &&
-              (pdfThumbnails.length > 0 || loadingThumbnails) && (
-                <div className="space-y-2">
-                  {loadingThumbnails && pdfThumbnails.length === 0 ? (
-                    <div
-                      className="flex items-center justify-center gap-3 p-8 rounded-2xl"
+                    <span
+                      className="text-[11px] px-2.5 py-1 rounded-lg font-medium"
                       style={{
-                        border: "1px dashed rgba(99,102,241,0.2)",
-                        background: "rgba(99,102,241,0.02)",
+                        background: "rgba(52,211,153,0.08)",
+                        color: "#34d399",
+                        border: "1px solid rgba(52,211,153,0.18)",
                       }}
                     >
-                      <Loader2Icon
-                        className="w-4 h-4 animate-spin"
-                        style={{ color: "#818cf8" }}
-                      />
-                      <span
-                        className="text-[13px]"
-                        style={{ color: colors.textMuted }}
-                      >
-                        Preparing preview…
-                      </span>
-                    </div>
-                  ) : (
-                    <PageSelector
-                      totalPages={pdfTotalPages}
-                      thumbnails={pdfThumbnails}
-                      selectedPages={selectedPages}
-                      loading={loadingThumbnails}
-                      onToggle={togglePage}
-                      onSelectAll={selectAllPages}
-                      onClearAll={clearAllPages}
-                    />
-                  )}
+                      .pdf
+                    </span>
+                    <span
+                      className="text-[11px]"
+                      style={{ color: colors.textDim }}
+                    >
+                      · max {MAX_FILE_MB} MB
+                    </span>
+                  </div>
+
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".docx,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleFile(f);
+                    }}
+                    disabled={isProcessing}
+                  />
+                </div>
+              ) : (
+                /* File card */
+                <div
+                  className="flex items-center gap-3 p-4 rounded-2xl"
+                  style={{
+                    background:
+                      fileKind === "pdf"
+                        ? "rgba(52,211,153,0.04)"
+                        : "rgba(99,102,241,0.05)",
+                    border: `1px solid ${
+                      fileKind === "pdf"
+                        ? "rgba(52,211,153,0.16)"
+                        : "rgba(99,102,241,0.16)"
+                    }`,
+                  }}
+                >
                   <div
-                    className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                     style={{
-                      background: "rgba(251,191,36,0.05)",
-                      border: "1px solid rgba(251,191,36,0.1)",
+                      background:
+                        fileKind === "pdf"
+                          ? "rgba(52,211,153,0.1)"
+                          : "rgba(99,102,241,0.14)",
                     }}
                   >
-                    <AlertCircleIcon
-                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                      style={{ color: "#fbbf24" }}
-                    />
-                    <p
-                      className="text-[11px] leading-relaxed"
-                      style={{ color: "#fbbf24" }}
-                    >
-                      <span className="font-semibold">
-                        PDF conversion note:
-                      </span>{" "}
-                      Complex layouts, tables, or scanned pages may need manual
-                      adjustment after conversion. Plain text PDFs convert best.
-                    </p>
+                    {fileKind === "pdf" ? (
+                      <FileIcon
+                        className="w-4 h-4"
+                        style={{ color: "#34d399" }}
+                      />
+                    ) : (
+                      <FileTextIcon
+                        className="w-4 h-4"
+                        style={{ color: "#818cf8" }}
+                      />
+                    )}
                   </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-sm font-medium truncate"
+                      style={{ color: colors.text }}
+                    >
+                      {file.name}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-px rounded uppercase tracking-wide"
+                        style={{
+                          background:
+                            fileKind === "pdf"
+                              ? "rgba(52,211,153,0.12)"
+                              : "rgba(99,102,241,0.12)",
+                          color: fileKind === "pdf" ? "#34d399" : "#818cf8",
+                        }}
+                      >
+                        {fileKind}
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: colors.textMuted }}
+                      >
+                        {fileSizeMB(file.size)} MB
+                      </span>
+                      {fileKind === "pdf" && pdfTotalPages > 0 && (
+                        <>
+                          <span style={{ color: colors.textDim }}>·</span>
+                          <span
+                            className="text-[11px]"
+                            style={{ color: colors.textMuted }}
+                          >
+                            {pdfTotalPages} page
+                            {pdfTotalPages !== 1 ? "s" : ""}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={resetFile}
+                    disabled={isProcessing}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5 active:bg-white/10 active:scale-90 disabled:opacity-40"
+                    style={{ color: colors.textMuted }}
+                    title="Remove file"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* ── PDF loading state ──────────────────────────────────────── */}
+            {fileKind === "pdf" &&
+              loadingThumbnails &&
+              pdfThumbnails.length === 0 && (
+                <div
+                  className="flex items-center justify-center gap-3 p-8 rounded-2xl"
+                  style={{
+                    border: "1px dashed rgba(99,102,241,0.18)",
+                    background: "rgba(99,102,241,0.02)",
+                  }}
+                >
+                  <Loader2Icon
+                    className="w-4 h-4 animate-spin"
+                    style={{ color: "#818cf8" }}
+                  />
+                  <span className="text-sm" style={{ color: colors.textMuted }}>
+                    Loading page previews…
+                  </span>
                 </div>
               )}
 
-            {/* DOCX hint */}
-            {fileKind === "docx" && (
-              <div
-                className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
-                style={{
-                  background: "rgba(99,102,241,0.06)",
-                  border: "1px solid rgba(99,102,241,0.14)",
-                }}
-              >
-                <ChevronRightIcon
-                  className="w-3.5 h-3.5 shrink-0"
-                  style={{ color: "#818cf8" }}
+            {/* ── SECTION 2: Page selection (PDF only) ──────────────────── */}
+            {fileKind === "pdf" && pdfThumbnails.length > 0 && (
+              <section>
+                <div className="mb-3">
+                  <h2
+                    className="text-sm font-semibold"
+                    style={{ color: colors.text }}
+                  >
+                    2. Choose pages
+                  </h2>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: colors.textMuted }}
+                  >
+                    Select which pages to include in the template
+                  </p>
+                </div>
+
+                <PageSelector
+                  totalPages={pdfTotalPages}
+                  thumbnails={pdfThumbnails}
+                  selectedPages={selectedPages}
+                  loading={loadingThumbnails}
+                  onToggle={togglePage}
+                  onSelectAll={selectAllPages}
+                  onClearAll={clearAllPages}
+                  disabled={isProcessing}
                 />
-                <p className="text-[11px]" style={{ color: colors.textMuted }}>
-                  Page selection is only available for PDF files. Your DOCX will
-                  be used as-is.
-                </p>
-              </div>
+
+                {selectedPages.size === 0 && !isProcessing && (
+                  <FieldError message="Select at least one page to continue." />
+                )}
+
+                {/* PDF conversion note */}
+                <div
+                  className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl mt-3"
+                  style={{
+                    background: "rgba(251,191,36,0.04)",
+                    border: "1px solid rgba(251,191,36,0.1)",
+                  }}
+                >
+                  <AlertCircleIcon
+                    className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                    style={{ color: "#fbbf24" }}
+                  />
+                  <p
+                    className="text-[11px] leading-relaxed"
+                    style={{ color: "#fbbf24" }}
+                  >
+                    <span className="font-semibold">Conversion note:</span>{" "}
+                    Complex layouts, tables, or scanned/image-based pages may
+                    need manual adjustments. Plain text PDFs convert best.
+                  </p>
+                </div>
+              </section>
             )}
 
-            {/* Template metadata */}
+            {/* ── SECTION 3: Template details (shown after file is loaded) ── */}
             {file && (
-              <div className="space-y-4">
-                {/* Name */}
-                <div className="space-y-1.5">
-                  <label
-                    className="text-xs font-semibold"
+              <section>
+                <div className="mb-3">
+                  <h2
+                    className="text-sm font-semibold"
+                    style={{ color: colors.text }}
+                  >
+                    {fileKind === "pdf" ? "3." : "2."} Template details
+                  </h2>
+                  <p
+                    className="text-xs mt-0.5"
                     style={{ color: colors.textMuted }}
                   >
-                    Template name <span style={{ color: "#f87171" }}>*</span>
-                  </label>
-                  <input
-                    placeholder="e.g. Employee Contract"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && canSave && handleSave()
-                    }
-                    disabled={isProcessing}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: `1px solid ${colors.border}`,
-                      color: colors.text,
-                    }}
-                    onFocus={(e) =>
-                      (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-                    }
-                    onBlur={(e) =>
-                      (e.currentTarget.style.border = `1px solid ${colors.border}`)
-                    }
-                  />
+                    Name and categorize your template
+                  </p>
                 </div>
 
-                {/* Description */}
-                <div className="space-y-1.5">
-                  <label
-                    className="text-xs font-semibold"
-                    style={{ color: colors.textMuted }}
-                  >
-                    Description{" "}
-                    <span style={{ color: colors.textDim, fontWeight: 400 }}>
-                      (optional)
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="What is this template used for?"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={2}
-                    disabled={isProcessing}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none disabled:opacity-50"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: `1px solid ${colors.border}`,
-                      color: colors.text,
-                    }}
-                    onFocus={(e) =>
-                      (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
-                    }
-                    onBlur={(e) =>
-                      (e.currentTarget.style.border = `1px solid ${colors.border}`)
-                    }
-                  />
-                </div>
+                <div
+                  className="rounded-2xl p-4 space-y-4"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: `1px solid ${colors.borderSubtle}`,
+                  }}
+                >
+                  {/* Name */}
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="template-name"
+                      className="text-xs font-semibold flex items-center gap-1"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Template name
+                      <span style={{ color: "#f87171" }}>*</span>
+                    </label>
+                    <input
+                      id="template-name"
+                      placeholder="e.g. Employee Contract"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (e.target.value.trim()) setNameError("");
+                      }}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && canSave && handleSave()
+                      }
+                      disabled={isProcessing}
+                      className="w-full rounded-xl px-3.5 py-3 text-sm outline-none disabled:opacity-50 transition-colors min-h-[44px]"
+                      style={{
+                        background: "rgba(255,255,255,0.05)",
+                        border: `1px solid ${nameError ? "rgba(239,68,68,0.5)" : colors.border}`,
+                        color: colors.text,
+                      }}
+                      onFocus={(e) =>
+                        !nameError &&
+                        (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                      }
+                      onBlur={(e) =>
+                        (e.currentTarget.style.border = `1px solid ${nameError ? "rgba(239,68,68,0.5)" : colors.border}`)
+                      }
+                    />
+                    {nameError && <FieldError message={nameError} />}
+                  </div>
 
-                {/* Tags (labels) */}
-                <div className="space-y-1.5">
-                  <label
-                    className="text-xs font-semibold flex items-center gap-1.5"
-                    style={{ color: colors.textMuted }}
-                  >
-                    <TagIcon className="w-3 h-3" />
-                    Labels{" "}
-                    <span style={{ color: colors.textDim, fontWeight: 400 }}>
-                      (optional)
-                    </span>
-                  </label>
-                  <TagsInput
-                    value={tags}
-                    onChange={setTags}
-                    suggestions={existingLabels}
-                    disabled={isProcessing}
-                  />
+                  {/* Description */}
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-xs font-semibold"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Description{" "}
+                      <span style={{ color: colors.textDim, fontWeight: 400 }}>
+                        (optional)
+                      </span>
+                    </label>
+                    <textarea
+                      placeholder="What is this template used for?"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={2}
+                      disabled={isProcessing}
+                      className="w-full rounded-xl px-3.5 py-3 text-sm outline-none resize-none disabled:opacity-50 transition-colors"
+                      style={{
+                        background: "rgba(255,255,255,0.05)",
+                        border: `1px solid ${colors.border}`,
+                        color: colors.text,
+                      }}
+                      onFocus={(e) =>
+                        (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                      }
+                      onBlur={(e) =>
+                        (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                      }
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-xs font-semibold flex items-center gap-1.5"
+                      style={{ color: colors.textMuted }}
+                    >
+                      <TagIcon className="w-3 h-3" />
+                      Labels{" "}
+                      <span style={{ color: colors.textDim, fontWeight: 400 }}>
+                        (optional)
+                      </span>
+                    </label>
+                    <TagsInput
+                      value={tags}
+                      onChange={setTags}
+                      suggestions={existingLabels}
+                      disabled={isProcessing}
+                    />
+                  </div>
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Save button */}
+            {/* ── Save button ──────────────────────────────────────────── */}
             {file && (
-              <div className="space-y-3 pb-8">
+              <section className="pb-10">
                 <button
                   onClick={handleSave}
                   disabled={!canSave}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[52px]"
                   style={{
                     background: canSave
-                      ? "rgba(99,102,241,0.2)"
-                      : "rgba(99,102,241,0.07)",
+                      ? "rgba(99,102,241,0.22)"
+                      : "rgba(99,102,241,0.06)",
                     color: canSave ? colors.accentPale : colors.textDim,
-                    border: `1px solid ${canSave ? colors.accentBorder : "rgba(99,102,241,0.1)"}`,
+                    border: `1.5px solid ${canSave ? colors.accentBorder : "rgba(99,102,241,0.09)"}`,
                   }}
                 >
-                  {saving || loadingThumbnails ? (
+                  {saving ? (
                     <>
                       <Loader2Icon
                         className="w-4 h-4 animate-spin"
                         style={{ color: colors.accentLight }}
                       />
-                      {currentStageLabel ||
-                        (loadingThumbnails ? "Preparing preview…" : "Saving…")}
+                      <span>{STAGE_LABEL[stage] || "Saving…"}</span>
                     </>
                   ) : fileKind === "pdf" && selectedPages.size === 0 ? (
                     "Select at least one page to continue"
+                  ) : !name.trim() ? (
+                    "Enter a template name to continue"
                   ) : (
-                    "Save & open editor →"
+                    <>
+                      Save & open editor
+                      <ChevronRightIcon className="w-4 h-4" />
+                    </>
                   )}
                 </button>
 
-                {saving && (
-                  <div className="flex items-center justify-center gap-2">
-                    {(
-                      [
-                        "splitting",
-                        "converting",
-                        "uploading",
-                        "scanning",
-                      ] as Stage[]
-                    ).map((s, i) => {
-                      const stages: Stage[] =
-                        fileKind === "pdf"
-                          ? ["splitting", "converting", "uploading", "scanning"]
-                          : ["uploading", "scanning"];
-                      const stageIdx = stages.indexOf(s);
-                      if (stageIdx === -1) return null;
-                      const currentIdx = stages.indexOf(stage as Stage);
-                      const isDone = currentIdx > stageIdx;
-                      const isActive = stage === s;
-                      return (
-                        <div key={s} className="flex items-center gap-1">
-                          <div
-                            className="flex items-center gap-1"
-                            style={{
-                              opacity: isDone ? 0.4 : isActive ? 1 : 0.25,
-                            }}
-                          >
-                            <div
-                              className="w-1.5 h-1.5 rounded-full"
-                              style={{
-                                background: isDone
-                                  ? "#34d399"
-                                  : isActive
-                                    ? "#818cf8"
-                                    : "rgba(255,255,255,0.2)",
-                              }}
-                            />
-                            <span
-                              className="text-[10px] hidden sm:inline"
-                              style={{
-                                color: isDone
-                                  ? "#34d399"
-                                  : isActive
-                                    ? "#818cf8"
-                                    : colors.textDim,
-                              }}
-                            >
-                              {STAGE_LABEL[s].replace("…", "")}
-                            </span>
-                          </div>
-                          {stageIdx < stages.length - 1 && (
-                            <ChevronRightIcon
-                              className="w-2.5 h-2.5"
-                              style={{ color: "rgba(255,255,255,0.1)" }}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                {/* Progress steps during save */}
+                {saving && stage && (
+                  <div className="mt-3">
+                    <ProgressSteps stages={activeStages} current={stage} />
                   </div>
                 )}
-              </div>
+
+                {/* DOCX hint */}
+                {fileKind === "docx" && !saving && (
+                  <p
+                    className="text-[11px] text-center mt-2"
+                    style={{ color: colors.textDim }}
+                  >
+                    Your DOCX will be used as-is · placeholders detected
+                    automatically
+                  </p>
+                )}
+              </section>
             )}
           </div>
         </div>
       </div>
 
-      {/* Global processing message */}
+      {/* ── Global processing overlay toast ─────────────────────────────── */}
       {isProcessing && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm text-white text-xs font-medium shadow-lg">
-          Please wait, your document is being processed…
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-xl text-xs font-medium"
+          style={{
+            background: "rgba(15,15,25,0.92)",
+            border: "1px solid rgba(99,102,241,0.25)",
+            backdropFilter: "blur(12px)",
+            color: colors.textSecondary,
+          }}
+        >
+          <Loader2Icon
+            className="w-3.5 h-3.5 animate-spin"
+            style={{ color: "#818cf8" }}
+          />
+          {STAGE_LABEL[stage] || "Processing…"}
         </div>
       )}
     </div>
