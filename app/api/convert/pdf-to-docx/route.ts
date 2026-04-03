@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { put, del } from "@vercel/blob";
+import { cleanupTempBlobs } from "@/lib/cleanup-temp-blobs";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ function isValidDocx(buffer: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  cleanupTempBlobs();
   let blobUrl: string | null = null;
 
   try {
