@@ -6,8 +6,9 @@ import { Id } from "./_generated/dataModel";
 // ── Token refresh helper ──────────────────────────────────────────────────────
 
 async function refreshGoogleToken(refreshToken: string): Promise<{
-  access_token: string;
-  expires_in: number;
+  access_token?: string;
+  expires_in?: number;
+  error?: string;
 }> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -27,28 +28,112 @@ async function refreshGoogleToken(refreshToken: string): Promise<{
 async function getValidToken(
   ctx: any,
   ownerId: string
-): Promise<string | null> {
+): Promise<{ token: string | null; error?: string }> {
   const account = await ctx.runQuery(
     internal.googleAccounts.getByOwnerInternal,
     { ownerId }
   );
-  if (!account) return null;
+  if (!account) return { token: null, error: "No Google account connected" };
 
   if (Date.now() < account.expiresAt - 60_000) {
-    return account.accessToken;
+    return { token: account.accessToken };
   }
 
   // Refresh
   const refreshed = await refreshGoogleToken(account.refreshToken);
-  if (!refreshed.access_token) return null;
+  if (!refreshed.access_token) {
+    const errMsg =
+      refreshed.error === "invalid_grant"
+        ? "Google token has been revoked. Please reconnect your Google account."
+        : "Token refresh failed. Please reconnect your Google account.";
+    return { token: null, error: errMsg };
+  }
 
   await ctx.runMutation(internal.googleAccounts.updateTokenInternal, {
     ownerId,
     accessToken: refreshed.access_token,
-    expiresAt: Date.now() + refreshed.expires_in * 1000,
+    expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
   });
 
-  return refreshed.access_token;
+  return { token: refreshed.access_token };
+}
+
+// ── Core document generation logic (shared by pollConnection and retrySubmission) ──
+
+async function generateDocxFromTemplate(
+  ctx: any,
+  params: {
+    submissionId: Id<"formSubmissions">;
+    templateId: Id<"templates">;
+    fieldValues: Record<string, string>;
+    filename: string;
+  }
+): Promise<void> {
+  const { submissionId, templateId, fieldValues } = params;
+  const convexSiteUrl = process.env.CONVEX_SITE_URL!;
+
+  const template = await ctx.runQuery(api.templates.getById, {
+    id: templateId,
+  });
+  if (!template) throw new Error("Template not found");
+
+  const PizZip = (await import("pizzip")).default;
+  const Docxtemplater = (await import("docxtemplater")).default;
+
+  const fileUrl = await ctx.storage.getUrl(
+    template.storageId as Id<"_storage">
+  );
+  if (!fileUrl) throw new Error("Template file not found in storage");
+
+  const fileRes = await fetch(fileUrl);
+  if (!fileRes.ok) throw new Error("Failed to fetch template file");
+  const buffer = await fileRes.arrayBuffer();
+
+  // Build data object with correct type coercion
+  const data: Record<string, unknown> = {};
+  for (const field of template.fields) {
+    if (field.type === "condition" || field.type === "condition_inverse") {
+      // Case-insensitive comparison for boolean conditions
+      data[field.name] = fieldValues[field.name]?.toLowerCase() === "true";
+    } else if (field.type === "loop") {
+      // Loop fields are not mappable from Google Forms — leave as empty array
+      data[field.name] = [];
+    } else {
+      data[field.name] = fieldValues[field.name] ?? "";
+    }
+  }
+
+  const zip = new PizZip(buffer);
+  const doc = new Docxtemplater(zip, {
+    delimiters: { start: "{{", end: "}}" },
+    paragraphLoop: true,
+    linebreaks: true,
+  });
+  doc.render(data);
+
+  const outBuffer: ArrayBuffer = doc.getZip().generate({ type: "arraybuffer" });
+  const outUint8 = new Uint8Array(outBuffer);
+
+  const uploadUrl = await ctx.storage.generateUploadUrl();
+  const uploadRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    },
+    body: outUint8,
+  });
+  if (!uploadRes.ok) throw new Error("Upload failed");
+
+  const { storageId: newStorageId } = await uploadRes.json();
+  const generatedFileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}`;
+
+  await ctx.runMutation(internal.formConnections.updateSubmissionInternal, {
+    id: submissionId,
+    storageId: newStorageId,
+    fileUrl: generatedFileUrl,
+    status: "generated",
+  });
 }
 
 // ── Process a single connection ───────────────────────────────────────────────
@@ -62,29 +147,32 @@ export const pollConnection = internalAction({
     );
     if (!connection || !connection.isActive || !connection.googleFormId) return;
 
-    const accessToken = await getValidToken(ctx, connection.ownerId);
+    const { token: accessToken, error: tokenError } = await getValidToken(
+      ctx,
+      connection.ownerId
+    );
     if (!accessToken) {
       console.error(
-        `[pollConnection] No valid token for owner ${connection.ownerId}`
+        `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`
       );
+      // Mark connection as inactive so UI can surface the error
+      await ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
+        id: args.connectionId,
+        lastPolledAt: Date.now(),
+      });
       return;
     }
 
-    // Get template
-    const template = await ctx.runQuery(api.templates.getById, {
-      id: connection.templateId,
-    });
-    if (!template) return;
-
-    // Fetch responses from Google Forms API, filtered by lastPolledAt
-    const filterParam = connection.lastPolledAt
-      ? `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`
-      : undefined;
-
+    // Fetch responses from Google Forms API
     const url = new URL(
       `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`
     );
-    if (filterParam) url.searchParams.set("filter", filterParam);
+    if (connection.lastPolledAt) {
+      url.searchParams.set(
+        "filter",
+        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`
+      );
+    }
 
     const responsesRes = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -110,17 +198,14 @@ export const pollConnection = internalAction({
     const questionMap: Record<string, string> =
       connection.googleQuestionMap ?? {};
 
-    const convexSiteUrl = process.env.CONVEX_SITE_URL!;
-
     for (const response of responses) {
       const submittedAt = new Date(response.createTime).getTime();
 
-      // Skip already processed (safety check)
       if (connection.lastPolledAt && submittedAt <= connection.lastPolledAt) {
         continue;
       }
 
-      // Map answers → fieldValues using questionMap + fieldMappings
+      // Map answers → fieldValues
       const fieldValues: Record<string, string> = {};
       const answers: Record<string, any> = response.answers ?? {};
 
@@ -146,7 +231,6 @@ export const pollConnection = internalAction({
         )
         .replace(/[<>:"/\\|?*]/g, "_");
 
-      // Create submission record
       const submissionId = await ctx.runMutation(
         internal.formConnections.createSubmissionInternal,
         {
@@ -161,73 +245,13 @@ export const pollConnection = internalAction({
         }
       );
 
-      // Generate document
       try {
-        const PizZip = (await import("pizzip")).default;
-        const Docxtemplater = (await import("docxtemplater")).default;
-
-        // Fetch template file
-        const fileUrl = await ctx.storage.getUrl(
-          template.storageId as Id<"_storage">
-        );
-        if (!fileUrl) throw new Error("Template file not found in storage");
-
-        const fileRes = await fetch(fileUrl);
-        if (!fileRes.ok) throw new Error("Failed to fetch template file");
-        const buffer = await fileRes.arrayBuffer();
-
-        // Build data object
-        const data: Record<string, unknown> = {};
-        for (const field of template.fields) {
-          if (
-            field.type === "condition" ||
-            field.type === "condition_inverse"
-          ) {
-            data[field.name] = fieldValues[field.name] === "true";
-          } else if (field.type === "loop") {
-            data[field.name] = [];
-          } else {
-            data[field.name] = fieldValues[field.name] ?? "";
-          }
-        }
-
-        const zip = new PizZip(buffer);
-        const doc = new Docxtemplater(zip, {
-          delimiters: { start: "{{", end: "}}" },
-          paragraphLoop: true,
-          linebreaks: true,
+        await generateDocxFromTemplate(ctx, {
+          submissionId: submissionId as Id<"formSubmissions">,
+          templateId: connection.templateId,
+          fieldValues,
+          filename,
         });
-        doc.render(data);
-
-        const outBuffer: ArrayBuffer = doc
-          .getZip()
-          .generate({ type: "arraybuffer" });
-        const outUint8 = new Uint8Array(outBuffer);
-
-        // Upload generated doc
-        const uploadUrl = await ctx.storage.generateUploadUrl();
-        const uploadRes = await fetch(uploadUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          },
-          body: outUint8,
-        });
-        if (!uploadRes.ok) throw new Error("Upload failed");
-
-        const { storageId: newStorageId } = await uploadRes.json();
-        const generatedFileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}`;
-
-        await ctx.runMutation(
-          internal.formConnections.updateSubmissionInternal,
-          {
-            id: submissionId as Id<"formSubmissions">,
-            storageId: newStorageId,
-            fileUrl: generatedFileUrl,
-            status: "generated",
-          }
-        );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[pollConnection] Generation error:", message);
@@ -257,15 +281,20 @@ export const pollAll = internalAction({
     const connections = await ctx.runQuery(
       internal.formConnections.getAllGoogleConnectionsInternal
     );
+    // Process sequentially to avoid race conditions
     for (const conn of connections) {
-      await ctx.runAction(internal.processFormResponses.pollConnection, {
-        connectionId: conn._id,
-      });
+      try {
+        await ctx.runAction(internal.processFormResponses.pollConnection, {
+          connectionId: conn._id,
+        });
+      } catch (err) {
+        console.error(`[pollAll] Error polling connection ${conn._id}:`, err);
+      }
     }
   },
 });
 
-// ── Public action: "Sync Now" button ─────────────────────────────────────────
+// ── Public action: "Sync Now" button (works even when paused) ─────────────────
 
 export const syncConnection = action({
   args: { connectionId: v.id("formConnections") },
@@ -273,7 +302,6 @@ export const syncConnection = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    // Verify ownership
     const conn = await ctx.runQuery(internal.formConnections.getByIdInternal, {
       id: args.connectionId,
     });
@@ -281,8 +309,53 @@ export const syncConnection = action({
       throw new Error("Connection not found");
     }
 
+    // Allow sync even when paused (force poll)
     await ctx.runAction(internal.processFormResponses.pollConnection, {
       connectionId: args.connectionId,
     });
+  },
+});
+
+// ── Public action: Retry a failed submission ──────────────────────────────────
+
+export const retrySubmission = action({
+  args: { submissionId: v.id("formSubmissions") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const submission = await ctx.runQuery(
+      internal.formConnections.getSubmissionByIdInternal,
+      { id: args.submissionId }
+    );
+    if (!submission || submission.ownerId !== identity.subject) {
+      throw new Error("Submission not found");
+    }
+    if (submission.status !== "error") {
+      throw new Error("Only error submissions can be retried");
+    }
+
+    // Reset to pending
+    await ctx.runMutation(internal.formConnections.resetSubmissionInternal, {
+      id: args.submissionId,
+    });
+
+    // Re-generate
+    try {
+      await generateDocxFromTemplate(ctx, {
+        submissionId: args.submissionId,
+        templateId: submission.templateId,
+        fieldValues: submission.fieldValues as Record<string, string>,
+        filename: submission.filename,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      await ctx.runMutation(internal.formConnections.updateSubmissionInternal, {
+        id: args.submissionId,
+        status: "error",
+        errorMessage: message,
+      });
+      throw new Error(message);
+    }
   },
 });

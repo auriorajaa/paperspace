@@ -178,6 +178,47 @@ export const remove = mutation({
   },
 });
 
+// ── NEW: Deactivate all connections for the authenticated user (for disconnect flow) ──
+
+export const deactivateAllForOwner = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+    const conns = await ctx.db
+      .query("formConnections")
+      .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
+      .collect();
+    await Promise.all(
+      conns
+        .filter((c) => c.isActive)
+        .map((c) => ctx.db.patch(c._id, { isActive: false }))
+    );
+  },
+});
+
+// ── NEW: Delete a single submission (for bulk delete) ──
+
+export const deleteSubmission = mutation({
+  args: { id: v.id("formSubmissions") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+    const sub = await ctx.db.get(args.id);
+    if (!sub || sub.ownerId !== identity.subject)
+      throw new ConvexError("Not found");
+    // Best-effort delete from storage
+    if (sub.storageId) {
+      try {
+        await ctx.storage.delete(sub.storageId as any);
+      } catch {
+        // non-critical
+      }
+    }
+    await ctx.db.delete(args.id);
+  },
+});
+
 export const createSubmission = mutation({
   args: {
     connectionId: v.id("formConnections"),
@@ -231,6 +272,13 @@ export const getByIdInternal = internalQuery({
   },
 });
 
+export const getSubmissionByIdInternal = internalQuery({
+  args: { id: v.id("formSubmissions") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
+  },
+});
+
 export const updateLastPolledInternal = internalMutation({
   args: {
     id: v.id("formConnections"),
@@ -272,5 +320,18 @@ export const updateSubmissionInternal = internalMutation({
       if (v !== undefined) patch[k] = v;
     });
     await ctx.db.patch(id, patch);
+  },
+});
+
+// NEW: Reset a submission to pending (for retry)
+export const resetSubmissionInternal = internalMutation({
+  args: { id: v.id("formSubmissions") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      status: "pending",
+      errorMessage: undefined,
+      storageId: undefined,
+      fileUrl: undefined,
+    });
   },
 });
