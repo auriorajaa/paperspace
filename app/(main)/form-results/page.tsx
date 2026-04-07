@@ -4,7 +4,14 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@clerk/nextjs";
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  Fragment,
+} from "react";
 import {
   DownloadIcon,
   ClockIcon,
@@ -25,6 +32,9 @@ import {
   CheckSquareIcon,
   EyeIcon,
   CalendarIcon,
+  MoreVerticalIcon,
+  PauseIcon,
+  PlayIcon,
 } from "lucide-react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { colors } from "@/lib/design-tokens";
@@ -41,6 +51,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +86,138 @@ interface Connection {
   templateName?: string;
   fieldMappings: any[];
   lastPolledAt?: number;
+  _creationTime: number;
+}
+
+interface OverflowMenuItem {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  hidden?: boolean;
+}
+
+// ── Bottom Sheet / Overflow Menu ─────────────────────────────────────────────
+
+function BottomSheet({
+  open,
+  onClose,
+  items,
+  title,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: OverflowMenuItem[];
+  title?: string;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-end sm:p-4"
+      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
+    >
+      {/* Mobile: slide-up sheet; Desktop: compact dropdown */}
+      <div
+        className="w-full sm:w-56 rounded-t-2xl sm:rounded-2xl overflow-hidden"
+        style={{
+          background: "#1a1a28",
+          border: `1px solid ${colors.border}`,
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {title && (
+          <div
+            className="px-4 pt-4 pb-2"
+            style={{ borderBottom: `1px solid ${colors.border}` }}
+          >
+            <p
+              className="text-xs font-semibold truncate"
+              style={{ color: colors.textMuted }}
+            >
+              {title}
+            </p>
+          </div>
+        )}
+        {/* Drag handle — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div
+            className="w-8 h-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          />
+        </div>
+        <div className="py-2">
+          {items
+            .filter((item) => !item.hidden)
+            .map((item, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  item.onClick();
+                  onClose();
+                }}
+                disabled={item.disabled}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors text-left"
+                style={{
+                  color: item.danger ? "#f87171" : colors.text,
+                  opacity: item.disabled ? 0.4 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!item.disabled)
+                    e.currentTarget.style.background = item.danger
+                      ? "rgba(248,113,113,0.08)"
+                      : "rgba(255,255,255,0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <span
+                  className="w-4 h-4 shrink-0"
+                  style={{ color: item.danger ? "#f87171" : colors.textMuted }}
+                >
+                  {item.icon}
+                </span>
+                {item.label}
+              </button>
+            ))}
+        </div>
+        {/* iOS-style cancel row on mobile */}
+        <div
+          className="sm:hidden px-4 py-3"
+          style={{ borderTop: `1px solid ${colors.border}` }}
+        >
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-xl text-sm font-semibold"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: colors.textSecondary,
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -141,8 +289,8 @@ function SelectCheckbox({
       }}
       className="rounded-md flex items-center justify-center shrink-0 transition-all"
       style={{
-        width: 16,
-        height: 16,
+        width: 18,
+        height: 18,
         background:
           checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
         border: `1.5px solid ${
@@ -151,9 +299,9 @@ function SelectCheckbox({
       }}
     >
       {indeterminate ? (
-        <MinusIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <MinusIcon style={{ width: 10, height: 10, color: "#fff" }} />
       ) : checked ? (
-        <CheckIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <CheckIcon style={{ width: 10, height: 10, color: "#fff" }} />
       ) : null}
     </button>
   );
@@ -170,29 +318,23 @@ function PreviewModal({
   filename: string;
   onClose: () => void;
 }) {
-  // FIX: Separate loading and error states; reset both when fileUrl changes
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // FIX: Reset state and set timeout whenever the file changes (including re-opens)
   useEffect(() => {
     setIsLoading(true);
     setHasError(false);
-
-    // If Google Docs viewer hasn't fired onLoad within 10s, treat as error
     loadTimeoutRef.current = setTimeout(() => {
       setIsLoading(false);
       setHasError(true);
     }, 10000);
-
     return () => {
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
     };
   }, [fileUrl]);
 
-  // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -201,33 +343,28 @@ function PreviewModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // FIX: Clean load handler — no CORS contentDocument check
   const handleLoad = () => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
     setIsLoading(false);
     setHasError(false);
   };
 
-  // FIX: Clean error handler
   const handleError = () => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
     setIsLoading(false);
     setHasError(true);
   };
 
-  // Google Docs viewer URL for DOCX files
   const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
 
   return (
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
-      onClick={handleOverlayClick}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
     >
       <div
         className="flex flex-col w-full max-w-5xl rounded-2xl overflow-hidden"
@@ -235,11 +372,10 @@ function PreviewModal({
           background: "#13131a",
           border: `1px solid ${colors.border}`,
           boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
-          maxHeight: "95vh", // FIX: increased from 90vh for more vertical space
+          maxHeight: "95vh",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header */}
         <div
           className="flex items-center gap-3 px-4 py-3 shrink-0"
           style={{ borderBottom: `1px solid ${colors.border}` }}
@@ -298,9 +434,7 @@ function PreviewModal({
           </button>
         </div>
 
-        {/* Iframe content */}
-        <div className="flex-1 relative" style={{ minHeight: "50vh" }}>
-          {/* FIX: Loading overlay — shown while iframe initializes */}
+        <div className="flex-1 relative" style={{ minHeight: "60vh" }}>
           {isLoading && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10"
@@ -316,7 +450,6 @@ function PreviewModal({
             </div>
           )}
 
-          {/* FIX: Error state — only shown when loading is done AND there's an error */}
           {hasError && !isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center z-10">
               <div
@@ -346,15 +479,13 @@ function PreviewModal({
             </div>
           )}
 
-          {/* FIX: key prop forces remount when switching between submissions;
-               opacity hides the iframe while loading without unmounting it */}
           <iframe
             key={`${filename}-${fileUrl}`}
             src={viewerUrl}
             title={`Preview: ${filename}.docx`}
             className="w-full h-full border-0"
             style={{
-              minHeight: "50vh",
+              minHeight: "60vh",
               opacity: isLoading || hasError ? 0 : 1,
               transition: "opacity 0.2s ease",
             }}
@@ -442,7 +573,6 @@ function SubmissionRow({
   onSelect,
   onRetry,
   onDelete,
-  onEnterSelectMode,
   onPreview,
   isBeingPreviewed,
 }: {
@@ -452,9 +582,7 @@ function SubmissionRow({
   onSelect: (id: string, checked: boolean) => void;
   onRetry: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onEnterSelectMode: () => void;
   onPreview: (submission: Submission) => void;
-  // FIX: lets the Eye button reflect active-preview state for this row
   isBeingPreviewed: boolean;
 }) {
   const [retrying, setRetrying] = useState(false);
@@ -462,7 +590,7 @@ function SubmissionRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -483,16 +611,16 @@ function SubmissionRow({
     }
   };
 
-  const handleTouchStart = () => {
-    longPressTimer.current = setTimeout(() => {
-      if (!selectMode) onEnterSelectMode();
-    }, 500);
-  };
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
+  const handleDownload = async () => {
+    if (!submission.fileUrl) return;
+    const res = await fetch(submission.fileUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${submission.filename}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -502,16 +630,51 @@ function SubmissionRow({
     }
   };
 
+  const menuItems: OverflowMenuItem[] = [
+    {
+      icon: <EyeIcon className="w-4 h-4" />,
+      label: "Preview",
+      onClick: () => onPreview(submission),
+      hidden: submission.status !== "generated" || !submission.fileUrl,
+    },
+    {
+      icon: <DownloadIcon className="w-4 h-4" />,
+      label: "Download",
+      onClick: handleDownload,
+      hidden: submission.status !== "generated" || !submission.fileUrl,
+    },
+    {
+      icon: retrying ? (
+        <RefreshCwIcon className="w-4 h-4 animate-spin" />
+      ) : (
+        <RefreshCwIcon className="w-4 h-4" />
+      ),
+      label: retrying ? "Retrying…" : "Retry",
+      onClick: handleRetry,
+      disabled: retrying,
+      hidden: submission.status !== "error",
+    },
+    {
+      icon: deleting ? (
+        <div
+          className="w-4 h-4 rounded-full border border-t-transparent animate-spin"
+          style={{ borderColor: "#f87171" }}
+        />
+      ) : (
+        <Trash2Icon className="w-4 h-4" />
+      ),
+      label: "Delete",
+      onClick: () => setConfirmDelete(true),
+      danger: true,
+      disabled: deleting,
+    },
+  ];
+
   return (
     <>
-      <div
-        style={{ borderBottom: `1px solid ${colors.border}` }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-      >
+      <div style={{ borderBottom: `1px solid ${colors.border}` }}>
         <div
-          className="flex items-start gap-3 px-4 sm:px-5 py-3 transition-colors cursor-pointer"
+          className="flex items-start gap-3 px-4 sm:px-5 py-3.5 transition-colors cursor-pointer"
           style={{
             background: selected
               ? "rgba(99,102,241,0.06)"
@@ -523,9 +686,10 @@ function SubmissionRow({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
+          {/* Checkbox — always visible in select mode */}
           {selectMode && (
             <div
-              className="mt-1 shrink-0"
+              className="mt-0.5 shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onSelect(submission._id, !selected);
@@ -542,7 +706,7 @@ function SubmissionRow({
             <StatusIcon status={submission.status} />
           </div>
 
-          <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex-1 min-w-0 space-y-0.5">
             <p
               className="text-sm font-medium leading-snug"
               style={{ color: colors.text }}
@@ -591,121 +755,41 @@ function SubmissionRow({
             <StatusBadge status={submission.status} />
           </div>
 
-          {/* Actions */}
-          <div
-            className="flex items-center gap-1.5 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {submission.status === "generated" && submission.fileUrl && (
-              <>
-                {/* FIX: Preview button reflects active state when this submission is open */}
-                <button
-                  onClick={() => onPreview(submission)}
-                  aria-label="Preview document"
-                  className="flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-150"
-                  style={{
-                    background: isBeingPreviewed
-                      ? "rgba(99,102,241,0.22)"
-                      : "rgba(99,102,241,0.08)",
-                    color: "#818cf8",
-                    border: `1px solid ${isBeingPreviewed ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.18)"}`,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isBeingPreviewed)
-                      e.currentTarget.style.background =
-                        "rgba(99,102,241,0.16)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isBeingPreviewed)
-                      e.currentTarget.style.background =
-                        "rgba(99,102,241,0.08)";
-                  }}
-                  title="Preview document"
-                >
-                  <EyeIcon className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Download button */}
-                <button
-                  onClick={async () => {
-                    const res = await fetch(submission.fileUrl!);
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${submission.filename}.docx`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  aria-label="Download document"
-                  className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl min-h-[44px] sm:min-h-0 transition-all duration-150"
-                  style={{
-                    background: "rgba(52,211,153,0.1)",
-                    color: "#34d399",
-                    border: "1px solid rgba(52,211,153,0.2)",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "rgba(52,211,153,0.18)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "rgba(52,211,153,0.1)")
-                  }
-                >
-                  <DownloadIcon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Download</span>
-                </button>
-              </>
-            )}
-            {submission.status === "error" && (
-              <button
-                onClick={handleRetry}
-                disabled={retrying}
-                aria-label="Retry generation"
-                className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl min-h-[44px] sm:min-h-0 transition-all duration-150"
+          {/* Three-dots overflow menu - menggunakan DropdownMenu */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+              <DropdownMenuTrigger
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
-                  background: "rgba(99,102,241,0.1)",
-                  color: "#818cf8",
-                  border: "1px solid rgba(99,102,241,0.2)",
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${colors.border}`,
+                  color: colors.textMuted,
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
-                }
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                }}
               >
-                <RefreshCwIcon
-                  className={`w-3.5 h-3.5 ${retrying ? "animate-spin" : ""}`}
-                />
-                <span className="hidden sm:inline">
-                  {retrying ? "Retrying…" : "Retry"}
-                </span>
-              </button>
-            )}
-            <button
-              onClick={() => setConfirmDelete(true)}
-              disabled={deleting}
-              aria-label="Delete submission"
-              className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
-              style={{ color: colors.textDim }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#f87171";
-                e.currentTarget.style.background = "rgba(248,113,113,0.08)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = colors.textDim;
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              {deleting ? (
-                <div
-                  className="w-3.5 h-3.5 rounded-full border border-t-transparent animate-spin"
-                  style={{ borderColor: "currentColor" }}
-                />
-              ) : (
-                <Trash2Icon className="w-3.5 h-3.5" />
-              )}
-            </button>
+                <MoreVerticalIcon className="w-3.5 h-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {menuItems.map((item, idx) =>
+                  item.hidden ? null : (
+                    <DropdownMenuItem
+                      key={idx}
+                      onClick={item.onClick}
+                      disabled={item.disabled}
+                      className={`flex items-center gap-2 cursor-pointer ${item.danger ? "text-destructive focus:text-destructive" : ""}`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </DropdownMenuItem>
+                  )
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -755,6 +839,7 @@ function SubmissionRow({
         )}
       </div>
 
+      {/* Delete confirmation dialog */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -795,10 +880,12 @@ function ConnectionGroup({
   dateTo,
   onRetry,
   onDelete,
+  onDeleteConnection,
+  onToggleActive,
   onSync,
-  onEnterSelectMode,
   onPreview,
   previewingSubmissionId,
+  defaultExpanded,
 }: {
   connection: Connection;
   submissions: Submission[];
@@ -811,14 +898,18 @@ function ConnectionGroup({
   dateTo: Date | null;
   onRetry: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onDeleteConnection: (connection: Connection) => void;
+  onToggleActive: (connectionId: string, isActive: boolean) => Promise<void>;
   onSync: (connectionId: string) => Promise<void>;
-  onEnterSelectMode: () => void;
   onPreview: (submission: Submission) => void;
   previewingSubmissionId: string | null;
+  defaultExpanded: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [syncing, setSyncing] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDeleteConn, setConfirmDeleteConn] = useState(false);
 
   const filtered = useMemo(() => {
     return submissions.filter((s) => {
@@ -877,292 +968,317 @@ function ConnectionGroup({
     }
   };
 
+  const connectionMenuItems: OverflowMenuItem[] = [
+    {
+      icon: <ExternalLinkIcon className="w-4 h-4" />,
+      label: "Open Google Form",
+      onClick: () => {
+        if (connection.googleFormId) {
+          window.open(
+            `https://docs.google.com/forms/d/${connection.googleFormId}/edit`,
+            "_blank"
+          );
+        } else {
+          toast.info("Form link not available for this connection");
+        }
+      },
+      disabled: !connection.googleFormId,
+    },
+    {
+      icon: <FileSpreadsheetIcon className="w-4 h-4" />,
+      label: "View Spreadsheet",
+      onClick: () => {
+        if (connection.spreadsheetId) {
+          window.open(
+            `https://docs.google.com/spreadsheets/d/${connection.spreadsheetId}/edit`,
+            "_blank"
+          );
+        } else {
+          toast.info("Spreadsheet link not available for this connection");
+        }
+      },
+      disabled: !connection.spreadsheetId,
+    },
+    {
+      icon: syncing ? (
+        <RefreshCwIcon className="w-4 h-4 animate-spin" />
+      ) : (
+        <RefreshCwIcon className="w-4 h-4" />
+      ),
+      label: syncing ? "Syncing…" : "Sync Now",
+      onClick: handleSync,
+      disabled: syncing,
+    },
+    {
+      icon: connection.isActive ? (
+        <PauseIcon className="w-4 h-4" />
+      ) : (
+        <PlayIcon className="w-4 h-4" />
+      ),
+      label: connection.isActive ? "Pause Connection" : "Resume Connection",
+      onClick: () => onToggleActive(connection._id, !connection.isActive),
+    },
+    {
+      icon: expanded ? (
+        <ChevronUpIcon className="w-4 h-4" />
+      ) : (
+        <ChevronDownIcon className="w-4 h-4" />
+      ),
+      label: expanded ? "Collapse" : "Expand",
+      onClick: () => setExpanded((v) => !v),
+    },
+    {
+      icon: <Trash2Icon className="w-4 h-4" />,
+      label: "Delete Connection",
+      onClick: () => setConfirmDeleteConn(true),
+      danger: true,
+    },
+  ];
+
   return (
-    <div
-      className="rounded-2xl overflow-hidden"
-      style={{
-        border: `1px solid ${colors.border}`,
-        background: "rgba(255,255,255,0.015)",
-      }}
-    >
-      {/* Connection header */}
+    <>
       <div
-        className="flex items-start gap-3 p-4"
+        className="rounded-2xl overflow-hidden"
         style={{
-          borderBottom: expanded ? `1px solid ${colors.borderSubtle}` : "none",
+          border: `1px solid ${colors.border}`,
+          background: "rgba(255,255,255,0.015)",
         }}
       >
+        {/* Connection header - menggunakan div role="button" */}
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+          className="w-full flex items-start gap-3 p-4 text-left transition-colors cursor-pointer"
           style={{
-            background: "rgba(99,102,241,0.12)",
-            border: `1px solid ${colors.accentBorder}`,
+            borderBottom: expanded
+              ? `1px solid ${colors.borderSubtle}`
+              : "none",
+          }}
+          onClick={() => setExpanded((v) => !v)}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(255,255,255,0.02)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "transparent")
+          }
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setExpanded((v) => !v);
+            }
           }}
         >
-          📋
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold" style={{ color: colors.text }}>
-              {connection.formTitle}
-            </p>
-            <span
-              className="text-xs font-medium px-1.5 py-0.5 rounded-full"
-              style={{
-                background: connection.isActive
-                  ? "rgba(52,211,153,0.1)"
-                  : "rgba(255,255,255,0.06)",
-                color: connection.isActive ? "#34d399" : colors.textDim,
-              }}
+          {/* <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+            style={{
+              background: "rgba(99,102,241,0.12)",
+              border: `1px solid ${colors.accentBorder}`,
+            }}
+          >
+            📋
+          </div> */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p
+                className="text-sm font-semibold"
+                style={{ color: colors.text }}
+              >
+                {connection.formTitle}
+              </p>
+              <span
+                className="text-xs font-medium px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: connection.isActive
+                    ? "rgba(52,211,153,0.1)"
+                    : "rgba(255,255,255,0.06)",
+                  color: connection.isActive ? "#34d399" : colors.textDim,
+                }}
+              >
+                {connection.isActive ? "active" : "paused"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+              <span className="text-xs" style={{ color: colors.textMuted }}>
+                {counts.total} total
+              </span>
+              <span className="text-xs" style={{ color: "#34d399" }}>
+                {counts.generated} generated
+              </span>
+              {counts.error > 0 && (
+                <span className="text-xs" style={{ color: "#f87171" }}>
+                  {counts.error} errors
+                </span>
+              )}
+              {counts.pending > 0 && (
+                <span className="text-xs" style={{ color: "#fbbf24" }}>
+                  {counts.pending} pending
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Kanan: tiga titik + chevron */}
+          <div
+            className="flex items-center gap-1.5 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+              <DropdownMenuTrigger
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${colors.border}`,
+                  color: colors.textMuted,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                }}
+              >
+                <MoreVerticalIcon className="w-3.5 h-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {connectionMenuItems.map((item, idx) =>
+                  item.hidden ? null : (
+                    <DropdownMenuItem
+                      key={idx}
+                      onClick={item.onClick}
+                      disabled={item.disabled}
+                      className={`flex items-center gap-2 cursor-pointer ${item.danger ? "text-destructive focus:text-destructive" : ""}`}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </DropdownMenuItem>
+                  )
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div
+              className="flex items-center justify-center w-7 h-7"
+              style={{ color: colors.textDim }}
+              onClick={() => setExpanded((v) => !v)}
             >
-              {connection.isActive ? "active" : "paused"}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-            <span className="text-xs" style={{ color: colors.textMuted }}>
-              {counts.total} total
-            </span>
-            <span className="text-xs" style={{ color: "#34d399" }}>
-              {counts.generated} generated
-            </span>
-            {counts.error > 0 && (
-              <span className="text-xs" style={{ color: "#f87171" }}>
-                {counts.error} errors
-              </span>
-            )}
-            {counts.pending > 0 && (
-              <span className="text-xs" style={{ color: "#fbbf24" }}>
-                {counts.pending} pending
-              </span>
-            )}
+              {expanded ? (
+                <ChevronUpIcon className="w-4 h-4" />
+              ) : (
+                <ChevronDownIcon className="w-4 h-4" />
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Header actions — FIX: always 4 buttons, disabled state instead of hidden */}
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          {/* Google Form button — always visible, disabled when no ID */}
-          <a
-            href={
-              connection.googleFormId
-                ? `https://docs.google.com/forms/d/${connection.googleFormId}/edit`
-                : undefined
-            }
-            target={connection.googleFormId ? "_blank" : undefined}
-            rel="noopener noreferrer"
-            aria-label="Open Google Form"
-            onClick={(e) => {
-              if (!connection.googleFormId) {
-                e.preventDefault();
-                toast.info("Form link not available for this connection");
-              }
-            }}
-            className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${
-              !connection.googleFormId ? "cursor-not-allowed" : ""
-            }`}
-            style={{
-              color: colors.textDim,
-              border: `1px solid ${colors.border}`,
-              opacity: connection.googleFormId ? 1 : 0.4,
-            }}
-            onMouseEnter={(e) => {
-              if (connection.googleFormId) {
-                e.currentTarget.style.color = colors.accentLight;
-                e.currentTarget.style.borderColor = colors.accentBorder;
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = colors.textDim;
-              e.currentTarget.style.borderColor = colors.border;
-            }}
-            title={
-              connection.googleFormId
-                ? "Open Google Form"
-                : "Form link not available"
-            }
-          >
-            <ExternalLinkIcon className="w-3.5 h-3.5" />
-          </a>
-
-          {/* Spreadsheet button — always visible, disabled when no ID */}
-          <a
-            href={
-              connection.spreadsheetId
-                ? `https://docs.google.com/spreadsheets/d/${connection.spreadsheetId}/edit`
-                : undefined
-            }
-            target={connection.spreadsheetId ? "_blank" : undefined}
-            rel="noopener noreferrer"
-            aria-label="View in Google Sheets"
-            onClick={(e) => {
-              if (!connection.spreadsheetId) {
-                e.preventDefault();
-                toast.info(
-                  "Spreadsheet link not available for this connection"
-                );
-              }
-            }}
-            className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${
-              !connection.spreadsheetId ? "cursor-not-allowed" : ""
-            }`}
-            style={{
-              color: colors.textDim,
-              border: `1px solid ${colors.border}`,
-              opacity: connection.spreadsheetId ? 1 : 0.4,
-            }}
-            onMouseEnter={(e) => {
-              if (connection.spreadsheetId) {
-                e.currentTarget.style.color = "#34d399";
-                e.currentTarget.style.borderColor = "rgba(52,211,153,0.25)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = colors.textDim;
-              e.currentTarget.style.borderColor = colors.border;
-            }}
-            title={
-              connection.spreadsheetId
-                ? "View responses in Google Sheets"
-                : "Spreadsheet link not available"
-            }
-          >
-            <FileSpreadsheetIcon className="w-3.5 h-3.5" />
-          </a>
-
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            aria-label="Sync now"
-            className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl min-h-[44px] sm:min-h-0 transition-all duration-150"
-            style={{
-              background: "rgba(99,102,241,0.1)",
-              color: "#818cf8",
-              border: "1px solid rgba(99,102,241,0.2)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
-            }
-          >
-            <RefreshCwIcon
-              className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
-            />
-            <span className="hidden sm:inline">
-              {syncing ? "Syncing…" : "Sync"}
-            </span>
-          </button>
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            aria-label={expanded ? "Collapse" : "Expand"}
-            className="flex items-center gap-1 text-[13px] font-medium px-3 py-2 rounded-xl min-h-[44px] sm:min-h-0 transition-all duration-150"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
-            }
-          >
-            {expanded ? (
-              <ChevronUpIcon className="w-3.5 h-3.5" />
+        {/* Submissions list */}
+        {expanded && (
+          <>
+            {filtered.length === 0 ? (
+              <div className="px-4 sm:px-5 py-10 text-center">
+                <p className="text-sm" style={{ color: colors.textDim }}>
+                  {submissions.length === 0
+                    ? "No responses yet. Submit the form or tap Sync to check for new responses."
+                    : "No submissions match the current filters."}
+                </p>
+              </div>
             ) : (
-              <ChevronDownIcon className="w-3.5 h-3.5" />
+              <>
+                {selectMode && (
+                  <div
+                    className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
+                    style={{
+                      borderBottom: `1px solid ${colors.borderSubtle}`,
+                      background: "rgba(255,255,255,0.01)",
+                    }}
+                  >
+                    <SelectCheckbox
+                      checked={allDisplayedSelected}
+                      indeterminate={someDisplayedSelected}
+                      onChange={handleSelectAll}
+                    />
+                    <span className="text-xs" style={{ color: colors.textDim }}>
+                      {filtered.length} submission
+                      {filtered.length !== 1 ? "s" : ""}
+                      {selectedCount > 0 && ` · ${selectedCount} selected`}
+                      {hasMore && ` (showing ${displayed.length})`}
+                    </span>
+                  </div>
+                )}
+
+                {displayed.map((s) => (
+                  <SubmissionRow
+                    key={s._id}
+                    submission={s}
+                    selected={selectedIds.has(s._id)}
+                    selectMode={selectMode}
+                    onSelect={onSelectChange}
+                    onRetry={onRetry}
+                    onDelete={onDelete}
+                    onPreview={onPreview}
+                    isBeingPreviewed={previewingSubmissionId === s._id}
+                  />
+                ))}
+
+                {hasMore && (
+                  <div
+                    className="flex items-center justify-center px-4 py-3"
+                    style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+                  >
+                    <button
+                      onClick={() =>
+                        setDisplayLimit((prev) => prev + PAGE_SIZE)
+                      }
+                      className="text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 min-h-[40px]"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        color: colors.textMuted,
+                        border: `1px solid ${colors.border}`,
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255,255,255,0.08)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255,255,255,0.04)")
+                      }
+                    >
+                      Load more ({filtered.length - displayLimit} remaining)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-            <span className="hidden sm:inline">
-              {expanded ? "Collapse" : "Expand"}
-            </span>
-          </button>
-        </div>
+          </>
+        )}
       </div>
 
-      {/* Submissions list */}
-      {expanded && (
-        <>
-          {filtered.length === 0 ? (
-            <div className="px-4 sm:px-5 py-10 text-center">
-              <p className="text-sm" style={{ color: colors.textDim }}>
-                {submissions.length === 0
-                  ? "No responses yet. Submit the form or click Sync to check for new responses."
-                  : "No submissions match the current filters."}
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Select-all row */}
-              {selectMode && (
-                <div
-                  className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
-                  style={{
-                    borderBottom: `1px solid ${colors.borderSubtle}`,
-                    background: "rgba(255,255,255,0.01)",
-                  }}
-                >
-                  <SelectCheckbox
-                    checked={allDisplayedSelected}
-                    indeterminate={someDisplayedSelected}
-                    onChange={handleSelectAll}
-                  />
-                  <span className="text-xs" style={{ color: colors.textDim }}>
-                    {filtered.length} submission
-                    {filtered.length !== 1 ? "s" : ""}
-                    {selectedCount > 0 && ` · ${selectedCount} selected`}
-                    {hasMore && ` (showing ${displayed.length})`}
-                  </span>
-                </div>
-              )}
-
-              {displayed.map((s) => (
-                <SubmissionRow
-                  key={s._id}
-                  submission={s}
-                  selected={selectedIds.has(s._id)}
-                  selectMode={selectMode}
-                  onSelect={onSelectChange}
-                  onRetry={onRetry}
-                  onDelete={onDelete}
-                  onEnterSelectMode={onEnterSelectMode}
-                  onPreview={onPreview}
-                  isBeingPreviewed={previewingSubmissionId === s._id}
-                />
-              ))}
-
-              {/* Load more button */}
-              {hasMore && (
-                <div
-                  className="flex items-center justify-center px-4 py-3"
-                  style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
-                >
-                  <button
-                    onClick={() => setDisplayLimit((prev) => prev + PAGE_SIZE)}
-                    className="text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 min-h-[40px]"
-                    style={{
-                      background: "rgba(255,255,255,0.04)",
-                      color: colors.textMuted,
-                      border: `1px solid ${colors.border}`,
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.08)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.04)")
-                    }
-                  >
-                    Load more ({filtered.length - displayLimit} remaining)
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </div>
+      {/* Delete connection confirmation */}
+      <AlertDialog open={confirmDeleteConn} onOpenChange={setConfirmDeleteConn}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete connection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the connection to &ldquo;{connection.formTitle}
+              &rdquo;. Generated documents will NOT be deleted. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmDeleteConn(false);
+                onDeleteConnection(connection);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -1405,30 +1521,6 @@ function GroupSkeleton() {
           />
         </div>
       </div>
-      <div style={{ borderTop: `1px solid ${colors.border}` }}>
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="flex items-center gap-3 px-4 py-3"
-            style={{ borderBottom: `1px solid ${colors.border}` }}
-          >
-            <div
-              className="w-4 h-4 rounded"
-              style={{ background: "rgba(255,255,255,0.06)" }}
-            />
-            <div className="flex-1 space-y-1.5">
-              <div
-                className="h-3.5 rounded w-3/4"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              />
-              <div
-                className="h-2.5 rounded w-1/2"
-                style={{ background: "rgba(255,255,255,0.04)" }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1449,6 +1541,8 @@ export default function FormResultsPage() {
 
   const retryAction = useAction(api.processFormResponses.retrySubmission);
   const deleteSubmission = useMutation(api.formConnections.deleteSubmission);
+  const removeConnection = useMutation(api.formConnections.remove);
+  const updateConnection = useMutation(api.formConnections.update);
   const syncAction = useAction(api.processFormResponses.syncConnection);
 
   // Filters
@@ -1481,10 +1575,6 @@ export default function FormResultsPage() {
   useEffect(() => {
     if (selectedIds.size === 0 && selectMode) setSelectMode(false);
   }, [selectedIds.size]);
-
-  const handleEnterSelectMode = useCallback(() => {
-    setSelectMode(true);
-  }, []);
 
   const handleSelectChange = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -1541,6 +1631,33 @@ export default function FormResultsPage() {
     [syncAction]
   );
 
+  const handleDeleteConnection = useCallback(
+    async (connection: Connection) => {
+      try {
+        await removeConnection({ id: connection._id as Id<"formConnections"> });
+        toast.success(`"${connection.formTitle}" connection deleted`);
+      } catch (err: any) {
+        toast.error(err?.message ?? "Failed to delete connection");
+      }
+    },
+    [removeConnection]
+  );
+
+  const handleToggleActive = useCallback(
+    async (connectionId: string, isActive: boolean) => {
+      try {
+        await updateConnection({
+          id: connectionId as Id<"formConnections">,
+          isActive,
+        });
+        toast.success(isActive ? "Connection resumed" : "Connection paused");
+      } catch (err: any) {
+        toast.error(err?.message ?? "Failed to update connection");
+      }
+    },
+    [updateConnection]
+  );
+
   const handlePreview = useCallback((sub: Submission) => {
     setPreviewSubmission(sub);
   }, []);
@@ -1560,6 +1677,16 @@ export default function FormResultsPage() {
     }),
     [submissions]
   );
+
+  // Determine the "latest" connection ID — by lastPolledAt, fallback to _creationTime
+  const latestConnectionId = useMemo(() => {
+    if (!connections || connections.length === 0) return null;
+    return connections.reduce((best, conn) => {
+      const bestTime = best.lastPolledAt ?? best._creationTime;
+      const connTime = conn.lastPolledAt ?? conn._creationTime;
+      return connTime > bestTime ? conn : best;
+    })._id;
+  }, [connections]);
 
   // Group submissions by connection
   const groupedSubmissions = useMemo(() => {
@@ -1618,29 +1745,55 @@ export default function FormResultsPage() {
             </p>
           )}
         </div>
-        {/* Mobile filter toggle */}
-        <button
-          onClick={() => setShowFilters((v) => !v)}
-          aria-label="Toggle filters"
-          className="relative flex items-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl min-h-[44px] transition-colors sm:hidden"
-          style={{
-            background: showFilters
-              ? "rgba(99,102,241,0.12)"
-              : "rgba(255,255,255,0.05)",
-            color: showFilters ? colors.accentLight : colors.textMuted,
-            border: `1px solid ${showFilters ? colors.accentBorder : colors.border}`,
-          }}
-        >
-          <FilterIcon className="w-3.5 h-3.5" />
-          {activeFilterCount > 0 && (
-            <span
-              className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center"
-              style={{ background: colors.accent, color: "#fff" }}
-            >
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+
+        {/* Header right: Select (mobile) + Filter toggle (mobile) */}
+        <div className="flex items-center gap-2 sm:hidden">
+          {/* Explicit Select button — mobile-only, always discoverable */}
+          <button
+            onClick={() => {
+              setSelectMode((v) => {
+                if (v) setSelectedIds(new Set());
+                return !v;
+              });
+            }}
+            aria-label="Toggle selection mode"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl min-h-[44px] transition-colors"
+            style={{
+              background: selectMode
+                ? "rgba(99,102,241,0.15)"
+                : "rgba(255,255,255,0.05)",
+              color: selectMode ? colors.accentLight : colors.textMuted,
+              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
+            }}
+          >
+            <CheckSquareIcon className="w-3.5 h-3.5" />
+            Select
+          </button>
+
+          {/* Filter toggle */}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            aria-label="Toggle filters"
+            className="relative flex items-center justify-center w-[44px] h-[44px] rounded-xl transition-colors"
+            style={{
+              background: showFilters
+                ? "rgba(99,102,241,0.12)"
+                : "rgba(255,255,255,0.05)",
+              color: showFilters ? colors.accentLight : colors.textMuted,
+              border: `1px solid ${showFilters ? colors.accentBorder : colors.border}`,
+            }}
+          >
+            <FilterIcon className="w-3.5 h-3.5" />
+            {activeFilterCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center"
+                style={{ background: colors.accent, color: "#fff" }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -1723,7 +1876,6 @@ export default function FormResultsPage() {
               className="w-3.5 h-3.5 shrink-0"
               style={{ color: colors.textDim }}
             />
-            {/* FIX: Added visible "From" / "To" labels for clarity on mobile */}
             <span
               className="text-[11px] shrink-0"
               style={{ color: colors.textDim }}
@@ -1799,7 +1951,7 @@ export default function FormResultsPage() {
             )}
           </div>
 
-          {/* Select mode toggle */}
+          {/* Select mode toggle — desktop only (mobile has it in header) */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -1891,7 +2043,7 @@ export default function FormResultsPage() {
         )}
       </div>
 
-      {/* Select mode header */}
+      {/* Select mode hint bar */}
       {selectMode && !someSelected && (
         <div
           className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
@@ -1901,15 +2053,19 @@ export default function FormResultsPage() {
           }}
         >
           <span className="text-[11px]" style={{ color: colors.textDim }}>
-            Click submissions to select
+            Tap submissions to select
           </span>
           <button
             onClick={() => {
               setSelectMode(false);
               setSelectedIds(new Set());
             }}
-            className="ml-auto text-[11px]"
-            style={{ color: colors.textDim }}
+            className="ml-auto text-[11px] font-medium px-3 py-1.5 rounded-lg min-h-[36px]"
+            style={{
+              color: colors.textMuted,
+              background: "rgba(255,255,255,0.05)",
+              border: `1px solid ${colors.border}`,
+            }}
           >
             Cancel
           </button>
@@ -1933,7 +2089,7 @@ export default function FormResultsPage() {
         ) : submissions?.length === 0 ? (
           <EmptyState
             title="No responses yet"
-            description="Submit your Google Form or click 'Sync' on a connection to check for new responses."
+            description="Submit your Google Form or tap 'Sync' on a connection to check for new responses."
           />
         ) : (
           <div className="space-y-5 max-w-5xl">
@@ -1951,10 +2107,12 @@ export default function FormResultsPage() {
                 dateTo={dateTo}
                 onRetry={handleRetry}
                 onDelete={handleDelete}
+                onDeleteConnection={handleDeleteConnection}
+                onToggleActive={handleToggleActive}
                 onSync={handleSync}
-                onEnterSelectMode={handleEnterSelectMode}
                 onPreview={handlePreview}
                 previewingSubmissionId={previewSubmission?._id ?? null}
+                defaultExpanded={connection._id === latestConnectionId}
               />
             ))}
           </div>
