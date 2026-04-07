@@ -1,3 +1,5 @@
+// app/api/google/forms/[formId]/questions/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
@@ -89,9 +91,17 @@ export async function GET(
     }
   }
 
+  // Extract linked spreadsheet ID if responses are collected in a Google Sheet.
+  // Google Forms API v1 exposes this as `linkedSheetId` at the top level.
+  const spreadsheetId: string | null =
+    form.linkedSheetId ??
+    form.info?.responseDestination?.drive?.spreadsheetId ??
+    null;
+
   return NextResponse.json({
     formTitle: form.info?.title ?? "Untitled Form",
     questions,
     questionIdMap,
+    spreadsheetId,
   });
 }

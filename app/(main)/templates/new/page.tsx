@@ -1,3 +1,5 @@
+// D:\Skripsi\paperspace\app\(main)\templates\new\page.tsx
+
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";

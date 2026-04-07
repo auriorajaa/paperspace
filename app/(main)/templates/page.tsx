@@ -1,3 +1,5 @@
+// D:\Skripsi\paperspace\app\(main)\templates\page.tsx
+
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
