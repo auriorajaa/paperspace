@@ -80,7 +80,6 @@ async function generateDocxFromTemplate(
 
   const PizZip = (await import("pizzip")).default;
   const Docxtemplater = (await import("docxtemplater")).default;
-  const { preprocessTemplate } = await import("@/lib/template-preprocessor");
 
   const fileUrl = await ctx.storage.getUrl(
     template.storageId as Id<"_storage">
@@ -91,9 +90,45 @@ async function generateDocxFromTemplate(
   if (!fileRes.ok) throw new Error("Failed to fetch template file");
   const rawBuffer = await fileRes.arrayBuffer();
 
-  // Fix split XML runs — Word often breaks {{tag}} across multiple runs,
-  // which makes docxtemplater fail to parse them. preprocessTemplate joins them back.
-  const buffer = await preprocessTemplate(rawBuffer);
+  // ── Inline preprocessor: stitch {{placeholders}} split across Word XML runs ──
+  // Word/ONLYOFFICE often breaks {{tag}} into multiple <w:r> runs in the XML.
+  // docxtemplater can't parse split tags → "Multi error". We fix them first.
+  const preprocessDocx = (buf: ArrayBuffer): ArrayBuffer => {
+    const zip = new PizZip(buf);
+    const xmlPaths = [
+      "word/document.xml",
+      "word/header1.xml", "word/header2.xml", "word/header3.xml",
+      "word/footer1.xml", "word/footer2.xml", "word/footer3.xml",
+    ];
+    for (const path of xmlPaths) {
+      if (!zip.files[path]) continue;
+      let xml: string = zip.files[path].asText();
+      // Process paragraph by paragraph
+      xml = xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (para) => {
+        const nodes: { full: string; text: string }[] = [];
+        const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+        let mm: RegExpExecArray | null;
+        while ((mm = re.exec(para)) !== null)
+          nodes.push({ full: mm[0], text: mm[1] });
+        if (nodes.length <= 1) return para;
+        const combined = nodes.map((n) => n.text).join("");
+        if (!combined.includes("{{") || !combined.includes("}}")) return para;
+        let out = para;
+        let isFirst = true;
+        for (const node of nodes) {
+          out = isFirst
+            ? out.replace(node.full, node.full.replace(/>([^<]*)<\/w:t>/, `>${combined}</w:t>`))
+            : out.replace(node.full, node.full.replace(/>([^<]*)<\/w:t>/, `></w:t>`));
+          isFirst = false;
+        }
+        return out;
+      });
+      zip.file(path, xml);
+    }
+    return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
+  };
+
+  const buffer = preprocessDocx(rawBuffer);
 
   // Build data object with correct type coercion
   const data: Record<string, unknown> = {};

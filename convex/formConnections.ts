@@ -175,6 +175,22 @@ export const remove = mutation({
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
+
+    // Cascade-delete all submissions belonging to this connection.
+    // Without this, submissions are orphaned and still counted in the header.
+    const submissions = await ctx.db
+      .query("formSubmissions")
+      .withIndex("by_connection_id", (q) => q.eq("connectionId", args.id))
+      .collect();
+    await Promise.all(
+      submissions.map(async (sub) => {
+        if (sub.storageId) {
+          try { await ctx.storage.delete(sub.storageId as any); } catch {}
+        }
+        await ctx.db.delete(sub._id);
+      })
+    );
+
     await ctx.db.delete(args.id);
   },
 });
