@@ -80,6 +80,7 @@ async function generateDocxFromTemplate(
 
   const PizZip = (await import("pizzip")).default;
   const Docxtemplater = (await import("docxtemplater")).default;
+  const { preprocessTemplate } = await import("@/lib/template-preprocessor");
 
   const fileUrl = await ctx.storage.getUrl(
     template.storageId as Id<"_storage">
@@ -88,7 +89,11 @@ async function generateDocxFromTemplate(
 
   const fileRes = await fetch(fileUrl);
   if (!fileRes.ok) throw new Error("Failed to fetch template file");
-  const buffer = await fileRes.arrayBuffer();
+  const rawBuffer = await fileRes.arrayBuffer();
+
+  // Fix split XML runs — Word often breaks {{tag}} across multiple runs,
+  // which makes docxtemplater fail to parse them. preprocessTemplate joins them back.
+  const buffer = await preprocessTemplate(rawBuffer);
 
   // Build data object with correct type coercion
   const data: Record<string, unknown> = {};
