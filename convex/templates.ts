@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internalMutation } from "./_generated/server";
 
@@ -208,6 +209,13 @@ export const saveGeneratedDocument = mutation({
       isBulk: args.isBulk,
       bulkCount: args.bulkCount,
     });
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: { id: v.id("templates") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
   },
 });
 

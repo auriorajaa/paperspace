@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v } from "convex/values";
 import {
   mutation,
@@ -279,6 +280,21 @@ export const getSubmissionByIdInternal = internalQuery({
   },
 });
 
+export const getSubmissionByResponseIdInternal = internalQuery({
+  args: {
+    connectionId: v.id("formConnections"),
+    responseId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query("formSubmissions")
+      .withIndex("by_connection_and_response", (q) =>
+        q.eq("connectionId", args.connectionId).eq("responseId", args.responseId)
+      )
+      .first();
+  },
+});
+
 export const updateLastPolledInternal = internalMutation({
   args: {
     id: v.id("formConnections"),
@@ -299,6 +315,7 @@ export const createSubmissionInternal = internalMutation({
     filename: v.string(),
     status: v.string(),
     submittedAt: v.number(),
+    responseId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return ctx.db.insert("formSubmissions", args);
