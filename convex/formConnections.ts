@@ -33,7 +33,7 @@ export const getAll = query({
       connections.map(async (c) => {
         const template = await ctx.db.get(c.templateId);
         return { ...c, templateName: template?.name ?? "Deleted template" };
-      })
+      }),
     );
     return withTemplates;
   },
@@ -78,7 +78,7 @@ export const getSubmissions = query({
     return ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_id", (q) =>
-        q.eq("connectionId", args.connectionId)
+        q.eq("connectionId", args.connectionId),
       )
       .order("desc")
       .collect();
@@ -110,7 +110,7 @@ export const create = mutation({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
-      })
+      }),
     ),
     filenamePattern: v.string(),
     connectionType: v.optional(v.string()),
@@ -146,8 +146,8 @@ export const update = mutation({
         v.object({
           formQuestionTitle: v.string(),
           templateFieldName: v.string(),
-        })
-      )
+        }),
+      ),
     ),
     filenamePattern: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
@@ -185,17 +185,19 @@ export const remove = mutation({
     await Promise.all(
       submissions.map(async (sub) => {
         if (sub.storageId) {
-          try { await ctx.storage.delete(sub.storageId as any); } catch {}
+          try {
+            await ctx.storage.delete(sub.storageId as any);
+          } catch {}
         }
         await ctx.db.delete(sub._id);
-      })
+      }),
     );
 
     await ctx.db.delete(args.id);
   },
 });
 
-// ── NEW: Deactivate all connections for the authenticated user (for disconnect flow) ──
+// ── Deactivate all connections for the authenticated user (for disconnect flow) ──
 
 export const deactivateAllForOwner = mutation({
   args: {},
@@ -209,12 +211,12 @@ export const deactivateAllForOwner = mutation({
     await Promise.all(
       conns
         .filter((c) => c.isActive)
-        .map((c) => ctx.db.patch(c._id, { isActive: false }))
+        .map((c) => ctx.db.patch(c._id, { isActive: false })),
     );
   },
 });
 
-// ── NEW: Delete a single submission (for bulk delete) ──
+// ── Delete a single submission ────────────────────────────────────────────────
 
 export const deleteSubmission = mutation({
   args: { id: v.id("formSubmissions") },
@@ -224,7 +226,6 @@ export const deleteSubmission = mutation({
     const sub = await ctx.db.get(args.id);
     if (!sub || sub.ownerId !== identity.subject)
       throw new ConvexError("Not found");
-    // Best-effort delete from storage
     if (sub.storageId) {
       try {
         await ctx.storage.delete(sub.storageId as any);
@@ -277,7 +278,7 @@ export const getAllGoogleConnectionsInternal = internalQuery({
   handler: async (ctx) => {
     const all = await ctx.db.query("formConnections").collect();
     return all.filter(
-      (c) => c.isActive && c.connectionType === "google" && c.googleFormId
+      (c) => c.isActive && c.connectionType === "google" && c.googleFormId,
     );
   },
 });
@@ -305,7 +306,28 @@ export const getSubmissionByResponseIdInternal = internalQuery({
     return ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_and_response", (q) =>
-        q.eq("connectionId", args.connectionId).eq("responseId", args.responseId)
+        q
+          .eq("connectionId", args.connectionId)
+          .eq("responseId", args.responseId),
+      )
+      .first();
+  },
+});
+
+// FIX: fallback dedup query — used when responseId is absent (old API format)
+// or when two concurrent sync runs race before lastPolledAt is committed.
+export const getSubmissionByTimestampInternal = internalQuery({
+  args: {
+    connectionId: v.id("formConnections"),
+    submittedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query("formSubmissions")
+      .withIndex("by_connection_and_submitted", (q) =>
+        q
+          .eq("connectionId", args.connectionId)
+          .eq("submittedAt", args.submittedAt),
       )
       .first();
   },
@@ -356,7 +378,7 @@ export const updateSubmissionInternal = internalMutation({
   },
 });
 
-// NEW: Reset a submission to pending (for retry)
+// Reset a submission to pending (for retry)
 export const resetSubmissionInternal = internalMutation({
   args: { id: v.id("formSubmissions") },
   handler: async (ctx, args) => {

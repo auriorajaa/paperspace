@@ -72,10 +72,10 @@ export default defineSchema({
               type: v.string(),
               required: v.boolean(),
               placeholder: v.string(),
-            })
-          )
+            }),
+          ),
         ),
-      })
+      }),
     ),
   })
     .index("by_owner_id", ["ownerId"])
@@ -114,7 +114,7 @@ export default defineSchema({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
-      })
+      }),
     ),
     scriptToken: v.string(),
     filenamePattern: v.string(),
@@ -147,5 +147,8 @@ export default defineSchema({
     .index("by_owner_id", ["ownerId"])
     .index("by_connection_id", ["connectionId"])
     .index("by_template_id", ["templateId"])
-    .index("by_connection_and_response", ["connectionId", "responseId"]),
+    .index("by_connection_and_response", ["connectionId", "responseId"])
+    // FIX: fallback dedup index for responses that lack a responseId
+    // (older Google Forms API format) or when two concurrent syncs race.
+    .index("by_connection_and_submitted", ["connectionId", "submittedAt"]),
 });

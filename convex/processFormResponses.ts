@@ -28,11 +28,11 @@ async function refreshGoogleToken(refreshToken: string): Promise<{
 
 async function getValidToken(
   ctx: any,
-  ownerId: string
+  ownerId: string,
 ): Promise<{ token: string | null; error?: string }> {
   const account = await ctx.runQuery(
     internal.googleAccounts.getByOwnerInternal,
-    { ownerId }
+    { ownerId },
   );
   if (!account) return { token: null, error: "No Google account connected" };
 
@@ -59,6 +59,78 @@ async function getValidToken(
   return { token: refreshed.access_token };
 }
 
+// ── Preprocessor: stitch {{placeholders}} split across Word XML runs ──────────
+//
+// Word/ONLYOFFICE often breaks {{tag}} into multiple <w:r> runs in the XML.
+// docxtemplater can't parse split tags → "Multi error". We fix them first.
+//
+// Root causes of the original approach failing:
+//   1. String.replace(node.full, ...) finds the FIRST occurrence — breaks when
+//      two nodes have identical XML (e.g. two empty <w:t></w:t>).
+//   2. The replacement string passed to String.replace() is interpreted for
+//      special $ sequences ($&, $1, etc.), corrupting the output.
+//
+// This version uses **index-based slicing** on the raw text content positions,
+// so neither problem applies.
+
+function stitchParagraph(para: string): string {
+  // Collect every <w:t>…</w:t> node: store the byte-offset range of the
+  // TEXT CONTENT only (between the closing > of the opening tag and </w:t>).
+  const nodes: { tStart: number; tEnd: number; text: string }[] = [];
+  const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(para)) !== null) {
+    // m[0] = full element, e.g. `<w:t xml:space="preserve">hello</w:t>`
+    // m[1] = text content = "hello"
+    // Text content ends just before </w:t> (6 chars), so:
+    const tEnd = m.index + m[0].length - 6; // 6 = "</w:t>".length
+    const tStart = tEnd - m[1].length;
+    nodes.push({ tStart, tEnd, text: m[1] });
+  }
+
+  if (nodes.length <= 1) return para;
+
+  const combined = nodes.map((n) => n.text).join("");
+  // Only touch paragraphs that actually contain a (possibly split) placeholder
+  if (!combined.includes("{{") || !combined.includes("}}")) return para;
+
+  // Replace text content back-to-front so earlier offsets stay valid
+  let result = para;
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const { tStart, tEnd } = nodes[i];
+    // First node gets ALL the combined text; the rest become empty
+    const newText = i === 0 ? combined : "";
+    result = result.slice(0, tStart) + newText + result.slice(tEnd);
+  }
+  return result;
+}
+
+function preprocessDocxBuffer(buf: ArrayBuffer, PizZip: any): ArrayBuffer {
+  const zip = new PizZip(buf);
+  const xmlPaths = [
+    "word/document.xml",
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/header3.xml",
+    "word/footer1.xml",
+    "word/footer2.xml",
+    "word/footer3.xml",
+  ];
+
+  for (const path of xmlPaths) {
+    if (!zip.files[path]) continue;
+    let xml: string = zip.files[path].asText();
+
+    // Pass 1 – stitch within each paragraph
+    xml = xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, stitchParagraph);
+
+    zip.file(path, xml);
+  }
+
+  return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
+}
+
 // ── Core document generation logic (shared by pollConnection and retrySubmission) ──
 
 async function generateDocxFromTemplate(
@@ -68,7 +140,7 @@ async function generateDocxFromTemplate(
     templateId: Id<"templates">;
     fieldValues: Record<string, string>;
     filename: string;
-  }
+  },
 ): Promise<void> {
   const { submissionId, templateId, fieldValues } = params;
   const convexSiteUrl = process.env.CONVEX_SITE_URL!;
@@ -82,7 +154,7 @@ async function generateDocxFromTemplate(
   const Docxtemplater = (await import("docxtemplater")).default;
 
   const fileUrl = await ctx.storage.getUrl(
-    template.storageId as Id<"_storage">
+    template.storageId as Id<"_storage">,
   );
   if (!fileUrl) throw new Error("Template file not found in storage");
 
@@ -90,51 +162,12 @@ async function generateDocxFromTemplate(
   if (!fileRes.ok) throw new Error("Failed to fetch template file");
   const rawBuffer = await fileRes.arrayBuffer();
 
-  // ── Inline preprocessor: stitch {{placeholders}} split across Word XML runs ──
-  // Word/ONLYOFFICE often breaks {{tag}} into multiple <w:r> runs in the XML.
-  // docxtemplater can't parse split tags → "Multi error". We fix them first.
-  const preprocessDocx = (buf: ArrayBuffer): ArrayBuffer => {
-    const zip = new PizZip(buf);
-    const xmlPaths = [
-      "word/document.xml",
-      "word/header1.xml", "word/header2.xml", "word/header3.xml",
-      "word/footer1.xml", "word/footer2.xml", "word/footer3.xml",
-    ];
-    for (const path of xmlPaths) {
-      if (!zip.files[path]) continue;
-      let xml: string = zip.files[path].asText();
-      // Process paragraph by paragraph
-      xml = xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (para) => {
-        const nodes: { full: string; text: string }[] = [];
-        const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-        let mm: RegExpExecArray | null;
-        while ((mm = re.exec(para)) !== null)
-          nodes.push({ full: mm[0], text: mm[1] });
-        if (nodes.length <= 1) return para;
-        const combined = nodes.map((n) => n.text).join("");
-        if (!combined.includes("{{") || !combined.includes("}}")) return para;
-        let out = para;
-        let isFirst = true;
-        for (const node of nodes) {
-          out = isFirst
-            ? out.replace(node.full, node.full.replace(/>([^<]*)<\/w:t>/, `>${combined}</w:t>`))
-            : out.replace(node.full, node.full.replace(/>([^<]*)<\/w:t>/, `></w:t>`));
-          isFirst = false;
-        }
-        return out;
-      });
-      zip.file(path, xml);
-    }
-    return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
-  };
-
-  const buffer = preprocessDocx(rawBuffer);
+  const buffer = preprocessDocxBuffer(rawBuffer, PizZip);
 
   // Build data object with correct type coercion
   const data: Record<string, unknown> = {};
   for (const field of template.fields) {
     if (field.type === "condition" || field.type === "condition_inverse") {
-      // Case-insensitive comparison for boolean conditions
       data[field.name] = fieldValues[field.name]?.toLowerCase() === "true";
     } else if (field.type === "loop") {
       // Loop fields are not mappable from Google Forms — leave as empty array
@@ -149,13 +182,12 @@ async function generateDocxFromTemplate(
     delimiters: { start: "{{", end: "}}" },
     paragraphLoop: true,
     linebreaks: true,
-    // Return empty string for any variable not present in data
     nullGetter: () => "",
   });
+
   try {
     doc.render(data);
   } catch (err: any) {
-    // Extract human-readable message from docxtemplater multi-error
     if (err?.properties?.errors?.length) {
       const details = (err.properties.errors as any[])
         .map((e: any) => e?.properties?.explanation ?? e?.message ?? String(e))
@@ -197,34 +229,38 @@ export const pollConnection = internalAction({
   handler: async (ctx, args) => {
     const connection = await ctx.runQuery(
       internal.formConnections.getByIdInternal,
-      { id: args.connectionId }
+      { id: args.connectionId },
     );
     if (!connection || !connection.isActive || !connection.googleFormId) return;
 
-    const { token: accessToken, error: tokenError } = await getValidToken(
-      ctx,
-      connection.ownerId
-    );
-    if (!accessToken) {
-      console.error(
-        `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`
-      );
-      // Mark connection as inactive so UI can surface the error
-      await ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
+    // Helper — always stamp lastPolledAt so the next poll doesn't re-fetch
+    // responses we already processed (or attempted), even if this run failed.
+    const stampPolledAt = () =>
+      ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
         id: args.connectionId,
         lastPolledAt: Date.now(),
       });
+
+    const { token: accessToken, error: tokenError } = await getValidToken(
+      ctx,
+      connection.ownerId,
+    );
+    if (!accessToken) {
+      console.error(
+        `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`,
+      );
+      await stampPolledAt();
       return;
     }
 
     // Fetch responses from Google Forms API
     const url = new URL(
-      `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`
+      `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`,
     );
     if (connection.lastPolledAt) {
       url.searchParams.set(
         "filter",
-        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`
+        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`,
       );
     }
 
@@ -235,17 +271,18 @@ export const pollConnection = internalAction({
     if (!responsesRes.ok) {
       console.error(
         "[pollConnection] Forms API error:",
-        await responsesRes.text()
+        await responsesRes.text(),
       );
+      // FIX: stamp lastPolledAt even on API error so the cron doesn't re-try
+      // the same time-window forever, which caused the "error count keeps
+      // growing after delete" bug.
+      await stampPolledAt();
       return;
     }
 
     const { responses = [] } = await responsesRes.json();
     if (responses.length === 0) {
-      await ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
-        id: args.connectionId,
-        lastPolledAt: Date.now(),
-      });
+      await stampPolledAt();
       return;
     }
 
@@ -260,11 +297,24 @@ export const pollConnection = internalAction({
         continue;
       }
 
-      // Dedup: skip if this Google responseId was already processed for this connection
+      // ── Dedup: primary key is (connectionId, responseId) ──────────────────
       if (responseId) {
         const existing = await ctx.runQuery(
           internal.formConnections.getSubmissionByResponseIdInternal,
-          { connectionId: connection._id, responseId }
+          { connectionId: connection._id, responseId },
+        );
+        if (existing) continue;
+      }
+
+      // ── Dedup: fallback key is (connectionId, submittedAt) ─────────────────
+      // Covers the case where responseId is absent (old API format) or two
+      // concurrent sync runs race before lastPolledAt is written — this was
+      // the cause of the "double documents" bug when connecting the same form
+      // to a second template.
+      {
+        const existing = await ctx.runQuery(
+          internal.formConnections.getSubmissionByTimestampInternal,
+          { connectionId: connection._id, submittedAt },
         );
         if (existing) continue;
       }
@@ -277,7 +327,7 @@ export const pollConnection = internalAction({
         const questionTitle = questionMap[questionId];
         if (!questionTitle) continue;
         const mapping = connection.fieldMappings.find(
-          (m: any) => m.formQuestionTitle === questionTitle
+          (m: any) => m.formQuestionTitle === questionTitle,
         );
         if (!mapping) continue;
         const value =
@@ -291,7 +341,7 @@ export const pollConnection = internalAction({
         .replace(/{{row_number}}/g, rowNumber)
         .replace(
           /{{(\w+)}}/g,
-          (_: string, key: string) => fieldValues[key] ?? ""
+          (_: string, key: string) => fieldValues[key] ?? "",
         )
         .replace(/[<>:"/\\|?*]/g, "_");
 
@@ -307,7 +357,7 @@ export const pollConnection = internalAction({
           status: "pending",
           submittedAt,
           responseId: responseId || undefined,
-        }
+        },
       );
 
       try {
@@ -326,15 +376,12 @@ export const pollConnection = internalAction({
             id: submissionId as Id<"formSubmissions">,
             status: "error",
             errorMessage: message,
-          }
+          },
         );
       }
     }
 
-    await ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
-      id: args.connectionId,
-      lastPolledAt: Date.now(),
-    });
+    await stampPolledAt();
   },
 });
 
@@ -344,7 +391,7 @@ export const pollAll = internalAction({
   args: {},
   handler: async (ctx) => {
     const connections = await ctx.runQuery(
-      internal.formConnections.getAllGoogleConnectionsInternal
+      internal.formConnections.getAllGoogleConnectionsInternal,
     );
     // Process sequentially to avoid race conditions
     for (const conn of connections) {
@@ -391,7 +438,7 @@ export const retrySubmission = action({
 
     const submission = await ctx.runQuery(
       internal.formConnections.getSubmissionByIdInternal,
-      { id: args.submissionId }
+      { id: args.submissionId },
     );
     if (!submission || submission.ownerId !== identity.subject) {
       throw new Error("Submission not found");
