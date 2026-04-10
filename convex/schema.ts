@@ -142,8 +142,10 @@ export default defineSchema({
     status: v.string(), // "pending" | "generated" | "error"
     errorMessage: v.optional(v.string()),
     submittedAt: v.number(),
+    responseId: v.optional(v.string()), // Google Forms responseId for dedup
   })
     .index("by_owner_id", ["ownerId"])
     .index("by_connection_id", ["connectionId"])
-    .index("by_template_id", ["templateId"]),
+    .index("by_template_id", ["templateId"])
+    .index("by_connection_and_response", ["connectionId", "responseId"]),
 });

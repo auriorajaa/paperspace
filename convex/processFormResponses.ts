@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { internalAction, action } from "./_generated/server";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
@@ -72,7 +73,7 @@ async function generateDocxFromTemplate(
   const { submissionId, templateId, fieldValues } = params;
   const convexSiteUrl = process.env.CONVEX_SITE_URL!;
 
-  const template = await ctx.runQuery(api.templates.getById, {
+  const template = await ctx.runQuery(internal.templates.getByIdInternal, {
     id: templateId,
   });
   if (!template) throw new Error("Template not found");
@@ -108,8 +109,21 @@ async function generateDocxFromTemplate(
     delimiters: { start: "{{", end: "}}" },
     paragraphLoop: true,
     linebreaks: true,
+    // Return empty string for any variable not present in data
+    nullGetter: () => "",
   });
-  doc.render(data);
+  try {
+    doc.render(data);
+  } catch (err: any) {
+    // Extract human-readable message from docxtemplater multi-error
+    if (err?.properties?.errors?.length) {
+      const details = (err.properties.errors as any[])
+        .map((e: any) => e?.properties?.explanation ?? e?.message ?? String(e))
+        .join("; ");
+      throw new Error(`Template render failed: ${details}`);
+    }
+    throw err;
+  }
 
   const outBuffer: ArrayBuffer = doc.getZip().generate({ type: "arraybuffer" });
   const outUint8 = new Uint8Array(outBuffer);
@@ -200,9 +214,19 @@ export const pollConnection = internalAction({
 
     for (const response of responses) {
       const submittedAt = new Date(response.createTime).getTime();
+      const responseId: string = response.responseId ?? "";
 
       if (connection.lastPolledAt && submittedAt <= connection.lastPolledAt) {
         continue;
+      }
+
+      // Dedup: skip if this Google responseId was already processed for this connection
+      if (responseId) {
+        const existing = await ctx.runQuery(
+          internal.formConnections.getSubmissionByResponseIdInternal,
+          { connectionId: connection._id, responseId }
+        );
+        if (existing) continue;
       }
 
       // Map answers → fieldValues
@@ -242,6 +266,7 @@ export const pollConnection = internalAction({
           filename,
           status: "pending",
           submittedAt,
+          responseId: responseId || undefined,
         }
       );
 
