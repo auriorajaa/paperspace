@@ -2058,22 +2058,42 @@ export default function TemplateEditPage() {
             </button>
           </div>
         ) : (
-          <OnlyOfficeEditor
-            key={editorKey}
-            fileUrl={template.fileUrl}
-            fileName={template.name}
-            fileKey={`tmpl-${templateId}-${template.storageId?.slice(-8) ?? (template as any)._creationTime}`}
-            templateId={templateId}
-            storageId={template.storageId}
-            onReady={() => {
-              setEditorReady(true);
-              setEditorError(false);
-            }}
-            onError={() => {
-              setEditorError(true);
-              setEditorReady(false);
-            }}
-          />
+          <div
+            className="relative flex-1 w-full h-full"
+            style={{ minHeight: 0 }}
+          >
+            {/* Loading overlay — visible until OnlyOffice fires onDocumentReady */}
+            {!editorReady && (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
+                style={{ background: colors.bg }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+                  style={{ borderColor: colors.accentLight }}
+                />
+                <p className="text-[12px]" style={{ color: colors.textMuted }}>
+                  Loading editor…
+                </p>
+              </div>
+            )}
+            <OnlyOfficeEditor
+              key={editorKey}
+              fileUrl={template.fileUrl}
+              fileName={template.name}
+              fileKey={`tmpl-${templateId}-${template.storageId?.slice(-8) ?? (template as any)._creationTime}`}
+              templateId={templateId}
+              storageId={template.storageId}
+              onReady={() => {
+                setEditorReady(true);
+                setEditorError(false);
+              }}
+              onError={() => {
+                setEditorError(true);
+                setEditorReady(false);
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

@@ -37,46 +37,47 @@ export async function preprocessTemplate(
 /**
  * Word splits {{field}} across <w:r> runs in XML.
  * This stitches them back into a single <w:t> node per paragraph.
+ *
+ * Uses index-based slicing (back-to-front) so that:
+ *   1. Duplicate <w:t> nodes (e.g. two empty ones) are handled correctly —
+ *      String.replace would only patch the FIRST occurrence.
+ *   2. No $ substitution side-effects from String.replace replacement strings.
  */
 function stitchSplitPlaceholders(xml: string): string {
   // Process paragraph by paragraph
-  return xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (paragraph) => {
-    // Collect all text nodes in order
-    const textNodes: Array<{ full: string; text: string }> = [];
-    const wtRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-    let m: RegExpExecArray | null;
+  return xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, stitchParagraph);
+}
 
-    while ((m = wtRegex.exec(paragraph)) !== null) {
-      textNodes.push({ full: m[0], text: m[1] });
-    }
+function stitchParagraph(para: string): string {
+  // Collect every <w:t>…</w:t> node.
+  // For each node store the byte-offset of the text content only
+  // (the region between the closing > of the start tag and </w:t>).
+  const nodes: { tStart: number; tEnd: number; text: string }[] = [];
+  const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+  let m: RegExpExecArray | null;
 
-    if (textNodes.length <= 1) return paragraph;
+  while ((m = re.exec(para)) !== null) {
+    // m[0] = full element, e.g. `<w:t xml:space="preserve">hello</w:t>`
+    // Text content ends just before </w:t> (6 chars)
+    const tEnd = m.index + m[0].length - 6; // 6 = "</w:t>".length
+    const tStart = tEnd - m[1].length;
+    nodes.push({ tStart, tEnd, text: m[1] });
+  }
 
-    const combined = textNodes.map((n) => n.text).join("");
+  if (nodes.length <= 1) return para;
 
-    // Only stitch if combining reveals a placeholder
-    const hasPlaceholder = /\{\{/.test(combined) && /\}\}/.test(combined);
+  const combined = nodes.map((n) => n.text).join("");
 
-    if (!hasPlaceholder) return paragraph;
+  // Only stitch if combining reveals a placeholder
+  if (!combined.includes("{{") || !combined.includes("}}")) return para;
 
-    // Put the combined text in the first <w:t>, clear the rest
-    let result = paragraph;
-    let first = true;
-    for (const node of textNodes) {
-      if (first) {
-        result = result.replace(
-          node.full,
-          node.full.replace(/>([^<]*)<\/w:t>/, `>${combined}</w:t>`)
-        );
-        first = false;
-      } else {
-        result = result.replace(
-          node.full,
-          node.full.replace(/>([^<]*)<\/w:t>/, `></w:t>`)
-        );
-      }
-    }
-
-    return result;
-  });
+  // Replace text content back-to-front so earlier offsets stay valid.
+  // First node gets ALL combined text; the rest become empty.
+  let result = para;
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const { tStart, tEnd } = nodes[i];
+    const newText = i === 0 ? combined : "";
+    result = result.slice(0, tStart) + newText + result.slice(tEnd);
+  }
+  return result;
 }

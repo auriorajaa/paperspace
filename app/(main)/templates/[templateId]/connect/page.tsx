@@ -227,7 +227,7 @@ function AccountBadge({
       await disconnect();
       onDisconnect();
       toast.success(
-        "Google account disconnected — all connections paused. Reconnect to resume auto-sync."
+        "Google account disconnected — all connections paused. Reconnect to resume auto-sync.",
       );
     } catch {
       toast.error("Failed to disconnect. Please try again.");
@@ -291,6 +291,15 @@ function AccountBadge({
             )}
           </button>
         </div>
+
+        {/* Always-visible token info — replaces hover-only tooltip on mobile */}
+        <p
+          className="text-[11px] leading-relaxed px-1"
+          style={{ color: colors.textDim }}
+        >
+          Token auto-refreshes in the background. You only need to reconnect if
+          you revoke access in your Google Account settings.
+        </p>
 
         {tokenExpired && (
           <ErrorBanner
@@ -412,11 +421,11 @@ function GoogleFormWizard({
 
   const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [questionIdMap, setQuestionIdMap] = useState<Record<string, string>>(
-    {}
+    {},
   );
   // Store linked spreadsheet ID fetched from the questions API
   const [linkedSpreadsheetId, setLinkedSpreadsheetId] = useState<string | null>(
-    null
+    null,
   );
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState("");
@@ -438,8 +447,8 @@ function GoogleFormWizard({
       })
       .catch(() =>
         setFormsError(
-          "Unable to fetch your forms. Check your internet connection or try again."
-        )
+          "Unable to fetch your forms. Check your internet connection or try again.",
+        ),
       )
       .finally(() => setFormsLoading(false));
   }, []);
@@ -459,7 +468,7 @@ function GoogleFormWizard({
       const qs: FormQuestion[] = data.questions ?? [];
       if (qs.length === 0) {
         setQuestionsError(
-          "This form has no questions that can be mapped. Make sure your form has at least one question."
+          "This form has no questions that can be mapped. Make sure your form has at least one question.",
         );
         setQuestions([]);
         setQuestionIdMap({});
@@ -475,7 +484,7 @@ function GoogleFormWizard({
       setStep(2);
     } catch {
       setQuestionsError(
-        "Failed to load form questions. Please check your connection and try again."
+        "Failed to load form questions. Please check your connection and try again.",
       );
     } finally {
       setQuestionsLoading(false);
@@ -492,7 +501,7 @@ function GoogleFormWizard({
 
     if (validMappings.length === 0) {
       setMappingError(
-        "Please map at least one template field to a Google Form question."
+        "Please map at least one template field to a Google Form question.",
       );
       return;
     }
@@ -502,7 +511,7 @@ function GoogleFormWizard({
     const cleanedPattern = pattern.replace(/{{.*?}}/g, "");
     if (ILLEGAL_CHARS.test(cleanedPattern)) {
       setFilenameError(
-        'Filename cannot contain special characters: < > : " / \\ | ? *'
+        'Filename cannot contain special characters: < > : " / \\ | ? *',
       );
       return;
     }
@@ -527,7 +536,7 @@ function GoogleFormWizard({
       onDone();
     } catch (err: any) {
       toast.error(
-        err?.message ?? "Failed to create connection. Please try again."
+        err?.message ?? "Failed to create connection. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -535,15 +544,15 @@ function GoogleFormWizard({
   };
 
   const filteredForms = forms.filter((f) =>
-    f.name.toLowerCase().includes(search.toLowerCase())
+    f.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   const NON_MAPPABLE = ["loop", "condition", "condition_inverse"];
   const mappableFields = templateFields.filter(
-    (f) => !NON_MAPPABLE.includes(f.type)
+    (f) => !NON_MAPPABLE.includes(f.type),
   );
   const nonMappableFields = templateFields.filter((f) =>
-    NON_MAPPABLE.includes(f.type)
+    NON_MAPPABLE.includes(f.type),
   );
 
   const STEPS = [
@@ -587,8 +596,8 @@ function GoogleFormWizard({
                   })
                   .catch(() =>
                     setFormsError(
-                      "Unable to fetch your forms. Check your connection."
-                    )
+                      "Unable to fetch your forms. Check your connection.",
+                    ),
                   )
                   .finally(() => setFormsLoading(false));
               }}
@@ -1083,13 +1092,13 @@ function ConnectionCard({ connection }: { connection: any }) {
   const [removing, setRemoving] = useState(false);
 
   const generatedCount = (submissions ?? []).filter(
-    (s: any) => s.status === "generated"
+    (s: any) => s.status === "generated",
   ).length;
   const errorCount = (submissions ?? []).filter(
-    (s: any) => s.status === "error"
+    (s: any) => s.status === "error",
   ).length;
   const pendingCount = (submissions ?? []).filter(
-    (s: any) => s.status === "pending"
+    (s: any) => s.status === "pending",
   ).length;
 
   const handleSync = async () => {
@@ -1105,7 +1114,7 @@ function ConnectionCard({ connection }: { connection: any }) {
           ? "Sync failed — Google token may have expired. Try reconnecting your Google account."
           : msg.includes("Template")
             ? "Sync failed — template file is missing. Please check your template."
-            : "Sync failed. Check your Google connection and try again."
+            : "Sync failed. Check your Google connection and try again.",
       );
     } finally {
       setSyncing(false);
@@ -1569,11 +1578,11 @@ export default function ConnectFormPage() {
 
   const template = useQuery(
     api.templates.getById,
-    isLoaded && isSignedIn ? { id: templateId } : "skip"
+    isLoaded && isSignedIn ? { id: templateId } : "skip",
   );
   const connections = useQuery(
     api.formConnections.getByTemplateId,
-    isLoaded && isSignedIn ? { templateId } : "skip"
+    isLoaded && isSignedIn ? { templateId } : "skip",
   );
   const googleAccount = useQuery(api.googleAccounts.getMyAccount);
 
@@ -1586,11 +1595,11 @@ export default function ConnectFormPage() {
       setGlobalError("Google sign-in was cancelled. Please try again.");
     else if (p === "token_exchange_failed")
       setGlobalError(
-        "Google authentication failed. Please try connecting again."
+        "Google authentication failed. Please try connecting again.",
       );
     else if (p === "oauth_state_invalid")
       setGlobalError(
-        "Something went wrong during Google sign-in. Please try again."
+        "Something went wrong during Google sign-in. Please try again.",
       );
 
     if (searchParams.get("connected") === "1") {

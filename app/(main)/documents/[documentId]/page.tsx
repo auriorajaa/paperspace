@@ -657,7 +657,7 @@ export default function DocumentEditorPage() {
 
   const document = useQuery(
     api.documents.getById,
-    isLoaded && isSignedIn ? { id: documentId } : "skip"
+    isLoaded && isSignedIn ? { id: documentId } : "skip",
   );
   const updateDocument = useMutation(api.documents.update);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
@@ -690,19 +690,19 @@ export default function DocumentEditorPage() {
         const zip = new JSZip();
         zip.file(
           "[Content_Types].xml",
-          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
         );
         zip.file(
           "_rels/.rels",
-          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
         );
         zip.file(
           "word/document.xml",
-          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t></w:t></w:r></w:p><w:sectPr/></w:body></w:document>`
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t></w:t></w:r></w:p><w:sectPr/></w:body></w:document>`,
         );
         zip.file(
           "word/_rels/document.xml.rels",
-          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`,
         );
         const blob = await zip.generateAsync({
           type: "blob",
@@ -932,25 +932,45 @@ export default function DocumentEditorPage() {
         ) : editorError ? (
           <EditorErrorPanel onRetry={handleRetry} retryCount={retryCount} />
         ) : (
-          <OnlyOfficeEditor
-            key={editorKey}
-            fileUrl={fileUrl}
-            fileName={document.title}
-            fileKey={`doc-${documentId}-${document.storageId?.slice(-8) ?? document._creationTime}`}
-            documentId={documentId}
-            storageId={document.storageId}
-            userId={user?.id}
-            userName={user?.fullName ?? user?.firstName ?? undefined}
-            userAvatar={user?.imageUrl}
-            onReady={() => {
-              setEditorReady(true);
-              setEditorError(false);
-            }}
-            onError={() => {
-              setEditorError(true);
-              setEditorReady(false);
-            }}
-          />
+          <div
+            className="relative flex-1 w-full h-full"
+            style={{ minHeight: 0 }}
+          >
+            {/* Loading overlay — visible until OnlyOffice fires onDocumentReady */}
+            {!editorReady && (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
+                style={{ background: colors.bg }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+                  style={{ borderColor: colors.accentLight }}
+                />
+                <p className="text-[12px]" style={{ color: colors.textMuted }}>
+                  Loading editor…
+                </p>
+              </div>
+            )}
+            <OnlyOfficeEditor
+              key={editorKey}
+              fileUrl={fileUrl}
+              fileName={document.title}
+              fileKey={`doc-${documentId}-${document.storageId?.slice(-8) ?? document._creationTime}`}
+              documentId={documentId}
+              storageId={document.storageId}
+              userId={user?.id}
+              userName={user?.fullName ?? user?.firstName ?? undefined}
+              userAvatar={user?.imageUrl}
+              onReady={() => {
+                setEditorReady(true);
+                setEditorError(false);
+              }}
+              onError={() => {
+                setEditorError(true);
+                setEditorReady(false);
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

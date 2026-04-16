@@ -54,13 +54,13 @@ interface ConditionGroup {
  */
 function getConditionInnerFieldNames(
   previewText: string,
-  conditionName: string
+  conditionName: string,
 ): Set<string> {
   const result = new Set<string>();
   // Match {{#conditionName}} ... {{/conditionName}} or {{^conditionName}} ... {{/conditionName}}
   const openRe = new RegExp(
     `\\{\\{[#^]\\s*${conditionName}\\s*\\}\\}([\\s\\S]*?)\\{\\{/\\s*${conditionName}\\s*\\}\\}`,
-    "gi"
+    "gi",
   );
   let m: RegExpExecArray | null;
   while ((m = openRe.exec(previewText)) !== null) {
@@ -82,7 +82,7 @@ function getConditionInnerFieldNames(
  */
 function buildFieldHierarchy(
   fields: TemplateField[],
-  previewText: string
+  previewText: string,
 ): {
   trueSimpleFields: TemplateField[];
   loopFields: TemplateField[];
@@ -92,12 +92,12 @@ function buildFieldHierarchy(
   const loopSubNames = new Set(
     fields
       .filter((f) => f.type === "loop")
-      .flatMap((f) => (f.subFields ?? []).map((sf) => sf.name))
+      .flatMap((f) => (f.subFields ?? []).map((sf) => sf.name)),
   );
 
   // 2. Find condition fields and their inner field names
   const conditionFields = fields.filter(
-    (f) => f.type === "condition" || f.type === "condition_inverse"
+    (f) => f.type === "condition" || f.type === "condition_inverse",
   );
   const loopFields = fields.filter((f) => f.type === "loop");
 
@@ -114,7 +114,7 @@ function buildFieldHierarchy(
           innerNames.has(f.name) &&
           f.type !== "loop" &&
           f.type !== "condition" &&
-          f.type !== "condition_inverse"
+          f.type !== "condition_inverse",
       );
       conditionGroups.push({ conditionField: cf, innerFields });
     }
@@ -134,7 +134,7 @@ function buildFieldHierarchy(
       f.type !== "condition" &&
       f.type !== "condition_inverse" &&
       !loopSubNames.has(f.name) &&
-      !conditionInnerNames.has(f.name)
+      !conditionInnerNames.has(f.name),
   );
 
   return { trueSimpleFields, loopFields, conditionGroups };
@@ -520,12 +520,7 @@ function LoopSection({
 
               {subFields.length > 0 ? (
                 /* Desktop: grid, Mobile: stack */
-                <div
-                  className="flex-1 grid gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${Math.min(subFields.length, 2)}, 1fr)`,
-                  }}
-                >
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {subFields.map((sf) => (
                     <div key={sf.name} className="space-y-1 sm:space-y-0">
                       {/* Mobile label */}
@@ -576,7 +571,7 @@ function LoopSection({
 
               <button
                 onClick={() => onRemoveRow(rowIdx)}
-                className="w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 mt-1.5 sm:mt-0"
+                className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all shrink-0"
                 style={{ color: colors.textDim }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "rgba(248,113,113,0.12)";
@@ -595,10 +590,10 @@ function LoopSection({
           {/* Add more */}
           <button
             onClick={onAddRow}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] transition-all"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] transition-all min-h-[44px]"
             style={{
               color: colors.textDim,
-              background: "transparent",
+              background: "rgba(129,140,248,0.04)",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "rgba(129,140,248,0.04)";
@@ -705,7 +700,7 @@ function ConditionSection({
               <button
                 key={val}
                 onClick={() => onConditionChange(val)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all min-h-[44px]"
                 style={{
                   background: active
                     ? isShow
@@ -943,7 +938,7 @@ function SingleForm({
 
   const { trueSimpleFields, loopFields, conditionGroups } = buildFieldHierarchy(
     fields,
-    previewText ?? ""
+    previewText ?? "",
   );
 
   // Helpers
@@ -959,7 +954,7 @@ function SingleForm({
     fieldName: string,
     rowIdx: number,
     key: string,
-    val: string
+    val: string,
   ) => {
     setLoopRows((prev) => {
       const rows = [...(prev[fieldName] ?? [])];
@@ -985,7 +980,7 @@ function SingleForm({
     ...trueSimpleFields.filter((f) =>
       f.type === "condition" || f.type === "condition_inverse"
         ? true
-        : !!values[f.name]?.trim()
+        : !!values[f.name]?.trim(),
     ),
     ...loopFields.filter((f) => (loopRows[f.name]?.length ?? 0) > 0),
     ...conditionGroups, // always "filled" since toggle exists
@@ -1000,7 +995,7 @@ function SingleForm({
       const Docxtemplater = (await import("docxtemplater")).default;
 
       const res = await fetch(
-        `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`
+        `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`,
       );
       if (!res.ok) throw new Error("Failed to fetch template");
       const buffer = await res.arrayBuffer();
@@ -1246,7 +1241,8 @@ function SingleForm({
       </div>
 
       {/* ── Mobile floating generate ── */}
-      <div className="lg:hidden fixed bottom-20 md:bottom-6 left-4 right-4 z-40">
+      <div className="lg:hidden fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-6 left-4 right-4 z-40">
+        {" "}
         <button
           onClick={handleGenerate}
           disabled={generating}
@@ -1297,7 +1293,7 @@ function BulkForm({
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [filenamePattern, setFilenamePattern] = useState(
-    `${templateName}_{{row_number}}`
+    `${templateName}_{{row_number}}`,
   );
   const [progress, setProgress] = useState(0);
   const [generating, setGenerating] = useState(false);
@@ -1308,7 +1304,7 @@ function BulkForm({
   // Only flat (non-loop, non-condition) fields are bulk-fillable
   const { trueSimpleFields } = buildFieldHierarchy(fields, previewText ?? "");
   const bulkFields = trueSimpleFields.filter(
-    (f) => f.type !== "condition" && f.type !== "condition_inverse"
+    (f) => f.type !== "condition" && f.type !== "condition_inverse",
   );
   const fieldNames = bulkFields.map((f) => f.name);
   const unmapped = fieldNames.filter((n) => !headers.includes(n));
@@ -1325,7 +1321,7 @@ function BulkForm({
               ? "1000"
               : f.type === "email"
                 ? "contoh@email.com"
-                : `contoh_${f.name}`
+                : `contoh_${f.name}`,
         ),
       ]);
       const wb = XLSX.utils.book_new();
@@ -1357,7 +1353,7 @@ function BulkForm({
       });
       if (!data.length) {
         toast.error(
-          "No data rows found. Make sure your Excel has data below the header row."
+          "No data rows found. Make sure your Excel has data below the header row.",
         );
         return;
       }
@@ -1370,7 +1366,7 @@ function BulkForm({
       toast.error(
         err?.message?.includes("File is password protected")
           ? "This Excel file is password-protected. Remove the password first."
-          : "Couldn't read the Excel file. Make sure it's a valid .xlsx or .xls file."
+          : "Couldn't read the Excel file. Make sure it's a valid .xlsx or .xls file.",
       );
     }
   };
@@ -1389,11 +1385,11 @@ function BulkForm({
       const JSZip = (await import("jszip")).default;
 
       const res = await fetch(
-        `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`
+        `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`,
       );
       if (!res.ok)
         throw new Error(
-          "Failed to fetch template file. Check your connection."
+          "Failed to fetch template file. Check your connection.",
         );
       const templateBuffer = await res.arrayBuffer();
       const processedBuffer = await preprocessTemplate(templateBuffer);
@@ -2189,7 +2185,7 @@ export default function TemplateFillPage() {
 
   const template = useQuery(
     api.templates.getById,
-    isLoaded && isSignedIn ? { id: templateId } : "skip"
+    isLoaded && isSignedIn ? { id: templateId } : "skip",
   );
 
   if (template === undefined) {
@@ -2278,7 +2274,7 @@ export default function TemplateFillPage() {
   // Pre-compute hierarchy for header stats
   const { trueSimpleFields, loopFields, conditionGroups } = buildFieldHierarchy(
     fields,
-    previewText ?? ""
+    previewText ?? "",
   );
   const totalSections =
     trueSimpleFields.length + loopFields.length + conditionGroups.length;

@@ -190,7 +190,28 @@ async function generateDocxFromTemplate(
   } catch (err: any) {
     if (err?.properties?.errors?.length) {
       const details = (err.properties.errors as any[])
-        .map((e: any) => e?.properties?.explanation ?? e?.message ?? String(e))
+        .map((e: any) => {
+          const id = e?.properties?.id as string | undefined;
+          const tag = e?.properties?.xtag ?? e?.properties?.tag ?? "";
+          const tagHint = tag ? ` (tag: {{${tag}}})` : "";
+          if (id === "unopened_tag")
+            return `Closing tag {{/${tag}}} has no matching opening tag${tagHint}`;
+          if (id === "unclosed_tag")
+            return `Opening tag {{${tag}}} has no matching closing tag${tagHint}`;
+          if (id === "closing_tag_does_not_match") {
+            const openTag =
+              e?.properties?.openingtag ?? e?.properties?.openTag ?? "";
+            return `Mismatched tags: {{#${openTag}}} closed by {{/${tag}}} — they must match`;
+          }
+          if (id === "raw_tag_not_in_paragraph")
+            return `Raw tag {{@${tag}}} must be the only content in its paragraph${tagHint}`;
+          if (id === "loop_tag_not_in_cell")
+            return `Loop tag {{#${tag}}} and its closing tag must be in separate table rows${tagHint}`;
+          // Fallback: use explanation or message
+          return (
+            e?.properties?.explanation ?? e?.message ?? String(e)
+          );
+        })
         .join("; ");
       throw new Error(`Template render failed: ${details}`);
     }
