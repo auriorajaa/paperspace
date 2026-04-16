@@ -142,14 +142,14 @@ function OnlyOfficeInner({
 
   if (!editorData) {
     return (
-      <div className="flex-1 flex items-center justify-center w-full">
+      <div className="absolute inset-0 flex items-center justify-center bg-inherit">
         <LoadingSteps />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 w-full h-full" style={{ minHeight: 0 }}>
+    <div className="relative flex-1 w-full h-full" style={{ minHeight: 0 }}>
       <DocumentEditor
         id={editorId}
         documentServerUrl={editorData.serverUrl}

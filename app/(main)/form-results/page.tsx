@@ -738,7 +738,7 @@ function SubmissionRow({
                   e.stopPropagation();
                   setExpanded((v) => !v);
                 }}
-                className="text-xs flex items-center gap-1 mt-0.5"
+                className="text-xs flex items-center gap-1 mt-0.5 min-h-[44px]"
                 style={{ color: "#f87171" }}
               >
                 {expanded ? (
@@ -759,7 +759,7 @@ function SubmissionRow({
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
-                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
+                className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
                   background: "rgba(255,255,255,0.06)",
                   border: `1px solid ${colors.border}`,
@@ -1400,7 +1400,7 @@ function BulkActions({
             onClick={handleBulkDownload}
             disabled={downloading}
             aria-label="Download selected as ZIP"
-            className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+            className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all min-h-[44px]"
             style={{
               background: "rgba(52,211,153,0.12)",
               color: "#34d399",
@@ -1456,7 +1456,7 @@ function BulkActions({
         <button
           onClick={onClear}
           aria-label="Clear selection"
-          className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
+          className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center ml-0.5"
           style={{
             background: "rgba(255,255,255,0.06)",
             color: colors.textMuted,
