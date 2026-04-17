@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
-import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import { fieldTypeColors } from "@/lib/design-tokens";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertDialog,
@@ -71,16 +71,19 @@ function ErrorBanner({
     <div
       className="rounded-xl p-4 flex items-start gap-3"
       style={{
-        background: "rgba(248,113,113,0.08)",
-        border: "1px solid rgba(248,113,113,0.2)",
+        background: "var(--danger-bg)",
+        border: "1px solid color-mix(in srgb, var(--danger) 20%, transparent)",
       }}
     >
       <AlertCircleIcon
         className="w-4 h-4 shrink-0 mt-0.5"
-        style={{ color: "#f87171" }}
+        style={{ color: "var(--danger)" }}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-xs leading-relaxed" style={{ color: "#fca5a5" }}>
+        <p
+          className="text-xs leading-relaxed"
+          style={{ color: "var(--danger)" }}
+        >
           {message}
         </p>
         {(onRetry || action) && (
@@ -90,9 +93,11 @@ function ErrorBanner({
                 onClick={onRetry}
                 className="text-[13px] font-medium px-3 py-2 rounded-lg min-h-[44px] transition-colors"
                 style={{
-                  background: "rgba(248,113,113,0.15)",
-                  color: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.3)",
+                  background:
+                    "color-mix(in srgb, var(--danger) 15%, transparent)",
+                  color: "var(--danger)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                 }}
               >
                 Try again
@@ -103,9 +108,11 @@ function ErrorBanner({
                 onClick={action.onClick}
                 className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
                 style={{
-                  background: "rgba(248,113,113,0.15)",
-                  color: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.3)",
+                  background:
+                    "color-mix(in srgb, var(--danger) 15%, transparent)",
+                  color: "var(--danger)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                 }}
               >
                 {action.label}
@@ -119,7 +126,7 @@ function ErrorBanner({
           onClick={onDismiss}
           aria-label="Dismiss error"
           className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
-          style={{ color: "#f87171" }}
+          style={{ color: "var(--danger)" }}
         >
           <XIcon className="w-3.5 h-3.5" />
         </button>
@@ -141,17 +148,17 @@ function WarningBanner({
     <div
       className="rounded-xl p-3 flex items-start gap-3"
       style={{
-        background: "rgba(251,191,36,0.08)",
-        border: "1px solid rgba(251,191,36,0.2)",
+        background: "var(--warning-bg)",
+        border: "1px solid color-mix(in srgb, var(--warning) 20%, transparent)",
       }}
     >
       <AlertTriangleIcon
         className="w-4 h-4 shrink-0 mt-0.5"
-        style={{ color: "#fbbf24" }}
+        style={{ color: "var(--warning)" }}
       />
       <p
         className="text-xs flex-1 leading-relaxed"
-        style={{ color: "#fde68a" }}
+        style={{ color: "var(--warning)" }}
       >
         {message}
       </p>
@@ -160,9 +167,10 @@ function WarningBanner({
           onClick={action.onClick}
           className="text-xs font-medium px-3 py-1.5 rounded-lg min-h-[44px] shrink-0"
           style={{
-            background: "rgba(251,191,36,0.15)",
-            color: "#fbbf24",
-            border: "1px solid rgba(251,191,36,0.3)",
+            background: "color-mix(in srgb, var(--warning) 15%, transparent)",
+            color: "var(--warning)",
+            border:
+              "1px solid color-mix(in srgb, var(--warning) 30%, transparent)",
           }}
         >
           {action.label}
@@ -179,17 +187,17 @@ function InfoBox({ children }: { children: React.ReactNode }) {
     <div
       className="rounded-xl p-3 flex items-start gap-2.5"
       style={{
-        background: "rgba(99,102,241,0.06)",
-        border: "1px solid rgba(99,102,241,0.15)",
+        background: "var(--accent-bg)",
+        border: "1px solid var(--accent-border)",
       }}
     >
       <InfoIcon
         className="w-3.5 h-3.5 shrink-0 mt-0.5"
-        style={{ color: colors.accentLight }}
+        style={{ color: "var(--accent-light)" }}
       />
       <div
         className="text-xs leading-relaxed"
-        style={{ color: colors.textMuted }}
+        style={{ color: "var(--text-muted)" }}
       >
         {children}
       </div>
@@ -227,7 +235,7 @@ function AccountBadge({
       await disconnect();
       onDisconnect();
       toast.success(
-        "Google account disconnected — all connections paused. Reconnect to resume auto-sync.",
+        "Google account disconnected — all connections paused. Reconnect to resume auto-sync."
       );
     } catch {
       toast.error("Failed to disconnect. Please try again.");
@@ -243,21 +251,25 @@ function AccountBadge({
         <div
           className="flex items-center gap-3 px-3 py-3 rounded-xl"
           style={{
-            background: "rgba(52,211,153,0.06)",
-            border: "1px solid rgba(52,211,153,0.15)",
+            background: "var(--success-bg)",
+            border:
+              "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
           }}
         >
           <CheckCircleIcon
             className="w-4 h-4 shrink-0"
-            style={{ color: "#34d399" }}
+            style={{ color: "var(--success)" }}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium" style={{ color: "#34d399" }}>
+            <p
+              className="text-xs font-medium"
+              style={{ color: "var(--success)" }}
+            >
               Google connected
             </p>
             <p
               className="text-[11px] truncate"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               {email}
             </p>
@@ -268,23 +280,24 @@ function AccountBadge({
             aria-label="Disconnect Google account"
             className="flex items-center justify-center w-11 h-11 rounded-lg transition-colors shrink-0"
             style={{
-              color: colors.textDim,
-              border: `1px solid ${colors.border}`,
+              color: "var(--text-dim)",
+              border: `1px solid var(--border-subtle)`,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#f87171";
-              e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)";
+              e.currentTarget.style.color = "var(--danger)";
+              e.currentTarget.style.borderColor =
+                "color-mix(in srgb, var(--danger) 30%, transparent)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = colors.textDim;
-              e.currentTarget.style.borderColor = colors.border;
+              e.currentTarget.style.color = "var(--text-dim)";
+              e.currentTarget.style.borderColor = "var(--border-subtle)";
             }}
             title="Disconnect Google account"
           >
             {disconnecting ? (
               <div
                 className="w-3 h-3 rounded-full border border-t-transparent animate-spin"
-                style={{ borderColor: colors.textDim }}
+                style={{ borderColor: "var(--text-dim)" }}
               />
             ) : (
               <LogOutIcon className="w-3.5 h-3.5" />
@@ -295,7 +308,7 @@ function AccountBadge({
         {/* Always-visible token info — replaces hover-only tooltip on mobile */}
         <p
           className="text-[11px] leading-relaxed px-1"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           Token auto-refreshes in the background. You only need to reconnect if
           you revoke access in your Google Account settings.
@@ -355,7 +368,10 @@ function StepIndicator({
       {steps.map(({ n, label }, idx) => (
         <div key={n} className="flex items-center gap-1.5 shrink-0">
           {idx > 0 && (
-            <div className="w-6 h-px" style={{ background: colors.border }} />
+            <div
+              className="w-6 h-px"
+              style={{ background: "var(--border-subtle)" }}
+            />
           )}
           <div className="flex items-center gap-1.5">
             <div
@@ -363,22 +379,22 @@ function StepIndicator({
               style={{
                 background:
                   step === n
-                    ? "rgba(99,102,241,0.25)"
+                    ? "var(--accent-strong-bg)"
                     : step > n
-                      ? "rgba(52,211,153,0.2)"
-                      : "rgba(255,255,255,0.06)",
+                      ? "var(--success-bg)"
+                      : "var(--bg-input)",
                 color:
                   step === n
-                    ? "#a5b4fc"
+                    ? "var(--accent-pale)"
                     : step > n
-                      ? "#34d399"
-                      : colors.textDim,
+                      ? "var(--success)"
+                      : "var(--text-dim)",
                 border: `1px solid ${
                   step === n
-                    ? "rgba(99,102,241,0.35)"
+                    ? "var(--accent-border)"
                     : step > n
-                      ? "rgba(52,211,153,0.3)"
-                      : "rgba(255,255,255,0.08)"
+                      ? "color-mix(in srgb, var(--success) 30%, transparent)"
+                      : "var(--border-subtle)"
                 }`,
               }}
             >
@@ -387,7 +403,7 @@ function StepIndicator({
             <span
               className="text-[11px] hidden sm:block"
               style={{
-                color: step === n ? colors.textSecondary : colors.textDim,
+                color: step === n ? "var(--text-secondary)" : "var(--text-dim)",
               }}
             >
               {label}
@@ -421,11 +437,11 @@ function GoogleFormWizard({
 
   const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [questionIdMap, setQuestionIdMap] = useState<Record<string, string>>(
-    {},
+    {}
   );
   // Store linked spreadsheet ID fetched from the questions API
   const [linkedSpreadsheetId, setLinkedSpreadsheetId] = useState<string | null>(
-    null,
+    null
   );
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState("");
@@ -447,8 +463,8 @@ function GoogleFormWizard({
       })
       .catch(() =>
         setFormsError(
-          "Unable to fetch your forms. Check your internet connection or try again.",
-        ),
+          "Unable to fetch your forms. Check your internet connection or try again."
+        )
       )
       .finally(() => setFormsLoading(false));
   }, []);
@@ -468,7 +484,7 @@ function GoogleFormWizard({
       const qs: FormQuestion[] = data.questions ?? [];
       if (qs.length === 0) {
         setQuestionsError(
-          "This form has no questions that can be mapped. Make sure your form has at least one question.",
+          "This form has no questions that can be mapped. Make sure your form has at least one question."
         );
         setQuestions([]);
         setQuestionIdMap({});
@@ -484,7 +500,7 @@ function GoogleFormWizard({
       setStep(2);
     } catch {
       setQuestionsError(
-        "Failed to load form questions. Please check your connection and try again.",
+        "Failed to load form questions. Please check your connection and try again."
       );
     } finally {
       setQuestionsLoading(false);
@@ -501,7 +517,7 @@ function GoogleFormWizard({
 
     if (validMappings.length === 0) {
       setMappingError(
-        "Please map at least one template field to a Google Form question.",
+        "Please map at least one template field to a Google Form question."
       );
       return;
     }
@@ -511,7 +527,7 @@ function GoogleFormWizard({
     const cleanedPattern = pattern.replace(/{{.*?}}/g, "");
     if (ILLEGAL_CHARS.test(cleanedPattern)) {
       setFilenameError(
-        'Filename cannot contain special characters: < > : " / \\ | ? *',
+        'Filename cannot contain special characters: < > : " / \\ | ? *'
       );
       return;
     }
@@ -536,7 +552,7 @@ function GoogleFormWizard({
       onDone();
     } catch (err: any) {
       toast.error(
-        err?.message ?? "Failed to create connection. Please try again.",
+        err?.message ?? "Failed to create connection. Please try again."
       );
     } finally {
       setSaving(false);
@@ -544,15 +560,15 @@ function GoogleFormWizard({
   };
 
   const filteredForms = forms.filter((f) =>
-    f.name.toLowerCase().includes(search.toLowerCase()),
+    f.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const NON_MAPPABLE = ["loop", "condition", "condition_inverse"];
   const mappableFields = templateFields.filter(
-    (f) => !NON_MAPPABLE.includes(f.type),
+    (f) => !NON_MAPPABLE.includes(f.type)
   );
   const nonMappableFields = templateFields.filter((f) =>
-    NON_MAPPABLE.includes(f.type),
+    NON_MAPPABLE.includes(f.type)
   );
 
   const STEPS = [
@@ -571,11 +587,11 @@ function GoogleFormWizard({
           <div>
             <h3
               className="text-sm font-semibold mb-1"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               Select a Google Form
             </h3>
-            <p className="text-xs" style={{ color: colors.textMuted }}>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Choose a form from your Drive — we'll read its questions
               automatically.
             </p>
@@ -596,8 +612,8 @@ function GoogleFormWizard({
                   })
                   .catch(() =>
                     setFormsError(
-                      "Unable to fetch your forms. Check your connection.",
-                    ),
+                      "Unable to fetch your forms. Check your connection."
+                    )
                   )
                   .finally(() => setFormsLoading(false));
               }}
@@ -607,7 +623,7 @@ function GoogleFormWizard({
               <div className="relative">
                 <SearchIcon
                   className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 />
                 <input
                   value={search}
@@ -615,15 +631,15 @@ function GoogleFormWizard({
                   placeholder="Search forms…"
                   className="w-full rounded-xl pl-9 pr-3 py-3 text-sm outline-none min-h-[44px]"
                   style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: `1px solid ${colors.border}`,
-                    color: colors.text,
+                    background: "var(--bg-muted)",
+                    border: `1px solid var(--border-subtle)`,
+                    color: "var(--text)",
                   }}
                   onFocus={(e) =>
-                    (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                    (e.currentTarget.style.border = `1px solid var(--accent-border)`)
                   }
                   onBlur={(e) =>
-                    (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                    (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                   }
                 />
               </div>
@@ -632,15 +648,18 @@ function GoogleFormWizard({
                 <div className="flex items-center justify-center py-12 gap-2">
                   <div
                     className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: colors.accentLight }}
+                    style={{ borderColor: "var(--accent-light)" }}
                   />
-                  <span className="text-xs" style={{ color: colors.textDim }}>
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--text-dim)" }}
+                  >
                     Loading your forms…
                   </span>
                 </div>
               ) : filteredForms.length === 0 ? (
                 <div className="text-center py-10">
-                  <p className="text-xs" style={{ color: colors.textDim }}>
+                  <p className="text-xs" style={{ color: "var(--text-dim)" }}>
                     {search
                       ? "No forms match your search"
                       : "No Google Forms found in your Drive"}
@@ -649,13 +668,13 @@ function GoogleFormWizard({
               ) : (
                 <div
                   className="rounded-xl overflow-hidden max-h-64 overflow-y-auto"
-                  style={{ border: `1px solid ${colors.border}` }}
+                  style={{ border: `1px solid var(--border-subtle)` }}
                 >
                   {filteredForms.map((form) => (
                     <div
                       key={form.id}
                       className="flex items-center"
-                      style={{ borderBottom: `1px solid ${colors.border}` }}
+                      style={{ borderBottom: `1px solid var(--border-subtle)` }}
                     >
                       <button
                         onClick={() => loadQuestions(form)}
@@ -664,7 +683,7 @@ function GoogleFormWizard({
                         style={{ background: "transparent" }}
                         onMouseEnter={(e) =>
                           (e.currentTarget.style.background =
-                            "rgba(99,102,241,0.06)")
+                            "var(--accent-bg)")
                         }
                         onMouseLeave={(e) =>
                           (e.currentTarget.style.background = "transparent")
@@ -672,20 +691,20 @@ function GoogleFormWizard({
                       >
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ background: "rgba(99,102,241,0.12)" }}
+                          style={{ background: "var(--accent-soft)" }}
                         >
                           📋
                         </div>
                         <div className="flex-1 min-w-0">
                           <p
                             className="text-sm font-medium truncate"
-                            style={{ color: colors.text }}
+                            style={{ color: "var(--text)" }}
                           >
                             {form.name}
                           </p>
                           <p
                             className="text-xs"
-                            style={{ color: colors.textDim }}
+                            style={{ color: "var(--text-dim)" }}
                           >
                             Modified{" "}
                             {formatDistanceToNow(new Date(form.modifiedTime), {
@@ -696,12 +715,12 @@ function GoogleFormWizard({
                         {questionsLoading && selectedForm?.id === form.id ? (
                           <div
                             className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin shrink-0"
-                            style={{ borderColor: colors.accentLight }}
+                            style={{ borderColor: "var(--accent-light)" }}
                           />
                         ) : (
                           <ChevronRightIcon
                             className="w-3.5 h-3.5 shrink-0"
-                            style={{ color: colors.textDim }}
+                            style={{ color: "var(--text-dim)" }}
                           />
                         )}
                       </button>
@@ -711,12 +730,12 @@ function GoogleFormWizard({
                         rel="noopener noreferrer"
                         aria-label="Open in Google Forms"
                         className="flex items-center justify-center w-11 h-11 shrink-0 mr-2 rounded-lg transition-colors"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                         onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = colors.accentLight)
+                          (e.currentTarget.style.color = "var(--accent-light)")
                         }
                         onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = colors.textDim)
+                          (e.currentTarget.style.color = "var(--text-dim)")
                         }
                         onClick={(e) => e.stopPropagation()}
                         title="Open in Google Forms"
@@ -739,7 +758,7 @@ function GoogleFormWizard({
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h3
                 className="text-sm font-semibold"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 Map fields
               </h3>
@@ -747,15 +766,15 @@ function GoogleFormWizard({
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full font-medium"
                   style={{
-                    background: "rgba(52,211,153,0.1)",
-                    color: "#34d399",
+                    background: "var(--success-bg)",
+                    color: "var(--success)",
                   }}
                 >
                   {selectedForm.name}
                 </span>
               )}
             </div>
-            <p className="text-xs" style={{ color: colors.textMuted }}>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Match each template field to the Google Form question that
               provides its value.
             </p>
@@ -774,7 +793,7 @@ function GoogleFormWizard({
             <InfoBox>
               <span
                 className="font-medium"
-                style={{ color: colors.accentLight }}
+                style={{ color: "var(--accent-light)" }}
               >
                 {nonMappableFields.length} field
                 {nonMappableFields.length !== 1 ? "s" : ""} skipped:
@@ -791,14 +810,14 @@ function GoogleFormWizard({
           {mappableFields.length > 0 ? (
             <div className="space-y-2">
               {mappableFields.map((field) => {
-                const c = fieldTypeColors[field.type] ?? "#6b7280";
+                const c = fieldTypeColors[field.type] ?? "var(--text-muted)";
                 return (
                   <div
                     key={field.name}
                     className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl"
                     style={{
-                      background: "rgba(255,255,255,0.02)",
-                      border: `1px solid ${mappings[field.name] ? `${c}30` : colors.border}`,
+                      background: "var(--bg-muted)",
+                      border: `1px solid ${mappings[field.name] ? `${c}30` : "var(--border-subtle)"}`,
                     }}
                   >
                     <div className="flex items-center gap-2 sm:w-36 sm:shrink-0">
@@ -809,19 +828,19 @@ function GoogleFormWizard({
                       <div className="min-w-0">
                         <p
                           className="text-xs font-medium truncate"
-                          style={{ color: colors.textSecondary }}
+                          style={{ color: "var(--text-secondary)" }}
                         >
                           {field.label}
                         </p>
                         <code
                           className="text-[9px] font-mono"
-                          style={{ color: colors.textDim }}
+                          style={{ color: "var(--text-dim)" }}
                         >{`{{${field.name}}}`}</code>
                       </div>
                     </div>
                     <span
                       className="text-xs shrink-0 hidden sm:block"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       ←
                     </span>
@@ -835,21 +854,21 @@ function GoogleFormWizard({
                       }
                       className="flex-1 w-full rounded-lg px-2.5 py-2.5 text-sm outline-none min-h-[44px]"
                       style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: `1px solid ${colors.border}`,
+                        background: "var(--bg-muted)",
+                        border: `1px solid var(--border-subtle)`,
                         color: mappings[field.name]
-                          ? colors.text
-                          : colors.textDim,
+                          ? "var(--text)"
+                          : "var(--text-dim)",
                       }}
                     >
-                      <option value="" style={{ background: "#18181d" }}>
+                      <option value="" style={{ background: "var(--popover)" }}>
                         — not mapped —
                       </option>
                       {questions.map((q) => (
                         <option
                           key={q.id}
                           value={q.title}
-                          style={{ background: "#18181d" }}
+                          style={{ background: "var(--popover)" }}
                         >
                           {q.title}
                         </option>
@@ -861,7 +880,7 @@ function GoogleFormWizard({
             </div>
           ) : (
             <div className="text-center py-6">
-              <p className="text-xs" style={{ color: colors.textDim }}>
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>
                 No mappable fields in this template.
               </p>
             </div>
@@ -872,15 +891,15 @@ function GoogleFormWizard({
               onClick={() => setStep(1)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                color: colors.textMuted,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+                (e.currentTarget.style.background = "var(--bg-input)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+                (e.currentTarget.style.background = "var(--bg-muted)")
               }
             >
               ← Back
@@ -892,15 +911,15 @@ function GoogleFormWizard({
               }}
               className="flex-1 flex items-center justify-center gap-1.5 text-[13px] font-medium py-2 rounded-xl min-h-[44px] transition-all duration-150"
               style={{
-                background: "rgba(99,102,241,0.18)",
-                color: "#a5b4fc",
-                border: "1px solid rgba(99,102,241,0.28)",
+                background: "var(--accent-strong-bg)",
+                color: "var(--accent-pale)",
+                border: "1px solid var(--accent-border)",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.28)")
+                (e.currentTarget.style.background = "var(--accent-mid)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
+                (e.currentTarget.style.background = "var(--accent-strong-bg)")
               }
             >
               Next: Filename →
@@ -915,11 +934,11 @@ function GoogleFormWizard({
           <div>
             <h3
               className="text-sm font-semibold mb-1"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               Filename pattern
             </h3>
-            <p className="text-xs" style={{ color: colors.textMuted }}>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               How each generated document will be named. Click tokens to insert
               them.
             </p>
@@ -935,23 +954,27 @@ function GoogleFormWizard({
               placeholder={`${selectedForm?.name ?? "document"}_{{row_number}}`}
               className="w-full rounded-xl px-3 py-3 text-sm font-mono outline-none min-h-[44px]"
               style={{
-                background: "rgba(255,255,255,0.05)",
+                background: "var(--bg-muted)",
                 border: `1px solid ${
-                  filenameError ? "rgba(248,113,113,0.4)" : colors.border
+                  filenameError
+                    ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                    : "var(--border-subtle)"
                 }`,
-                color: colors.text,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                (e.currentTarget.style.border = `1px solid var(--accent-border)`)
               }
               onBlur={(e) =>
                 (e.currentTarget.style.border = `1px solid ${
-                  filenameError ? "rgba(248,113,113,0.4)" : colors.border
+                  filenameError
+                    ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                    : "var(--border-subtle)"
                 }`)
               }
             />
             {filenameError && (
-              <p className="text-xs" style={{ color: "#f87171" }}>
+              <p className="text-xs" style={{ color: "var(--danger)" }}>
                 {filenameError}
               </p>
             )}
@@ -969,15 +992,15 @@ function GoogleFormWizard({
                   onClick={() => setFilenamePattern((p) => (p || "") + token)}
                   className="text-[10px] font-mono px-2 py-2 rounded-lg transition-colors min-h-[36px]"
                   style={{
-                    background: "rgba(99,102,241,0.1)",
-                    color: "#818cf8",
-                    border: "1px solid rgba(99,102,241,0.2)",
+                    background: "var(--accent-bg)",
+                    color: "var(--accent-light)",
+                    border: "1px solid var(--accent-border)",
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "rgba(99,102,241,0.2)")
+                    (e.currentTarget.style.background = "var(--accent-soft)")
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
+                    (e.currentTarget.style.background = "var(--accent-bg)")
                   }
                 >
                   {token}
@@ -990,15 +1013,16 @@ function GoogleFormWizard({
               <div
                 className="flex items-center gap-2 p-2 rounded-lg"
                 style={{
-                  background: "rgba(52,211,153,0.06)",
-                  border: "1px solid rgba(52,211,153,0.15)",
+                  background: "var(--success-bg)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
                 }}
               >
                 <FileSpreadsheetIcon
                   className="w-3.5 h-3.5 shrink-0"
-                  style={{ color: "#34d399" }}
+                  style={{ color: "var(--success)" }}
                 />
-                <p className="text-[11px]" style={{ color: "#34d399" }}>
+                <p className="text-[11px]" style={{ color: "var(--success)" }}>
                   Linked Google Sheet detected — a Spreadsheet button will
                   appear on the connection card.
                 </p>
@@ -1006,7 +1030,7 @@ function GoogleFormWizard({
             )}
 
             <InfoBox>
-              <span style={{ color: colors.accentLight }}>
+              <span style={{ color: "var(--accent-light)" }}>
                 ⏱ Auto-sync every 5 minutes.
               </span>{" "}
               After someone submits the form, their document will appear in the
@@ -1020,15 +1044,15 @@ function GoogleFormWizard({
               onClick={() => setStep(2)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                color: colors.textMuted,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+                (e.currentTarget.style.background = "var(--bg-input)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+                (e.currentTarget.style.background = "var(--bg-muted)")
               }
             >
               ← Back
@@ -1039,25 +1063,25 @@ function GoogleFormWizard({
               className="flex-1 flex items-center justify-center gap-2 text-[13px] py-2 rounded-xl font-semibold transition-all duration-150 min-h-[44px]"
               style={{
                 background: saving
-                  ? "rgba(99,102,241,0.12)"
-                  : "rgba(99,102,241,0.2)",
-                color: saving ? colors.textDim : "#a5b4fc",
-                border: "1px solid rgba(99,102,241,0.3)",
+                  ? "var(--accent-bg)"
+                  : "var(--accent-strong-bg)",
+                color: saving ? "var(--text-dim)" : "var(--accent-pale)",
+                border: "1px solid var(--accent-border)",
               }}
               onMouseEnter={(e) => {
                 if (!saving)
-                  e.currentTarget.style.background = "rgba(99,102,241,0.3)";
+                  e.currentTarget.style.background = "var(--accent-mid)";
               }}
               onMouseLeave={(e) => {
                 if (!saving)
-                  e.currentTarget.style.background = "rgba(99,102,241,0.2)";
+                  e.currentTarget.style.background = "var(--accent-strong-bg)";
               }}
             >
               {saving ? (
                 <>
                   <div
                     className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: colors.accentLight }}
+                    style={{ borderColor: "var(--accent-light)" }}
                   />
                   Creating…
                 </>
@@ -1092,13 +1116,13 @@ function ConnectionCard({ connection }: { connection: any }) {
   const [removing, setRemoving] = useState(false);
 
   const generatedCount = (submissions ?? []).filter(
-    (s: any) => s.status === "generated",
+    (s: any) => s.status === "generated"
   ).length;
   const errorCount = (submissions ?? []).filter(
-    (s: any) => s.status === "error",
+    (s: any) => s.status === "error"
   ).length;
   const pendingCount = (submissions ?? []).filter(
-    (s: any) => s.status === "pending",
+    (s: any) => s.status === "pending"
   ).length;
 
   const handleSync = async () => {
@@ -1114,7 +1138,7 @@ function ConnectionCard({ connection }: { connection: any }) {
           ? "Sync failed — Google token may have expired. Try reconnecting your Google account."
           : msg.includes("Template")
             ? "Sync failed — template file is missing. Please check your template."
-            : "Sync failed. Check your Google connection and try again.",
+            : "Sync failed. Check your Google connection and try again."
       );
     } finally {
       setSyncing(false);
@@ -1151,8 +1175,8 @@ function ConnectionCard({ connection }: { connection: any }) {
       <div
         className="rounded-2xl overflow-hidden"
         style={{
-          background: "rgba(255,255,255,0.025)",
-          border: `1px solid ${connection.isActive ? colors.accentBorder : colors.border}`,
+          background: "var(--bg-card)",
+          border: `1px solid ${connection.isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
         }}
       >
         {/* Header */}
@@ -1161,9 +1185,9 @@ function ConnectionCard({ connection }: { connection: any }) {
             className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base"
             style={{
               background: connection.isActive
-                ? "rgba(99,102,241,0.15)"
-                : "rgba(255,255,255,0.06)",
-              border: `1px solid ${connection.isActive ? colors.accentBorder : colors.border}`,
+                ? "var(--accent-bg)"
+                : "var(--bg-input)",
+              border: `1px solid ${connection.isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
             }}
           >
             📋
@@ -1173,7 +1197,7 @@ function ConnectionCard({ connection }: { connection: any }) {
             <div className="flex items-center gap-2 flex-wrap">
               <p
                 className="text-sm font-semibold truncate"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {connection.formTitle}
               </p>
@@ -1181,9 +1205,11 @@ function ConnectionCard({ connection }: { connection: any }) {
                 className="text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0"
                 style={{
                   background: connection.isActive
-                    ? "rgba(52,211,153,0.12)"
-                    : "rgba(255,255,255,0.06)",
-                  color: connection.isActive ? "#34d399" : colors.textDim,
+                    ? "var(--success-bg)"
+                    : "var(--bg-input)",
+                  color: connection.isActive
+                    ? "var(--success)"
+                    : "var(--text-dim)",
                 }}
                 title={
                   connection.isActive
@@ -1195,25 +1221,25 @@ function ConnectionCard({ connection }: { connection: any }) {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-              <span className="text-xs" style={{ color: colors.textMuted }}>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {connection.fieldMappings.length} field
                 {connection.fieldMappings.length !== 1 ? "s" : ""} mapped
               </span>
-              <span className="text-xs" style={{ color: "#34d399" }}>
+              <span className="text-xs" style={{ color: "var(--success)" }}>
                 {generatedCount} generated
               </span>
               {errorCount > 0 && (
-                <span className="text-xs" style={{ color: "#f87171" }}>
+                <span className="text-xs" style={{ color: "var(--danger)" }}>
                   {errorCount} errors
                 </span>
               )}
               {pendingCount > 0 && (
-                <span className="text-xs" style={{ color: "#fbbf24" }}>
+                <span className="text-xs" style={{ color: "var(--warning)" }}>
                   {pendingCount} pending
                 </span>
               )}
               {connection.lastPolledAt && (
-                <span className="text-xs" style={{ color: colors.textDim }}>
+                <span className="text-xs" style={{ color: "var(--text-dim)" }}>
                   synced{" "}
                   {formatDistanceToNow(new Date(connection.lastPolledAt), {
                     addSuffix: true,
@@ -1233,17 +1259,17 @@ function ConnectionCard({ connection }: { connection: any }) {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                color: colors.textMuted,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = colors.accentLight;
-                e.currentTarget.style.borderColor = colors.accentBorder;
+                e.currentTarget.style.color = "var(--accent-light)";
+                e.currentTarget.style.borderColor = "var(--accent-border)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = colors.textMuted;
-                e.currentTarget.style.borderColor = colors.border;
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.borderColor = "var(--border-subtle)";
               }}
               title="Open Google Form"
             >
@@ -1259,17 +1285,18 @@ function ConnectionCard({ connection }: { connection: any }) {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                color: colors.textMuted,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#34d399";
-                e.currentTarget.style.borderColor = "rgba(52,211,153,0.25)";
+                e.currentTarget.style.color = "var(--success)";
+                e.currentTarget.style.borderColor =
+                  "color-mix(in srgb, var(--success) 25%, transparent)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = colors.textMuted;
-                e.currentTarget.style.borderColor = colors.border;
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.borderColor = "var(--border-subtle)";
               }}
               title="View responses in Google Sheets"
             >
@@ -1285,15 +1312,15 @@ function ConnectionCard({ connection }: { connection: any }) {
             disabled={syncing}
             className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
             style={{
-              background: "rgba(99,102,241,0.1)",
-              color: syncing ? colors.textDim : "#818cf8",
-              border: "1px solid rgba(99,102,241,0.2)",
+              background: "var(--accent-bg)",
+              color: syncing ? "var(--text-dim)" : "var(--accent-light)",
+              border: "1px solid var(--accent-border)",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.18)")
+              (e.currentTarget.style.background = "var(--accent-soft)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
+              (e.currentTarget.style.background = "var(--accent-bg)")
             }
             title="Sync now (works even when paused)"
           >
@@ -1311,24 +1338,24 @@ function ConnectionCard({ connection }: { connection: any }) {
             className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
             style={{
               background: connection.isActive
-                ? "rgba(251,191,36,0.1)"
-                : "rgba(52,211,153,0.1)",
-              color: connection.isActive ? "#fbbf24" : "#34d399",
+                ? "var(--warning-bg)"
+                : "var(--success-bg)",
+              color: connection.isActive ? "var(--warning)" : "var(--success)",
               border: `1px solid ${
                 connection.isActive
-                  ? "rgba(251,191,36,0.2)"
-                  : "rgba(52,211,153,0.2)"
+                  ? "color-mix(in srgb, var(--warning) 20%, transparent)"
+                  : "color-mix(in srgb, var(--success) 20%, transparent)"
               }`,
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.background = connection.isActive
-                ? "rgba(251,191,36,0.18)"
-                : "rgba(52,211,153,0.18)")
+                ? "color-mix(in srgb, var(--warning) 18%, transparent)"
+                : "color-mix(in srgb, var(--success) 18%, transparent)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = connection.isActive
-                ? "rgba(251,191,36,0.1)"
-                : "rgba(52,211,153,0.1)")
+                ? "var(--warning-bg)"
+                : "var(--success-bg)")
             }
             title={
               connection.isActive
@@ -1355,15 +1382,15 @@ function ConnectionCard({ connection }: { connection: any }) {
             onClick={() => setExpanded((v) => !v)}
             className="text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+              (e.currentTarget.style.background = "var(--bg-muted)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+              (e.currentTarget.style.background = "var(--bg-input)")
             }
           >
             {expanded ? "Hide" : "Details"}
@@ -1385,13 +1412,13 @@ function ConnectionCard({ connection }: { connection: any }) {
         {expanded && (
           <div
             className="border-t p-4 space-y-5"
-            style={{ borderColor: colors.border }}
+            style={{ borderColor: "var(--border-subtle)" }}
           >
             {/* Field mappings */}
             <div className="space-y-2">
               <p
                 className="text-xs font-semibold"
-                style={{ color: colors.textSecondary }}
+                style={{ color: "var(--text-secondary)" }}
               >
                 Field mappings
               </p>
@@ -1404,18 +1431,18 @@ function ConnectionCard({ connection }: { connection: any }) {
                     <code
                       className="px-2 py-1 rounded-lg font-mono text-[10px]"
                       style={{
-                        background: "rgba(255,255,255,0.06)",
-                        color: colors.textMuted,
+                        background: "var(--bg-input)",
+                        color: "var(--text-muted)",
                       }}
                     >
                       {m.formQuestionTitle}
                     </code>
-                    <span style={{ color: colors.textDim }}>→</span>
+                    <span style={{ color: "var(--text-dim)" }}>→</span>
                     <code
                       className="px-2 py-1 rounded-lg font-mono text-[10px]"
                       style={{
-                        background: "rgba(99,102,241,0.1)",
-                        color: "#818cf8",
+                        background: "var(--accent-bg)",
+                        color: "var(--accent-light)",
                       }}
                     >
                       {`{{${m.templateFieldName}}}`}
@@ -1430,7 +1457,7 @@ function ConnectionCard({ connection }: { connection: any }) {
               <div className="space-y-2">
                 <p
                   className="text-xs font-semibold"
-                  style={{ color: colors.textSecondary }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   Generated documents ({submissions.length})
                 </p>
@@ -1440,8 +1467,8 @@ function ConnectionCard({ connection }: { connection: any }) {
                       key={s._id}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
                       style={{
-                        background: "rgba(255,255,255,0.02)",
-                        border: `1px solid ${colors.border}`,
+                        background: "var(--bg-muted)",
+                        border: `1px solid var(--border-subtle)`,
                       }}
                     >
                       <span
@@ -1449,29 +1476,29 @@ function ConnectionCard({ connection }: { connection: any }) {
                         style={{
                           background:
                             s.status === "generated"
-                              ? "#34d399"
+                              ? "var(--success)"
                               : s.status === "error"
-                                ? "#f87171"
-                                : "#fbbf24",
+                                ? "var(--danger)"
+                                : "var(--warning)",
                         }}
                       />
                       <span
                         className="flex-1 text-xs truncate"
-                        style={{ color: colors.textSecondary }}
+                        style={{ color: "var(--text-secondary)" }}
                       >
                         {s.filename}.docx
                       </span>
                       {s.respondentEmail && (
                         <span
                           className="text-[10px] shrink-0 hidden sm:inline"
-                          style={{ color: colors.textDim }}
+                          style={{ color: "var(--text-dim)" }}
                         >
                           {s.respondentEmail}
                         </span>
                       )}
                       <span
                         className="text-[10px] shrink-0"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         {formatDistanceToNow(new Date(s.submittedAt), {
                           addSuffix: true,
@@ -1491,8 +1518,8 @@ function ConnectionCard({ connection }: { connection: any }) {
                           }}
                           className="text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors shrink-0 min-h-[44px] sm:min-h-0"
                           style={{
-                            background: "rgba(52,211,153,0.1)",
-                            color: "#34d399",
+                            background: "var(--success-bg)",
+                            color: "var(--success)",
                           }}
                         >
                           Download
@@ -1501,7 +1528,7 @@ function ConnectionCard({ connection }: { connection: any }) {
                       {s.status === "error" && (
                         <span
                           className="text-[9px] shrink-0"
-                          style={{ color: "#f87171" }}
+                          style={{ color: "var(--danger)" }}
                           title={s.errorMessage}
                         >
                           Error ⚠
@@ -1510,7 +1537,7 @@ function ConnectionCard({ connection }: { connection: any }) {
                       {s.status === "pending" && (
                         <span
                           className="text-[9px] shrink-0"
-                          style={{ color: "#fbbf24" }}
+                          style={{ color: "var(--warning)" }}
                         >
                           Processing…
                         </span>
@@ -1526,11 +1553,12 @@ function ConnectionCard({ connection }: { connection: any }) {
               onClick={() => setConfirmRemove(true)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
               style={{
-                color: "#f87171",
-                border: "1px solid rgba(248,113,113,0.2)",
+                color: "var(--danger)",
+                border:
+                  "1px solid color-mix(in srgb, var(--danger) 20%, transparent)",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
+                (e.currentTarget.style.background = "var(--danger-bg)")
               }
               onMouseLeave={(e) =>
                 (e.currentTarget.style.background = "transparent")
@@ -1578,11 +1606,11 @@ export default function ConnectFormPage() {
 
   const template = useQuery(
     api.templates.getById,
-    isLoaded && isSignedIn ? { id: templateId } : "skip",
+    isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
   const connections = useQuery(
     api.formConnections.getByTemplateId,
-    isLoaded && isSignedIn ? { templateId } : "skip",
+    isLoaded && isSignedIn ? { templateId } : "skip"
   );
   const googleAccount = useQuery(api.googleAccounts.getMyAccount);
 
@@ -1595,11 +1623,11 @@ export default function ConnectFormPage() {
       setGlobalError("Google sign-in was cancelled. Please try again.");
     else if (p === "token_exchange_failed")
       setGlobalError(
-        "Google authentication failed. Please try connecting again.",
+        "Google authentication failed. Please try connecting again."
       );
     else if (p === "oauth_state_invalid")
       setGlobalError(
-        "Something went wrong during Google sign-in. Please try again.",
+        "Something went wrong during Google sign-in. Please try again."
       );
 
     if (searchParams.get("connected") === "1") {
@@ -1622,11 +1650,11 @@ export default function ConnectFormPage() {
 
   if (template === undefined || connections === undefined) {
     return (
-      <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+      <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
         <div className="flex-1 flex items-center justify-center">
           <div
             className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: colors.accentLight }}
+            style={{ borderColor: "var(--accent-light)" }}
           />
         </div>
       </div>
@@ -1637,28 +1665,28 @@ export default function ConnectFormPage() {
     return (
       <div
         className="flex flex-col items-center justify-center h-full gap-4"
-        style={{ background: colors.bg }}
+        style={{ background: "var(--bg)" }}
       >
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           <AlertCircleIcon
             className="w-6 h-6"
-            style={{ color: colors.danger }}
+            style={{ color: "var(--danger)" }}
           />
         </div>
         <div className="text-center">
           <p
             className="text-sm font-semibold mb-1"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Template not found
           </p>
-          <p className="text-xs" style={{ color: colors.textDim }}>
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             This template may have been deleted.
           </p>
         </div>
@@ -1666,9 +1694,9 @@ export default function ConnectFormPage() {
           onClick={() => router.push("/templates")}
           className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textSecondary,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            color: "var(--text-secondary)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           Back to templates
@@ -1680,41 +1708,44 @@ export default function ConnectFormPage() {
   const isConnected = !!googleAccount;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       <div
         className="px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5 shrink-0"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
           <Link
             href="/templates"
             className="text-[11px] transition-colors"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.color = colors.accentLight)
+              (e.currentTarget.style.color = "var(--accent-light)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.color = colors.textMuted)
+              (e.currentTarget.style.color = "var(--text-muted)")
             }
           >
             Templates
           </Link>
-          <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
           <Link
             href={`/templates/${templateId}/edit`}
             className="text-[11px] transition-colors"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.color = colors.accentLight)
+              (e.currentTarget.style.color = "var(--accent-light)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.color = colors.textMuted)
+              (e.currentTarget.style.color = "var(--text-muted)")
             }
           >
             {template.name}
           </Link>
-          <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
-          <span className="text-[11px]" style={{ color: colors.textSecondary }}>
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
+          <span
+            className="text-[11px]"
+            style={{ color: "var(--text-secondary)" }}
+          >
             Connect Form
           </span>
         </div>
@@ -1723,11 +1754,14 @@ export default function ConnectFormPage() {
           <div>
             <h1
               className="text-[15px] sm:text-base font-semibold"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               Google Form connections
             </h1>
-            <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
+            <p
+              className="text-xs mt-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
               Auto-generate documents when your Google Form receives a response.
             </p>
           </div>
@@ -1736,18 +1770,17 @@ export default function ConnectFormPage() {
               onClick={() => setShowWizard(true)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0 min-h-[44px]"
               style={{
-                background: colors.accentBg,
-                color: colors.accentPale,
-                border: `1px solid ${colors.accentBorder}`,
+                background: "var(--accent-bg)",
+                color: "var(--accent-pale)",
+                border: `1px solid var(--accent-border)`,
                 whiteSpace: "nowrap",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = colors.accentBgHover;
-                e.currentTarget.style.boxShadow =
-                  "0 0 20px rgba(99,102,241,0.2)";
+                e.currentTarget.style.background = "var(--accent-bg-hover)";
+                e.currentTarget.style.boxShadow = "0 0 20px var(--accent-bg)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = colors.accentBg;
+                e.currentTarget.style.background = "var(--accent-bg)";
                 e.currentTarget.style.boxShadow = "none";
               }}
             >
@@ -1774,8 +1807,8 @@ export default function ConnectFormPage() {
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-input)",
+                border: `1px solid var(--border-subtle)`,
               }}
             >
               🔗
@@ -1783,13 +1816,13 @@ export default function ConnectFormPage() {
             <div>
               <p
                 className="text-sm font-semibold mb-2"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 Connect your Google account
               </p>
               <p
                 className="text-xs max-w-xs leading-relaxed mx-auto"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Connect once, then pick any Google Form from your Drive.
                 Responses automatically generate documents — no code needed.
@@ -1799,15 +1832,15 @@ export default function ConnectFormPage() {
               onClick={handleConnectGoogle}
               className="flex items-center gap-2 text-[13px] font-semibold px-5 py-3 rounded-xl transition-all duration-150 min-h-[44px]"
               style={{
-                background: "rgba(99,102,241,0.2)",
-                color: "#a5b4fc",
-                border: "1px solid rgba(99,102,241,0.35)",
+                background: "var(--accent-strong-bg)",
+                color: "var(--accent-pale)",
+                border: "1px solid var(--accent-border)",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.3)")
+                (e.currentTarget.style.background = "var(--accent-mid)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.2)")
+                (e.currentTarget.style.background = "var(--accent-strong-bg)")
               }
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -1847,7 +1880,7 @@ export default function ConnectFormPage() {
                 <div className="flex items-center justify-between mb-5">
                   <h2
                     className="text-sm font-semibold"
-                    style={{ color: colors.text }}
+                    style={{ color: "var(--text)" }}
                   >
                     New connection
                   </h2>
@@ -1855,12 +1888,11 @@ export default function ConnectFormPage() {
                     onClick={() => setShowWizard(false)}
                     className="text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
                     style={{
-                      color: colors.textMuted,
-                      border: `1px solid ${colors.border}`,
+                      color: "var(--text-muted)",
+                      border: `1px solid var(--border-subtle)`,
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.05)")
+                      (e.currentTarget.style.background = "var(--bg-muted)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.background = "transparent")
@@ -1878,26 +1910,26 @@ export default function ConnectFormPage() {
             ) : connections.length === 0 ? (
               <div
                 className="flex flex-col items-center justify-center py-16 text-center rounded-2xl"
-                style={{ border: `1px dashed ${colors.border}` }}
+                style={{ border: `1px dashed var(--border-subtle)` }}
               >
                 <div
                   className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
+                  style={{ background: "var(--bg-muted)" }}
                 >
                   <LinkIcon
                     className="w-5 h-5"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   />
                 </div>
                 <p
                   className="text-sm font-semibold mb-1"
-                  style={{ color: colors.textSecondary }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   No connections yet
                 </p>
                 <p
                   className="text-xs mb-5 max-w-xs leading-relaxed"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   Pick a Google Form to start generating documents
                   automatically.
@@ -1906,15 +1938,16 @@ export default function ConnectFormPage() {
                   onClick={() => setShowWizard(true)}
                   className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
                   style={{
-                    background: colors.accentBg,
-                    color: colors.accentPale,
-                    border: `1px solid ${colors.accentBorder}`,
+                    background: "var(--accent-bg)",
+                    color: "var(--accent-pale)",
+                    border: `1px solid var(--accent-border)`,
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = colors.accentBgHover)
+                    (e.currentTarget.style.background =
+                      "var(--accent-bg-hover)")
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = colors.accentBg)
+                    (e.currentTarget.style.background = "var(--accent-bg)")
                   }
                 >
                   <PlusIcon className="w-3.5 h-3.5" />

@@ -47,10 +47,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+:root,
+:root[data-theme="dark"],
+.theme-dark {
   --radius: 0.625rem;
+  color-scheme: dark;
 
-  /* ── Dark by default — matches landing page ── */
   --background: #0a0a0c;
   --foreground: rgba(255, 255, 255, 0.92);
 
@@ -93,43 +95,220 @@
   --sidebar-accent-foreground: rgba(255, 255, 255, 0.7);
   --sidebar-border: rgba(255, 255, 255, 0.05);
   --sidebar-ring: #6366f1;
+
+  --bg: #0a0a0c;
+  --bg-sidebar: #0e0e12;
+  --bg-card: rgba(255, 255, 255, 0.025);
+  --bg-card-hover: rgba(255, 255, 255, 0.045);
+  --bg-muted: rgba(255, 255, 255, 0.04);
+  --bg-input: rgba(255, 255, 255, 0.06);
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.11);
+
+  --text: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-muted: rgba(255, 255, 255, 0.38);
+  --text-dim: rgba(255, 255, 255, 0.22);
+  --text-placeholder: rgba(255, 255, 255, 0.18);
+
+  --accent-light: #818cf8;
+  --accent-pale: #a5b4fc;
+  --accent-bg: rgba(99, 102, 241, 0.1);
+  --accent-bg-hover: rgba(99, 102, 241, 0.18);
+  --accent-border: rgba(99, 102, 241, 0.22);
+
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.08);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.1);
+
+  --documents: #818cf8;
+  --collections: #34d399;
+  --templates: #f472b6;
+  --archive: #fbbf24;
+
+  --field-text: #60a5fa;
+  --field-date: #34d399;
+  --field-number: #fb923c;
+  --field-email: #c084fc;
+  --field-loop: #818cf8;
+  --field-condition: #f472b6;
+  --field-condition-inverse: #fb7185;
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.16);
+  --grid-line: rgba(255, 255, 255, 0.025);
+  --ambient-glow: rgba(99, 102, 241, 0.06);
+  --mobile-header-bg: rgba(10, 10, 14, 0.92);
+  --mobile-tab-bg: rgba(10, 10, 14, 0.96);
+  --popover-surface: #18181d;
+  --overlay-backdrop: rgba(0, 0, 0, 0.6);
+  --shadow-elevated: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(99, 102, 241, 0.08);
+  --shadow-flyout: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-logo-glow: 0 0 14px rgba(99, 102, 241, 0.4);
+  --org-strip-bg: rgba(99, 102, 241, 0.07);
+  --org-strip-border: rgba(99, 102, 241, 0.12);
+  --accent-soft: rgba(99, 102, 241, 0.12);
+  --accent-mid: rgba(99, 102, 241, 0.15);
+  --accent-strong-bg: rgba(99, 102, 241, 0.2);
+  --accent-highlight-bg: rgba(99, 102, 241, 0.25);
+  --accent-dash: rgba(99, 102, 241, 0.4);
+  --nav-active-bg: rgba(99, 102, 241, 0.13);
 }
 
-/* No .dark class needed — app is always dark */
+:root[data-theme="light"],
+.theme-light {
+  color-scheme: light;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eef2ff;
+  --secondary-foreground: #1e293b;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --accent: #e2e8f0;
+  --accent-foreground: #1e293b;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: rgba(15, 23, 42, 0.12);
+  --input: rgba(15, 23, 42, 0.08);
+  --ring: #4f46e5;
+
+  --chart-1: #4f46e5;
+  --chart-2: #7c3aed;
+  --chart-3: #0ea5e9;
+  --chart-4: #f97316;
+  --chart-5: #14b8a6;
+
+  --sidebar: #f3f6fb;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(15, 23, 42, 0.05);
+  --sidebar-accent-foreground: #334155;
+  --sidebar-border: rgba(15, 23, 42, 0.1);
+  --sidebar-ring: #4f46e5;
+
+  --bg: #f8fafc;
+  --bg-sidebar: #f3f6fb;
+  --bg-card: rgba(255, 255, 255, 0.86);
+  --bg-card-hover: rgba(255, 255, 255, 0.92);
+  --bg-muted: rgba(15, 23, 42, 0.025);
+  --bg-input: rgba(15, 23, 42, 0.04);
+
+  --border-subtle: rgba(15, 23, 42, 0.12);
+  --border-hover: rgba(15, 23, 42, 0.14);
+
+  --text: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --text-dim: #64748b;
+  --text-placeholder: #94a3b8;
+
+  --accent-light: #4f46e5;
+  --accent-pale: #3730a3;
+  --accent-bg: rgba(99, 102, 241, 0.1);
+  --accent-bg-hover: rgba(99, 102, 241, 0.18);
+  --accent-border: rgba(99, 102, 241, 0.28);
+
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.12);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.12);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.12);
+
+  --documents: #4f46e5;
+  --collections: #059669;
+  --templates: #db2777;
+  --archive: #d97706;
+
+  --field-text: #2563eb;
+  --field-date: #059669;
+  --field-number: #ea580c;
+  --field-email: #9333ea;
+  --field-loop: #4f46e5;
+  --field-condition: #db2777;
+  --field-condition-inverse: #e11d48;
+
+  --scrollbar-thumb: rgba(15, 23, 42, 0.2);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.3);
+  --grid-line: rgba(15, 23, 42, 0.06);
+  --ambient-glow: rgba(99, 102, 241, 0.12);
+  --mobile-header-bg: rgba(248, 250, 252, 0.92);
+  --mobile-tab-bg: rgba(248, 250, 252, 0.96);
+  --popover-surface: #ffffff;
+  --overlay-backdrop: rgba(15, 23, 42, 0.24);
+  --shadow-elevated: 0 2px 8px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(99, 102, 241, 0.05);
+  --shadow-flyout: 0 4px 10px rgba(15, 23, 42, 0.08);
+  --shadow-logo-glow: 0 0 10px rgba(79, 70, 229, 0.14);
+  --org-strip-bg: rgba(99, 102, 241, 0.1);
+  --org-strip-border: rgba(99, 102, 241, 0.2);
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-mid: rgba(99, 102, 241, 0.16);
+  --accent-strong-bg: rgba(99, 102, 241, 0.2);
+  --accent-highlight-bg: rgba(99, 102, 241, 0.24);
+  --accent-dash: rgba(79, 70, 229, 0.35);
+  --nav-active-bg: rgba(99, 102, 241, 0.16);
+}
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    @apply font-sans;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: "Geist", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  html {
-    @apply font-sans;
-  }
 }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--scrollbar-thumb);
   border-radius: 99px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--scrollbar-thumb-hover);
 }
 
-/* ── Shadcn component overrides for dark theme ── */
 [data-radix-popper-content-wrapper] {
-  --card: #18181d;
-  --popover: #18181d;
+  --card: var(--popover-surface);
+  --popover: var(--popover-surface);
 }
+
+
+
+

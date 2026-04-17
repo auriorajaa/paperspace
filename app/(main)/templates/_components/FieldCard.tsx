@@ -12,7 +12,7 @@ import {
   CheckIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import { fieldTypeColors } from "@/lib/design-tokens";
 
 export type FieldType =
   | "text"
@@ -89,9 +89,9 @@ function CopyButton({ text }: { text: string }) {
         toast.success("Copied");
       }}
       className="w-6 h-6 rounded flex items-center justify-center transition-colors shrink-0"
-      style={{ color: copied ? "#34d399" : colors.textDim }}
+      style={{ color: copied ? "#34d399" : "var(--text-dim)" }}
       onMouseEnter={(e) =>
-        (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
+        (e.currentTarget.style.background = "var(--bg-input)")
       }
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       title="Copy syntax"
@@ -175,8 +175,8 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
     <div
       className="rounded-xl overflow-hidden"
       style={{
-        background: "rgba(255,255,255,0.025)",
-        border: `1px solid ${expanded ? `${color}25` : colors.border}`,
+        background: "var(--bg-card)",
+        border: `1px solid ${expanded ? `${color}25` : "var(--border-subtle)"}`,
       }}
     >
       {/* Header */}
@@ -186,7 +186,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
         onClick={() => setExpanded((v) => !v)}
         onMouseEnter={(e) => {
           if (!expanded)
-            e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+            e.currentTarget.style.background = "var(--bg-muted)";
         }}
         onMouseLeave={(e) => {
           if (!expanded) e.currentTarget.style.background = "transparent";
@@ -194,7 +194,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
       >
         <GripVerticalIcon
           className="w-3.5 h-3.5 shrink-0"
-          style={{ color: "rgba(255,255,255,0.15)" }}
+          style={{ color: "var(--text-placeholder)" }}
         />
 
         <span
@@ -210,14 +210,14 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
 
         <span
           className="text-sm font-medium flex-1 truncate"
-          style={{ color: colors.text }}
+          style={{ color: "var(--text)" }}
         >
           {field.label}
         </span>
 
         <code
           className="hidden sm:block text-[10px] font-mono shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           {field.placeholder.length > 24
             ? field.placeholder.slice(0, 24) + "…"
@@ -232,14 +232,14 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
             onRemove();
           }}
           className="w-6 h-6 rounded flex items-center justify-center transition-colors shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "rgba(248,113,113,0.12)";
             e.currentTarget.style.color = "#f87171";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = colors.textDim;
+            e.currentTarget.style.color = "var(--text-dim)";
           }}
           title="Remove field"
         >
@@ -249,12 +249,12 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
         {expanded ? (
           <ChevronDownIcon
             className="w-3.5 h-3.5 shrink-0"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           />
         ) : (
           <ChevronRightIcon
             className="w-3.5 h-3.5 shrink-0"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           />
         )}
       </div>
@@ -270,7 +270,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Label
               </p>
@@ -280,15 +280,15 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                 placeholder="Field label"
                 className="w-full h-8 rounded-lg px-2.5 text-sm outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text)",
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.border = `1px solid ${color}40`)
                 }
                 onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                  (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                 }
               />
             </div>
@@ -297,7 +297,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Field name
               </p>
@@ -314,15 +314,15 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                 placeholder="field_name"
                 className="w-full h-8 rounded-lg px-2.5 text-sm font-mono outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text)",
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.border = `1px solid ${color}40`)
                 }
                 onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                  (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                 }
               />
             </div>
@@ -333,7 +333,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Type
               </p>
@@ -344,9 +344,9 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                 }
                 className="w-full h-8 rounded-lg px-2.5 text-sm outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text)",
                 }}
               >
                 {FIELD_TYPES.map((t) => (
@@ -365,7 +365,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Required
               </p>
@@ -376,9 +376,9 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                 style={{
                   background: field.required
                     ? `${color}15`
-                    : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${field.required ? `${color}30` : colors.border}`,
-                  color: field.required ? color : colors.textMuted,
+                    : "var(--bg-muted)",
+                  border: `1px solid ${field.required ? `${color}30` : "var(--border-subtle)"}`,
+                  color: field.required ? color : "var(--text-muted)",
                 }}
               >
                 <div
@@ -386,7 +386,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                   style={{
                     background: field.required
                       ? `${color}40`
-                      : "rgba(255,255,255,0.1)",
+                      : "var(--bg-input)",
                   }}
                 >
                   <span
@@ -423,7 +423,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
           <div className="space-y-1">
             <p
               className="text-[10px] font-semibold uppercase tracking-wide"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               Syntax — paste in editor
             </p>
@@ -431,8 +431,8 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
               <code
                 className="flex-1 text-[11px] font-mono px-2.5 py-1.5 rounded-lg truncate"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
                   color: "#a5b4fc",
                 }}
               >
@@ -448,14 +448,14 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
               <div className="flex items-center justify-between">
                 <p
                   className="text-[10px] font-semibold uppercase tracking-wide"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   Columns
                 </p>
                 <button
                   onClick={addSubField}
                   className="flex items-center gap-1 text-[10px] font-medium transition-colors"
-                  style={{ color: colors.accentLight }}
+                  style={{ color: "var(--accent-light)" }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 >
@@ -465,7 +465,7 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
               </div>
 
               {(field.subFields ?? []).length === 0 ? (
-                <p className="text-[10px]" style={{ color: colors.textDim }}>
+                <p className="text-[10px]" style={{ color: "var(--text-dim)" }}>
                   No columns yet — add columns to define the repeating table
                   structure.
                 </p>
@@ -485,26 +485,26 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
                         placeholder="Column name"
                         className="flex-1 h-7 rounded-lg px-2 text-xs outline-none"
                         style={{
-                          background: "rgba(255,255,255,0.05)",
-                          border: `1px solid ${colors.border}`,
-                          color: colors.text,
+                          background: "var(--bg-muted)",
+                          border: `1px solid var(--border-subtle)`,
+                          color: "var(--text)",
                         }}
                       />
                       <code
                         className="text-[10px] font-mono shrink-0"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         {`{{${sf.name}}}`}
                       </code>
                       <button
                         onClick={() => removeSubField(sf.id)}
                         className="w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover/sf:opacity-100 transition-all shrink-0"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.color = "#f87171";
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.color = colors.textDim;
+                          e.currentTarget.style.color = "var(--text-dim)";
                         }}
                       >
                         <XIcon className="w-3 h-3" />
@@ -520,3 +520,8 @@ export function FieldCard({ field, onChange, onRemove }: FieldCardProps) {
     </div>
   );
 }
+
+
+
+
+

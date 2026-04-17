@@ -29,7 +29,6 @@ import {
 import { OnlyOfficeEditor } from "@/components/OnlyOfficeEditor";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
-import { colors } from "@/lib/design-tokens";
 
 // ── Mobile detection hook ─────────────────────────────────────────────────────
 
@@ -77,14 +76,14 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
   return (
     <div
       className="flex flex-col h-full overflow-y-auto"
-      style={{ background: colors.bg }}
+      style={{ background: "var(--bg)" }}
     >
       {/* Visual banner */}
       <div
         className="relative flex flex-col items-center justify-center px-6 py-10 gap-5 text-center"
         style={{
-          background: `linear-gradient(180deg, ${colors.bgSidebar} 0%, ${colors.bg} 100%)`,
-          borderBottom: `1px solid ${colors.borderSubtle}`,
+          background: `linear-gradient(180deg, var(--bg-sidebar) 0%, var(--bg) 100%)`,
+          borderBottom: `1px solid var(--border-subtle)`,
         }}
       >
         {/* Device trio */}
@@ -93,26 +92,26 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-4 py-3 rounded-2xl"
             style={{
-              background: colors.accentBg,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             <MonitorIcon
               className="w-7 h-7"
-              style={{ color: colors.accentLight }}
+              style={{ color: "var(--accent-light)" }}
             />
             <div className="flex flex-col items-center gap-0.5">
               <span
                 className="text-[11px] font-semibold"
-                style={{ color: colors.accentLight }}
+                style={{ color: "var(--accent-light)" }}
               >
                 Desktop
               </span>
               <span
                 className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
                 style={{
-                  background: colors.accentBorder,
-                  color: colors.accentLight,
+                  background: "var(--accent-border)",
+                  color: "var(--accent-light)",
                 }}
               >
                 Recommended
@@ -124,17 +123,17 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             <TabletIcon
               className="w-6 h-6"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             />
             <span
               className="text-[11px] font-medium"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             >
               Tablet
             </span>
@@ -144,18 +143,18 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
-              background: "rgba(255,255,255,0.02)",
-              border: `1px solid ${colors.borderSubtle}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
               opacity: 0.45,
             }}
           >
             <SmartphoneIcon
               className="w-5 h-5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <span
               className="text-[11px] font-medium"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               Phone
             </span>
@@ -166,13 +165,13 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         <div className="space-y-1.5 max-w-[280px]">
           <p
             className="text-[15px] font-semibold leading-snug"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             This editor works best on a larger screen
           </p>
           <p
             className="text-[12px] leading-relaxed"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             The document editor uses a full-featured toolbar designed for mouse
             and keyboard — not a phone screen.
@@ -184,7 +183,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
       <div className="px-5 py-5 space-y-2">
         <p
           className="text-[10px] font-semibold uppercase tracking-wider mb-3"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           What you may experience on mobile
         </p>
@@ -193,16 +192,16 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
             key={i}
             className="flex items-start gap-3 px-3.5 py-2.5 rounded-xl"
             style={{
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${colors.borderSubtle}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
-            <span className="shrink-0 mt-0.5" style={{ color: colors.textDim }}>
+            <span className="shrink-0 mt-0.5" style={{ color: "var(--text-dim)" }}>
               {item.icon}
             </span>
             <p
               className="text-[12px] leading-relaxed"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               {item.text}
             </p>
@@ -217,9 +216,9 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           onClick={handleCopyLink}
           className="w-full flex items-center justify-center gap-2 text-[13px] font-medium px-4 py-3 rounded-xl transition-all"
           style={{
-            background: copied ? "rgba(34,197,94,0.1)" : colors.accentBg,
-            color: copied ? colors.success : colors.accentLight,
-            border: `1px solid ${copied ? colors.success + "40" : colors.accentBorder}`,
+            background: copied ? "rgba(34,197,94,0.1)" : "var(--accent-bg)",
+            color: copied ? "var(--success)" : "var(--accent-light)",
+            border: `1px solid ${copied ? "var(--success)" : "var(--accent-border)"}`,
           }}
         >
           {copied ? (
@@ -240,9 +239,9 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           onClick={onContinue}
           className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium px-4 py-2.5 rounded-xl"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: colors.textMuted,
-            border: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           Continue on mobile anyway
@@ -252,7 +251,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         <Link
           href="/documents"
           className="flex items-center justify-center text-[11px] py-1"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           ← Back to documents
         </Link>
@@ -332,9 +331,9 @@ function InlineTitle({
           placeholder="Document title…"
           className="flex-1 min-w-0 text-[13px] font-medium rounded-lg px-2.5 py-1.5 outline-none"
           style={{
-            background: "rgba(255,255,255,0.07)",
-            border: `1px solid ${colors.accentBorder}`,
-            color: colors.text,
+            background: "var(--bg-input)",
+            border: `1px solid var(--accent-border)`,
+            color: "var(--text)",
             maxWidth: 280,
           }}
         />
@@ -344,20 +343,20 @@ function InlineTitle({
           disabled={saving}
           className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg"
           style={{
-            background: colors.accentBg,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            border: `1px solid var(--accent-border)`,
           }}
           title="Save (Enter)"
         >
           {saving ? (
             <div
               className="w-3 h-3 rounded-full border-[1.5px] border-t-transparent animate-spin"
-              style={{ borderColor: colors.accentLight }}
+              style={{ borderColor: "var(--accent-light)" }}
             />
           ) : (
             <CheckIcon
               className="w-3 h-3"
-              style={{ color: colors.accentLight }}
+              style={{ color: "var(--accent-light)" }}
             />
           )}
         </button>
@@ -369,12 +368,12 @@ function InlineTitle({
           }}
           className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
           title="Cancel (Esc)"
         >
-          <XIcon className="w-3 h-3" style={{ color: colors.textDim }} />
+          <XIcon className="w-3 h-3" style={{ color: "var(--text-dim)" }} />
         </button>
       </div>
     );
@@ -389,27 +388,27 @@ function InlineTitle({
       className="flex items-center gap-2 px-2 py-1.5 rounded-lg min-w-0 max-w-[180px] sm:max-w-[320px] transition-colors"
       style={{
         // Subtle but always-present border signals interactivity on touch
-        background: "rgba(255,255,255,0.03)",
-        border: `1px solid ${colors.borderSubtle}`,
+        background: "var(--bg-muted)",
+        border: `1px solid var(--border-subtle)`,
       }}
       title="Rename document"
     >
       <span
         className="text-[13px] font-medium truncate"
-        style={{ color: saved ? colors.success : colors.text }}
+        style={{ color: saved ? "var(--success)" : "var(--text)" }}
       >
         {value}
       </span>
       {saved ? (
         <CheckIcon
           className="w-3 h-3 shrink-0"
-          style={{ color: colors.success }}
+          style={{ color: "var(--success)" }}
         />
       ) : (
         <PencilIcon
           className="w-3 h-3 shrink-0"
           // Always visible at 0.55 opacity — readable but not distracting
-          style={{ color: colors.accentLight, opacity: 0.55 }}
+          style={{ color: "var(--accent-light)", opacity: 0.55 }}
         />
       )}
     </button>
@@ -424,11 +423,11 @@ function StatusPill({ ready, error }: { ready: boolean; error: boolean }) {
       <div className="flex items-center gap-1.5">
         <div
           className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ background: colors.danger }}
+          style={{ background: "var(--danger)" }}
         />
         <span
           className="text-[11px] font-medium hidden sm:inline"
-          style={{ color: colors.danger }}
+          style={{ color: "var(--danger)" }}
         >
           Editor offline
         </span>
@@ -441,13 +440,13 @@ function StatusPill({ ready, error }: { ready: boolean; error: boolean }) {
         <div
           className="w-1.5 h-1.5 rounded-full shrink-0"
           style={{
-            background: colors.success,
-            boxShadow: `0 0 5px ${colors.success}`,
+            background: "var(--success)",
+            boxShadow: `0 0 5px var(--success)`,
           }}
         />
         <span
           className="text-[11px] font-medium hidden sm:inline"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           Live
         </span>
@@ -458,11 +457,11 @@ function StatusPill({ ready, error }: { ready: boolean; error: boolean }) {
     <div className="flex items-center gap-1.5">
       <div
         className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-        style={{ background: colors.textDim }}
+        style={{ background: "var(--text-dim)" }}
       />
       <span
         className="text-[11px] hidden sm:inline"
-        style={{ color: colors.textDim }}
+        style={{ color: "var(--text-dim)" }}
       >
         Connecting…
       </span>
@@ -484,34 +483,34 @@ const ERROR_META: Record<
   { icon: React.ReactNode; title: string; hint: string }
 > = {
   "not-found": {
-    icon: <FileXIcon className="w-6 h-6" style={{ color: colors.textDim }} />,
+    icon: <FileXIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />,
     title: "Document not found",
     hint: "This document may have been deleted or moved.",
   },
   "no-access": {
     icon: (
-      <ShieldOffIcon className="w-6 h-6" style={{ color: colors.textDim }} />
+      <ShieldOffIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
     ),
     title: "Access denied",
     hint: "You don't have permission to view this document.",
   },
   network: {
     icon: (
-      <AlertCircleIcon className="w-6 h-6" style={{ color: colors.textDim }} />
+      <AlertCircleIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
     ),
     title: "Connection problem",
     hint: "Check your internet connection and try again.",
   },
   storage: {
     icon: (
-      <AlertCircleIcon className="w-6 h-6" style={{ color: colors.textDim }} />
+      <AlertCircleIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
     ),
     title: "File unavailable",
     hint: "The document file couldn't be retrieved from storage.",
   },
   generic: {
     icon: (
-      <AlertCircleIcon className="w-6 h-6" style={{ color: colors.textDim }} />
+      <AlertCircleIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
     ),
     title: "Something went wrong",
     hint: "An unexpected error occurred. Please try again.",
@@ -531,30 +530,30 @@ function ErrorState({
   return (
     <div
       className="flex flex-col items-center justify-center h-screen gap-5 p-8 text-center"
-      style={{ background: colors.bg }}
+      style={{ background: "var(--bg)" }}
     >
       <div
         className="w-14 h-14 rounded-2xl flex items-center justify-center"
         style={{
-          background: "rgba(255,255,255,0.04)",
-          border: `1px solid ${colors.border}`,
+          background: "var(--bg-muted)",
+          border: `1px solid var(--border-subtle)`,
         }}
       >
         {meta.icon}
       </div>
       <div className="space-y-1.5 max-w-sm">
-        <p className="text-[14px] font-semibold" style={{ color: colors.text }}>
+        <p className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>
           {meta.title}
         </p>
         <p
           className="text-[12px] leading-relaxed"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           {meta.hint}
           {extraHint && (
             <>
               {" "}
-              <span style={{ color: colors.textDim }}>{extraHint}</span>
+              <span style={{ color: "var(--text-dim)" }}>{extraHint}</span>
             </>
           )}
         </p>
@@ -583,20 +582,20 @@ function EditorErrorPanel({
       <div
         className="w-12 h-12 rounded-2xl flex items-center justify-center"
         style={{
-          background: colors.dangerBg,
-          border: `1px solid ${colors.danger}22`,
+          background: "var(--danger-bg)",
+          border: `1px solid var(--danger)22`,
         }}
       >
-        <AlertCircleIcon className="w-6 h-6" style={{ color: colors.danger }} />
+        <AlertCircleIcon className="w-6 h-6" style={{ color: "var(--danger)" }} />
       </div>
 
       <div className="space-y-1.5 max-w-xs">
-        <p className="text-[14px] font-semibold" style={{ color: colors.text }}>
+        <p className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>
           Editor couldn&apos;t load
         </p>
         <p
           className="text-[12px] leading-relaxed"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           {isRepeated
             ? "The editor is still having trouble. This might be a server issue."
@@ -608,17 +607,17 @@ function EditorErrorPanel({
         <div
           className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl max-w-xs text-left"
           style={{
-            background: "rgba(255,255,255,0.03)",
-            border: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           <InfoIcon
             className="w-3.5 h-3.5 mt-0.5 shrink-0"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           />
           <p
             className="text-[11px] leading-relaxed"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             The OnlyOffice server may be temporarily unavailable. Try again in a
             few minutes.
@@ -630,9 +629,9 @@ function EditorErrorPanel({
         onClick={onRetry}
         className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2 rounded-xl transition-colors"
         style={{
-          background: "rgba(255,255,255,0.06)",
-          color: colors.textSecondary,
-          border: `1px solid ${colors.border}`,
+          background: "var(--bg-input)",
+          color: "var(--text-secondary)",
+          border: `1px solid var(--border-subtle)`,
         }}
       >
         <RefreshCwIcon className="w-3.5 h-3.5" />
@@ -742,34 +741,34 @@ export default function DocumentEditorPage() {
 
   if (document === undefined) {
     return (
-      <div className="flex flex-col h-dvh" style={{ background: colors.bg }}>
+      <div className="flex flex-col h-dvh" style={{ background: "var(--bg)" }}>
         {/* Mobile-only spacer — only shows on screens < sm to clear the overlay top navbar */}
         <div className="h-12 sm:hidden shrink-0" />
         {/* Skeleton header — always 44px */}
         <div
           className="flex items-center gap-3 px-4 h-11 shrink-0 animate-pulse"
           style={{
-            borderBottom: `1px solid ${colors.borderSubtle}`,
-            background: colors.bgSidebar,
+            borderBottom: `1px solid var(--border-subtle)`,
+            background: "var(--bg-sidebar)",
           }}
         >
           <div
             className="w-20 h-3 rounded"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
-          <div className="w-px h-4" style={{ background: colors.border }} />
+          <div className="w-px h-4" style={{ background: "var(--border-subtle)" }} />
           <div
             className="w-44 h-3 rounded"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div
               className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-              style={{ borderColor: colors.accentLight }}
+              style={{ borderColor: "var(--accent-light)" }}
             />
-            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+            <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
               Loading document…
             </p>
           </div>
@@ -796,9 +795,9 @@ export default function DocumentEditorPage() {
               onClick={() => router.push("/documents")}
               className="text-[12px] font-medium px-4 py-2 rounded-xl transition-colors"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textSecondary,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-input)",
+                color: "var(--text-secondary)",
+                border: `1px solid var(--border-subtle)`,
               }}
             >
               ← Back to Documents
@@ -806,7 +805,7 @@ export default function DocumentEditorPage() {
             {!organization && (
               <span
                 className="flex items-center gap-1.5 text-[11px]"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 <BuildingIcon className="w-3.5 h-3.5" />
                 Switch org via the account menu
@@ -823,7 +822,7 @@ export default function DocumentEditorPage() {
   return (
     <div
       className="flex flex-col overflow-hidden h-dvh"
-      style={{ background: colors.bg }}
+      style={{ background: "var(--bg)" }}
     >
       {/*
        * ── Mobile-only spacer ──────────────────────────────────────────────────
@@ -840,25 +839,25 @@ export default function DocumentEditorPage() {
       <div
         className="flex items-center gap-2 px-3 sm:px-4 h-11 shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: colors.bgSidebar,
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-sidebar)",
         }}
       >
         {/* Back */}
         <Link
           href="/documents"
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.color = colors.textSecondary)
+            (e.currentTarget.style.color = "var(--text-secondary)")
           }
-          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Documents</span>
         </Link>
 
-        <span style={{ color: colors.textDim, fontSize: 12 }}>/</span>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
 
         {/* Inline rename — touch-friendly, pencil always visible */}
         <InlineTitle
@@ -873,9 +872,9 @@ export default function DocumentEditorPage() {
           <span
             className="hidden sm:flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
             style={{
-              background: colors.accentBg,
-              color: colors.accentLight,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              color: "var(--accent-light)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             <BuildingIcon className="w-2.5 h-2.5" />
@@ -907,9 +906,9 @@ export default function DocumentEditorPage() {
                 }}
                 className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2 rounded-xl transition-colors"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  color: colors.textSecondary,
-                  border: `1px solid ${colors.border}`,
+                  background: "var(--bg-input)",
+                  color: "var(--text-secondary)",
+                  border: `1px solid var(--border-subtle)`,
                 }}
               >
                 <RefreshCwIcon className="w-3.5 h-3.5" />
@@ -922,9 +921,9 @@ export default function DocumentEditorPage() {
             <div className="flex flex-col items-center gap-3">
               <div
                 className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.accentLight }}
+                style={{ borderColor: "var(--accent-light)" }}
               />
-              <p className="text-[12px]" style={{ color: colors.textMuted }}>
+              <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
                 Preparing document…
               </p>
             </div>
@@ -940,13 +939,13 @@ export default function DocumentEditorPage() {
             {!editorReady && (
               <div
                 className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
-                style={{ background: colors.bg }}
+                style={{ background: "var(--bg)" }}
               >
                 <div
                   className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-                  style={{ borderColor: colors.accentLight }}
+                  style={{ borderColor: "var(--accent-light)" }}
                 />
-                <p className="text-[12px]" style={{ color: colors.textMuted }}>
+                <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
                   Loading editor…
                 </p>
               </div>
@@ -976,3 +975,8 @@ export default function DocumentEditorPage() {
     </div>
   );
 }
+
+
+
+
+

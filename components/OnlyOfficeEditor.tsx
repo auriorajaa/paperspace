@@ -1,8 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useState, useRef } from "react";
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
+import type { ComponentType } from "react";
+
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface OnlyOfficeEditorProps {
   fileUrl: string;
@@ -18,12 +21,11 @@ interface OnlyOfficeEditorProps {
   onError?: () => void;
 }
 
-// Loading step messages for a more informative loading UX
 const LOADING_STEPS = [
-  { delay: 0, label: "Connecting to editor…" },
-  { delay: 1500, label: "Fetching document…" },
-  { delay: 3000, label: "Rendering content…" },
-  { delay: 6000, label: "Almost ready…" },
+  { delay: 0, label: "Connecting to editor..." },
+  { delay: 1500, label: "Fetching document..." },
+  { delay: 3000, label: "Rendering content..." },
+  { delay: 6000, label: "Almost ready..." },
 ];
 
 function LoadingSteps() {
@@ -72,6 +74,9 @@ function OnlyOfficeInner({
   } | null>(null);
   const [configError, setConfigError] = useState(false);
   const mountedRef = useRef(true);
+  const { theme } = useTheme();
+
+  const uiTheme = theme === "light" ? "default-light" : "default-dark";
 
   useEffect(() => {
     mountedRef.current = true;
@@ -136,7 +141,6 @@ function OnlyOfficeInner({
   ]);
 
   if (configError) {
-    // Parent already handles error UI via onError — show minimal state here
     return null;
   }
 
@@ -148,12 +152,31 @@ function OnlyOfficeInner({
     );
   }
 
+  const baseConfig = editorData.config as {
+    editorConfig?: {
+      customization?: Record<string, unknown>;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+
+  const themedConfig = {
+    ...baseConfig,
+    editorConfig: {
+      ...(baseConfig.editorConfig ?? {}),
+      customization: {
+        ...(baseConfig.editorConfig?.customization ?? {}),
+        uiTheme,
+      },
+    },
+  };
+
   return (
     <div className="relative flex-1 w-full h-full" style={{ minHeight: 0 }}>
       <DocumentEditor
         id={editorId}
         documentServerUrl={editorData.serverUrl}
-        config={editorData.config}
+        config={themedConfig}
         events_onDocumentReady={() => {
           onReady?.();
         }}
@@ -179,4 +202,6 @@ export const OnlyOfficeEditor = dynamic(
       </div>
     ),
   }
-) as React.ComponentType<OnlyOfficeEditorProps>;
+) as ComponentType<OnlyOfficeEditorProps>;
+
+

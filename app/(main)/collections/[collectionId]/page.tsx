@@ -84,7 +84,6 @@ import {
 } from "@/components/ui/dialog";
 import Link from "next/link";
 import { useDebounce } from "@/lib/useDebounce";
-import { colors } from "@/lib/design-tokens";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities (shared with collections page)
@@ -223,7 +222,7 @@ function AddDocumentDialog({
           <div className="relative">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
               placeholder="Search your papers…"
@@ -232,33 +231,33 @@ function AddDocumentDialog({
               autoFocus
               className="w-full h-9 pl-8 pr-3 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                (e.currentTarget.style.border = `1px solid var(--accent-border)`)
               }
               onBlur={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
           </div>
           <div
             className="max-h-64 overflow-y-auto space-y-0.5 rounded-xl p-1"
-            style={{ border: `1px solid ${colors.border}` }}
+            style={{ border: `1px solid var(--border-subtle)` }}
           >
             {searchResults === undefined ? (
               <div className="flex items-center justify-center py-8">
                 <div
                   className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
-                  style={{ borderColor: colors.accentLight }}
+                  style={{ borderColor: "var(--accent-light)" }}
                 />
               </div>
             ) : searchResults.length === 0 ? (
               <div
                 className="flex items-center justify-center py-8 text-[12px]"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 No papers found
               </div>
@@ -274,7 +273,7 @@ function AddDocumentDialog({
                     disabled={alreadyIn}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
                     style={{
-                      background: isSel ? colors.accentBg : "transparent",
+                      background: isSel ? "var(--accent-bg)" : "transparent",
                       opacity: alreadyIn ? 0.5 : 1,
                       cursor: alreadyIn ? "not-allowed" : "pointer",
                       minHeight: 44,
@@ -282,7 +281,7 @@ function AddDocumentDialog({
                     onMouseEnter={(e) => {
                       if (!alreadyIn && !isSel)
                         e.currentTarget.style.background =
-                          "rgba(255,255,255,0.04)";
+                          "var(--bg-muted)";
                     }}
                     onMouseLeave={(e) => {
                       if (!isSel)
@@ -294,7 +293,7 @@ function AddDocumentDialog({
                     </span>
                     <span
                       className="flex-1 text-[13px] truncate"
-                      style={{ color: colors.text }}
+                      style={{ color: "var(--text)" }}
                     >
                       {doc.title}
                     </span>
@@ -302,8 +301,8 @@ function AddDocumentDialog({
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 rounded-md shrink-0"
                         style={{
-                          background: "rgba(255,255,255,0.06)",
-                          color: colors.textDim,
+                          background: "var(--bg-input)",
+                          color: "var(--text-dim)",
                         }}
                       >
                         Already in
@@ -311,7 +310,7 @@ function AddDocumentDialog({
                     ) : isSel ? (
                       <CheckIcon
                         className="w-4 h-4 shrink-0"
-                        style={{ color: colors.accentLight }}
+                        style={{ color: "var(--accent-light)" }}
                       />
                     ) : null}
                   </button>
@@ -320,7 +319,7 @@ function AddDocumentDialog({
             )}
           </div>
           {selected.size > 0 && (
-            <p className="text-[11px]" style={{ color: colors.textMuted }}>
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {selected.size} paper{selected.size !== 1 ? "s" : ""} selected
             </p>
           )}
@@ -331,9 +330,9 @@ function AddDocumentDialog({
             disabled={loading}
             className="px-4 py-2 rounded-xl text-[13px] font-medium"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             Cancel
@@ -343,9 +342,9 @@ function AddDocumentDialog({
             disabled={loading || !selected.size}
             className="px-4 py-2 rounded-xl text-[13px] font-medium"
             style={{
-              background: colors.accentBg,
-              color: colors.accentLight,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              color: "var(--accent-light)",
+              border: `1px solid var(--accent-border)`,
               opacity: !selected.size ? 0.5 : 1,
             }}
           >
@@ -397,13 +396,13 @@ function DocCard({
         className="rounded-2xl flex flex-col overflow-hidden cursor-pointer transition-all duration-200 h-full"
         style={{
           background: hovered
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(255,255,255,0.025)",
-          border: `1px solid ${hovered ? accentColor + "35" : colors.border}`,
+            ? "var(--bg-card-hover)"
+            : "var(--bg-card)",
+          border: `1px solid ${hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
           boxShadow: hovered
-            ? `0 0 0 1px ${accentColor}12, 0 8px 24px rgba(0,0,0,0.28)`
+            ? "var(--shadow-elevated)"
             : "none",
-          transform: hovered ? "translateY(-1px)" : "none",
+          transform: "none",
         }}
         onClick={() => router.push(`/documents/${document._id}`)}
         onMouseEnter={() => setHovered(true)}
@@ -420,20 +419,20 @@ function DocCard({
           <div className="flex items-start gap-2.5">
             <div
               className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
-              style={{ background: "rgba(255,255,255,0.07)" }}
+              style={{ background: "var(--bg-input)" }}
             >
               {document.icon ?? "📄"}
             </div>
             <div className="flex-1 min-w-0">
               <p
                 className="text-[13px] font-semibold leading-snug line-clamp-2"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {document.title}
               </p>
               <p
                 className="text-[11px] mt-0.5 tabular-nums"
-                style={{ color: "rgba(255,255,255,0.42)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {smartDateShort(document._creationTime)}
               </p>
@@ -449,9 +448,9 @@ function DocCard({
                 disabled={removing}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textDim,
+                  background: "var(--bg-input)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-dim)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "rgba(248,113,113,0.12)";
@@ -460,16 +459,16 @@ function DocCard({
                     "1px solid rgba(248,113,113,0.2)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                  e.currentTarget.style.color = colors.textDim;
-                  e.currentTarget.style.border = `1px solid ${colors.border}`;
+                  e.currentTarget.style.background = "var(--bg-input)";
+                  e.currentTarget.style.color = "var(--text-dim)";
+                  e.currentTarget.style.border = `1px solid var(--border-subtle)`;
                 }}
                 title="Remove from collection"
               >
                 {removing ? (
                   <div
                     className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: colors.textDim }}
+                    style={{ borderColor: "var(--text-dim)" }}
                   />
                 ) : (
                   <XIcon className="w-3.5 h-3.5" />
@@ -486,13 +485,13 @@ function DocCard({
                 color:
                   document.aiSummaryStatus === "done"
                     ? accentColor + "bb"
-                    : "rgba(255,255,255,0.18)",
+                    : "var(--border-subtle)",
               }}
             />
             {document.aiSummaryStatus === "done" && document.aiSummary ? (
               <p
                 className="text-[11px] leading-relaxed line-clamp-3"
-                style={{ color: "rgba(255,255,255,0.48)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {document.aiSummary}
               </p>
@@ -504,7 +503,7 @@ function DocCard({
                 />
                 <p
                   className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.3)" }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   Generating summary…
                 </p>
@@ -512,7 +511,7 @@ function DocCard({
             ) : (
               <p
                 className="text-[11px] italic"
-                style={{ color: "rgba(255,255,255,0.2)" }}
+                style={{ color: "var(--text-dim)" }}
               >
                 No summary yet
               </p>
@@ -577,8 +576,8 @@ function DocListRow({
       <div
         className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150"
         style={{
-          borderBottom: `1px solid ${colors.border}`,
-          background: hovered ? "rgba(255,255,255,0.02)" : "transparent",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: hovered ? "var(--bg-card-hover)" : "transparent",
         }}
         onClick={() => router.push(`/documents/${document._id}`)}
         onMouseEnter={() => setHovered(true)}
@@ -586,14 +585,14 @@ function DocListRow({
       >
         <span
           className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0 mt-0.5"
-          style={{ background: "rgba(255,255,255,0.06)" }}
+          style={{ background: "var(--bg-input)" }}
         >
           {document.icon ?? "📄"}
         </span>
         <div className="flex-1 min-w-0 space-y-1">
           <p
             className="text-[13px] font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             {document.title}
           </p>
@@ -605,13 +604,13 @@ function DocListRow({
                 color:
                   document.aiSummaryStatus === "done"
                     ? accentColor + "aa"
-                    : "rgba(255,255,255,0.15)",
+                    : "var(--border-subtle)",
               }}
             />
             {document.aiSummaryStatus === "done" && document.aiSummary ? (
               <p
                 className="text-[11px] leading-relaxed line-clamp-2"
-                style={{ color: "rgba(255,255,255,0.45)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {document.aiSummary}
               </p>
@@ -623,7 +622,7 @@ function DocListRow({
                 />
                 <p
                   className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.3)" }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   Generating…
                 </p>
@@ -631,7 +630,7 @@ function DocListRow({
             ) : (
               <p
                 className="text-[11px] italic"
-                style={{ color: "rgba(255,255,255,0.2)" }}
+                style={{ color: "var(--text-dim)" }}
               >
                 No summary yet
               </p>
@@ -639,7 +638,7 @@ function DocListRow({
           </div>
           <p
             className="text-[11px] tabular-nums"
-            style={{ color: "rgba(255,255,255,0.35)" }}
+            style={{ color: "var(--text-muted)" }}
           >
             {smartDate(document._creationTime)}
           </p>
@@ -656,24 +655,24 @@ function DocListRow({
             disabled={removing}
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              border: `1px solid ${colors.border}`,
-              color: colors.textDim,
+              background: "var(--bg-input)",
+              border: `1px solid var(--border-subtle)`,
+              color: "var(--text-dim)",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "rgba(248,113,113,0.12)";
               e.currentTarget.style.color = "#f87171";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-              e.currentTarget.style.color = colors.textDim;
+              e.currentTarget.style.background = "var(--bg-input)";
+              e.currentTarget.style.color = "var(--text-dim)";
             }}
             title="Remove from collection"
           >
             {removing ? (
               <div
                 className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.textDim }}
+                style={{ borderColor: "var(--text-dim)" }}
               />
             ) : (
               <XIcon className="w-3.5 h-3.5" />
@@ -710,39 +709,39 @@ function DocGridSkeleton() {
     <div
       className="rounded-2xl overflow-hidden animate-pulse"
       style={{
-        background: "rgba(255,255,255,0.025)",
-        border: `1px solid ${colors.border}`,
+        background: "var(--bg-card)",
+        border: `1px solid var(--border-subtle)`,
       }}
     >
       <div
         className="h-0.5 w-full"
-        style={{ background: "rgba(255,255,255,0.06)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="p-3.5 space-y-2.5">
         <div className="flex items-start gap-2.5">
           <div
             className="w-8 h-8 rounded-lg shrink-0"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div className="flex-1 space-y-1.5">
             <div
               className="h-3.5 rounded w-3/4"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: "var(--bg-input)" }}
             />
             <div
               className="h-2.5 rounded w-1/3"
-              style={{ background: "rgba(255,255,255,0.05)" }}
+              style={{ background: "var(--bg-muted)" }}
             />
           </div>
         </div>
         <div className="space-y-1.5">
           <div
             className="h-2.5 rounded w-full"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-2.5 rounded w-4/5"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
       </div>
@@ -754,29 +753,29 @@ function DocListSkeleton() {
   return (
     <div
       className="flex items-start gap-3 px-4 sm:px-5 py-3 animate-pulse"
-      style={{ borderBottom: `1px solid ${colors.border}` }}
+      style={{ borderBottom: `1px solid var(--border-subtle)` }}
     >
       <div
         className="w-8 h-8 rounded-lg shrink-0 mt-0.5"
-        style={{ background: "rgba(255,255,255,0.07)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="flex-1 space-y-1.5">
         <div
           className="h-3.5 rounded w-1/2"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div
           className="h-2.5 rounded w-3/4"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div
           className="h-2.5 rounded w-1/4"
-          style={{ background: "rgba(255,255,255,0.04)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
       </div>
       <div
         className="w-7 h-7 rounded-lg shrink-0"
-        style={{ background: "rgba(255,255,255,0.05)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
     </div>
   );
@@ -862,28 +861,28 @@ export default function CollectionDetailPage() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (collection === undefined) {
     return (
-      <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+      <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
         <div
           className="px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-5 animate-pulse"
-          style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+          style={{ borderBottom: `1px solid var(--border-subtle)` }}
         >
           <div
             className="h-3 rounded w-24 mb-5"
-            style={{ background: "rgba(255,255,255,0.06)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div className="flex items-center gap-4">
             <div
               className="w-14 h-14 rounded-2xl shrink-0"
-              style={{ background: "rgba(255,255,255,0.07)" }}
+              style={{ background: "var(--bg-input)" }}
             />
             <div className="flex-1 space-y-2">
               <div
                 className="h-5 rounded w-48"
-                style={{ background: "rgba(255,255,255,0.08)" }}
+                style={{ background: "var(--bg-input)" }}
               />
               <div
                 className="h-3 rounded w-32"
-                style={{ background: "rgba(255,255,255,0.05)" }}
+                style={{ background: "var(--bg-muted)" }}
               />
             </div>
           </div>
@@ -901,27 +900,27 @@ export default function CollectionDetailPage() {
     return (
       <div
         className="flex flex-col items-center justify-center h-full gap-4"
-        style={{ background: colors.bg }}
+        style={{ background: "var(--bg)" }}
       >
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center"
-          style={{ background: colors.dangerBg }}
+          style={{ background: "var(--danger-bg)" }}
         >
           <AlertCircleIcon
             className="w-6 h-6"
-            style={{ color: colors.danger }}
+            style={{ color: "var(--danger)" }}
           />
         </div>
-        <p className="text-[14px] font-semibold" style={{ color: colors.text }}>
+        <p className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>
           Collection not found
         </p>
         <button
           onClick={() => router.push("/collections")}
           className="text-[12px] font-medium px-4 py-2 rounded-xl"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textSecondary,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            color: "var(--text-secondary)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           Back to Collections
@@ -933,7 +932,7 @@ export default function CollectionDetailPage() {
   const tags = collection.tags ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* Accent top line */}
       <div
         className="h-0.5 shrink-0"
@@ -945,15 +944,15 @@ export default function CollectionDetailPage() {
       {/* ── Header ── */}
       <div
         className="px-4 sm:px-6 pt-[calc(48px+0.75rem)] sm:pt-4 pb-4 shrink-0"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         {/* Breadcrumb */}
         <Link
           href="/collections"
           className="inline-flex items-center gap-1 text-[11px] font-medium mb-4 transition-colors"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           Collections
@@ -980,7 +979,7 @@ export default function CollectionDetailPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1
                   className="text-base sm:text-lg font-semibold tracking-tight"
-                  style={{ color: colors.text }}
+                  style={{ color: "var(--text)" }}
                 >
                   {collection.name}
                 </h1>
@@ -991,7 +990,7 @@ export default function CollectionDetailPage() {
               {collection.description && (
                 <p
                   className="text-[12px] sm:text-sm mt-0.5"
-                  style={{ color: colors.textMuted }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {collection.description}
                 </p>
@@ -1004,7 +1003,7 @@ export default function CollectionDetailPage() {
                   {documents?.length ?? 0} paper
                   {(documents?.length ?? 0) !== 1 ? "s" : ""}
                 </span>
-                <span className="text-[11px]" style={{ color: colors.textDim }}>
+                <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Created {smartDateShort(collection._creationTime)}
                 </span>
                 {tags.map((tag) => (
@@ -1033,9 +1032,9 @@ export default function CollectionDetailPage() {
               style={{
                 background: collection.isFavorite
                   ? "rgba(251,191,36,0.1)"
-                  : "rgba(255,255,255,0.05)",
-                color: collection.isFavorite ? "#fbbf24" : colors.textMuted,
-                border: `1px solid ${collection.isFavorite ? "rgba(251,191,36,0.3)" : colors.border}`,
+                  : "var(--bg-muted)",
+                color: collection.isFavorite ? "#fbbf24" : "var(--text-muted)",
+                border: `1px solid ${collection.isFavorite ? "rgba(251,191,36,0.3)" : "var(--border-subtle)"}`,
               }}
             >
               <StarIcon
@@ -1063,8 +1062,8 @@ export default function CollectionDetailPage() {
       <div
         className="shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: "rgba(255,255,255,0.01)",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-muted)",
         }}
       >
         <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5">
@@ -1072,7 +1071,7 @@ export default function CollectionDetailPage() {
           <div className="relative flex-1 max-w-sm">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
               placeholder="Search in this collection…"
@@ -1080,22 +1079,22 @@ export default function CollectionDetailPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
                 (e.currentTarget.style.border = `1px solid ${accentColor}40`)
               }
               onBlur={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -1108,9 +1107,9 @@ export default function CollectionDetailPage() {
               <button
                 className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium shrink-0"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
               >
                 {DOC_SORT_LABELS[docSort]}
@@ -1123,7 +1122,7 @@ export default function CollectionDetailPage() {
                   {docSort === key && (
                     <CheckIcon
                       className="w-3 h-3 mr-2"
-                      style={{ color: colors.accentLight }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   )}
                   {DOC_SORT_LABELS[key]}
@@ -1136,8 +1135,8 @@ export default function CollectionDetailPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {[
@@ -1150,7 +1149,7 @@ export default function CollectionDetailPage() {
                 className="p-1.5 rounded-lg transition-all"
                 style={{
                   background: view === v ? `${accentColor}25` : "transparent",
-                  color: view === v ? accentColor : colors.textDim,
+                  color: view === v ? accentColor : "var(--text-dim)",
                 }}
               >
                 <Icon className="w-4 h-4" />
@@ -1183,16 +1182,16 @@ export default function CollectionDetailPage() {
         {/* Mobile sort row */}
         <div
           className="flex items-center gap-2 px-4 py-2 sm:hidden"
-          style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+          style={{ borderTop: `1px solid var(--border-subtle)` }}
         >
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             Sort:
           </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className="flex items-center gap-1 text-[11px] font-medium"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {DOC_SORT_LABELS[docSort]}
                 <ChevronDownIcon className="w-3 h-3" />
@@ -1204,7 +1203,7 @@ export default function CollectionDetailPage() {
                   {docSort === key && (
                     <CheckIcon
                       className="w-3 h-3 mr-2"
-                      style={{ color: colors.accentLight }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   )}
                   {DOC_SORT_LABELS[key]}
@@ -1215,7 +1214,7 @@ export default function CollectionDetailPage() {
           {filteredDocs.length > 0 && (
             <span
               className="ml-auto text-[11px]"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               {filteredDocs.length} paper{filteredDocs.length !== 1 ? "s" : ""}
             </span>
@@ -1227,9 +1226,9 @@ export default function CollectionDetailPage() {
       {search && !!(filteredDocs.length !== (documents?.length ?? 0)) && (
         <div
           className="hidden sm:block px-4 sm:px-6 py-2 shrink-0"
-          style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+          style={{ borderBottom: `1px solid var(--border-subtle)` }}
         >
-          <p className="text-[11px]" style={{ color: colors.textMuted }}>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
             {filteredDocs.length} result{filteredDocs.length !== 1 ? "s" : ""}{" "}
             for &ldquo;{search}&rdquo;
           </p>
@@ -1268,13 +1267,13 @@ export default function CollectionDetailPage() {
             </div>
             <p
               className="text-[14px] font-semibold mb-1.5"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             >
               {search ? "No papers found" : "No papers yet"}
             </p>
             <p
               className="text-[12px] mb-5 max-w-[220px] leading-relaxed"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               {search
                 ? `No results for "${search}".`
@@ -1335,7 +1334,7 @@ export default function CollectionDetailPage() {
             <AlertDialogTitle>Delete collection?</AlertDialogTitle>
             <AlertDialogDescription>
               &ldquo;{collection.name}&rdquo; will be permanently deleted.
-              <strong className="block mt-1" style={{ color: colors.text }}>
+              <strong className="block mt-1" style={{ color: "var(--text)" }}>
                 Papers inside will NOT be deleted.
               </strong>
             </AlertDialogDescription>
@@ -1354,3 +1353,8 @@ export default function CollectionDetailPage() {
     </div>
   );
 }
+
+
+
+
+

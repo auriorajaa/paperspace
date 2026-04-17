@@ -11,7 +11,7 @@ import {
 import { CopyIcon, PlusIcon, XIcon, CheckIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { TemplateField, FieldType, SubField } from "./FieldCard";
-import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import { fieldTypeColors } from "@/lib/design-tokens";
 
 const FIELD_CATEGORIES: {
   value: FieldType;
@@ -151,7 +151,7 @@ export function AddFieldDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle style={{ color: colors.text }}>Add field</DialogTitle>
+          <DialogTitle style={{ color: "var(--text)" }}>Add field</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
@@ -159,7 +159,7 @@ export function AddFieldDialog({
           <div className="space-y-2">
             <p
               className="text-[10px] font-semibold uppercase tracking-wide"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               Field type
             </p>
@@ -174,27 +174,27 @@ export function AddFieldDialog({
                     onClick={() => setCategory(ft.value)}
                     className="flex flex-col items-start gap-1 p-2.5 rounded-xl text-left transition-all"
                     style={{
-                      background: active ? `${c}15` : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${active ? `${c}35` : colors.border}`,
+                      background: active ? `${c}15` : "var(--bg-muted)",
+                      border: `1px solid ${active ? `${c}35` : "var(--border-subtle)"}`,
                     }}
                   >
                     <span
                       className="text-[10px] font-semibold uppercase tracking-wide"
-                      style={{ color: active ? c : colors.textDim }}
+                      style={{ color: active ? c : "var(--text-dim)" }}
                     >
                       {ft.value}
                     </span>
                     <span
                       className="text-[11px] font-medium"
                       style={{
-                        color: active ? colors.textSecondary : colors.textMuted,
+                        color: active ? "var(--text-secondary)" : "var(--text-muted)",
                       }}
                     >
                       {ft.label}
                     </span>
                     <span
                       className="text-[10px] leading-tight"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       {ft.description}
                     </span>
@@ -209,7 +209,7 @@ export function AddFieldDialog({
             <div className="space-y-2">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Data format
               </p>
@@ -226,19 +226,19 @@ export function AddFieldDialog({
                       style={{
                         background: active
                           ? `${c}15`
-                          : "rgba(255,255,255,0.03)",
-                        border: `1px solid ${active ? `${c}35` : colors.border}`,
+                          : "var(--bg-muted)",
+                        border: `1px solid ${active ? `${c}35` : "var(--border-subtle)"}`,
                       }}
                     >
                       <span
                         className="text-[11px] font-semibold"
-                        style={{ color: active ? c : colors.textMuted }}
+                        style={{ color: active ? c : "var(--text-muted)" }}
                       >
                         {st.label}
                       </span>
                       <span
                         className="text-[9px]"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         {st.hint}
                       </span>
@@ -268,7 +268,7 @@ export function AddFieldDialog({
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Label <span style={{ color: "#f87171" }}>*</span>
               </p>
@@ -281,35 +281,35 @@ export function AddFieldDialog({
                 autoFocus
                 className="w-full h-9 rounded-xl px-3 text-sm outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text)",
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.border = `1px solid ${color}40`)
                 }
                 onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                  (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                 }
               />
             </div>
             <div className="space-y-1">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Field name (auto)
               </p>
               <div
                 className="h-9 rounded-xl px-3 flex items-center"
                 style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: `1px solid ${colors.border}`,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
                 }}
               >
                 <code
                   className="text-[11px] font-mono"
-                  style={{ color: name ? colors.accentLight : colors.textDim }}
+                  style={{ color: name ? "var(--accent-light)" : "var(--text-dim)" }}
                 >
                   {name || "field_name"}
                 </code>
@@ -326,9 +326,9 @@ export function AddFieldDialog({
               style={{
                 background: required
                   ? "rgba(99,102,241,0.1)"
-                  : "rgba(255,255,255,0.04)",
-                border: `1px solid ${required ? "rgba(99,102,241,0.25)" : colors.border}`,
-                color: required ? colors.accentLight : colors.textMuted,
+                  : "var(--bg-muted)",
+                border: `1px solid ${required ? "rgba(99,102,241,0.25)" : "var(--border-subtle)"}`,
+                color: required ? "var(--accent-light)" : "var(--text-muted)",
               }}
             >
               <div
@@ -336,7 +336,7 @@ export function AddFieldDialog({
                 style={{
                   background: required
                     ? "rgba(99,102,241,0.4)"
-                    : "rgba(255,255,255,0.12)",
+                    : "var(--border-hover)",
                 }}
               >
                 <span
@@ -357,7 +357,7 @@ export function AddFieldDialog({
             <div className="space-y-2">
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Columns (optional)
               </p>
@@ -365,8 +365,8 @@ export function AddFieldDialog({
                 <div
                   className="space-y-1 rounded-xl p-2"
                   style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--bg-muted)",
+                    border: `1px solid var(--border-subtle)`,
                   }}
                 >
                   {subFields.map((sf) => (
@@ -374,15 +374,15 @@ export function AddFieldDialog({
                       <span
                         className="flex-1 text-xs px-2 py-1 rounded-lg"
                         style={{
-                          color: colors.textSecondary,
-                          background: "rgba(255,255,255,0.04)",
+                          color: "var(--text-secondary)",
+                          background: "var(--bg-muted)",
                         }}
                       >
                         {sf.label}
                       </span>
                       <code
                         className="text-[10px] font-mono shrink-0"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >{`{{${sf.name}}}`}</code>
                       <button
                         type="button"
@@ -390,12 +390,12 @@ export function AddFieldDialog({
                           setSubFields((p) => p.filter((s) => s.id !== sf.id))
                         }
                         className="w-5 h-5 rounded flex items-center justify-center transition-colors"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                         onMouseEnter={(e) =>
                           (e.currentTarget.style.color = "#f87171")
                         }
                         onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = colors.textDim)
+                          (e.currentTarget.style.color = "var(--text-dim)")
                         }
                       >
                         <XIcon className="w-3 h-3" />
@@ -417,9 +417,9 @@ export function AddFieldDialog({
                   }}
                   className="flex-1 h-8 rounded-lg px-2.5 text-sm outline-none"
                   style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: `1px solid ${colors.border}`,
-                    color: colors.text,
+                    background: "var(--bg-muted)",
+                    border: `1px solid var(--border-subtle)`,
+                    color: "var(--text)",
                   }}
                 />
                 <button
@@ -428,7 +428,7 @@ export function AddFieldDialog({
                   className="flex items-center gap-1 px-3 h-8 rounded-lg text-xs font-medium"
                   style={{
                     background: "rgba(99,102,241,0.12)",
-                    color: colors.accentLight,
+                    color: "var(--accent-light)",
                     border: `1px solid rgba(99,102,241,0.2)`,
                   }}
                 >
@@ -450,7 +450,7 @@ export function AddFieldDialog({
             >
               <p
                 className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 Paste this in the editor
               </p>
@@ -465,9 +465,9 @@ export function AddFieldDialog({
                   onClick={copyPlaceholder}
                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0"
                   style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: copied ? "#34d399" : colors.textMuted,
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--bg-input)",
+                    color: copied ? "#34d399" : "var(--text-muted)",
+                    border: `1px solid var(--border-subtle)`,
                   }}
                 >
                   {copied ? (
@@ -489,9 +489,9 @@ export function AddFieldDialog({
             }}
             className="px-4 py-2 rounded-xl text-sm font-medium"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             Cancel
@@ -518,3 +518,8 @@ export function AddFieldDialog({
     </Dialog>
   );
 }
+
+
+
+
+

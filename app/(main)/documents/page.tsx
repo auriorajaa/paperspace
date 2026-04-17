@@ -57,9 +57,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDebounce } from "@/lib/useDebounce";
-import { colors, shadows } from "@/lib/design-tokens";
+import { shadows } from "@/lib/design-tokens";
 import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -124,7 +123,7 @@ function AddToCollectionDialog({
         </DialogHeader>
         <p
           className="text-[12px] mb-3 truncate"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           {documentTitle}
         </p>
@@ -133,13 +132,13 @@ function AddToCollectionDialog({
             <div className="flex justify-center py-8">
               <div
                 className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.accentLight }}
+                style={{ borderColor: "var(--accent-light)" }}
               />
             </div>
           ) : collections.length === 0 ? (
             <p
               className="text-[12px] text-center py-8"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               No collections yet.
             </p>
@@ -157,25 +156,23 @@ function AddToCollectionDialog({
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
                   style={{
                     background: isIn
-                      ? `${col.color ?? colors.accent}12`
-                      : "rgba(255,255,255,0.02)",
-                    border: `1px solid ${isIn ? `${col.color ?? colors.accent}30` : colors.border}`,
+                      ? `${col.color ?? "var(--primary)"}12`
+                      : "var(--bg-muted)",
+                    border: `1px solid ${isIn ? `${col.color ?? "var(--primary)"}30` : "var(--border-subtle)"}`,
                     minHeight: 48,
                   }}
                   onMouseEnter={(e) => {
                     if (!isIn && !loading)
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.05)";
+                      e.currentTarget.style.background = "var(--bg-muted)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isIn)
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.02)";
+                      e.currentTarget.style.background = "var(--bg-muted)";
                   }}
                 >
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
-                    style={{ background: `${col.color ?? colors.accent}18` }}
+                    style={{ background: `${col.color ?? "var(--primary)"}18` }}
                   >
                     {(() => {
                       const Icon = getIconComponent(col.icon ?? "folder");
@@ -190,13 +187,13 @@ function AddToCollectionDialog({
                   <div className="flex-1 min-w-0">
                     <p
                       className="text-[13px] font-medium truncate"
-                      style={{ color: colors.text }}
+                      style={{ color: "var(--text)" }}
                     >
                       {col.name}
                     </p>
                     <p
                       className="text-[11px]"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       {col.documentCount ?? 0} papers
                     </p>
@@ -204,12 +201,12 @@ function AddToCollectionDialog({
                   {isLoading ? (
                     <div
                       className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0"
-                      style={{ borderColor: colors.accentLight }}
+                      style={{ borderColor: "var(--accent-light)" }}
                     />
                   ) : isIn ? (
                     <CheckIcon
                       className="w-4 h-4 shrink-0"
-                      style={{ color: col.color ?? colors.accentLight }}
+                      style={{ color: col.color ?? "var(--accent-light)" }}
                     />
                   ) : null}
                 </button>
@@ -287,9 +284,9 @@ function RenameDialog({
             }}
             className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: `1px solid ${colors.accentBorder}`,
-              color: colors.text,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--accent-border)`,
+              color: "var(--text)",
             }}
             placeholder="Paper name"
           />
@@ -298,9 +295,9 @@ function RenameDialog({
               onClick={() => onOpenChange(false)}
               className="px-3 py-1.5 rounded-lg text-[12px] font-medium"
               style={{
-                color: colors.textMuted,
-                background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${colors.border}`,
+                color: "var(--text-muted)",
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
             >
               Cancel
@@ -310,9 +307,9 @@ function RenameDialog({
               disabled={saving || !value.trim()}
               className="px-3 py-1.5 rounded-lg text-[12px] font-medium"
               style={{
-                background: colors.accentBg,
-                color: colors.accentLight,
-                border: `1px solid ${colors.accentBorder}`,
+                background: "var(--accent-bg)",
+                color: "var(--accent-light)",
+                border: `1px solid var(--accent-border)`,
                 opacity: !value.trim() ? 0.5 : 1,
               }}
             >
@@ -389,16 +386,16 @@ function CollectionsPanel({
     <>
       <div
         className="flex items-center justify-between px-4 py-3 shrink-0"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div className="flex items-center gap-2">
           <FolderIcon
             className="w-3.5 h-3.5"
-            style={{ color: colors.accentLight }}
+            style={{ color: "var(--accent-light)" }}
           />
           <span
             className="text-[13px] font-semibold"
-            style={{ color: colors.textSecondary }}
+            style={{ color: "var(--text-secondary)" }}
           >
             Collections
           </span>
@@ -406,8 +403,8 @@ function CollectionsPanel({
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-md"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textDim,
+                background: "var(--bg-input)",
+                color: "var(--text-dim)",
               }}
             >
               {collections.length}
@@ -418,8 +415,8 @@ function CollectionsPanel({
           onClick={onClose}
           className="w-7 h-7 rounded-lg flex items-center justify-center"
           style={{
-            color: colors.textDim,
-            background: "rgba(255,255,255,0.04)",
+            color: "var(--text-dim)",
+            background: "var(--bg-muted)",
           }}
         >
           <XIcon className="w-3.5 h-3.5" />
@@ -432,7 +429,7 @@ function CollectionsPanel({
               <div
                 key={i}
                 className="h-11 rounded-xl animate-pulse"
-                style={{ background: "rgba(255,255,255,0.04)" }}
+                style={{ background: "var(--bg-muted)" }}
               />
             ))}
           </div>
@@ -440,15 +437,15 @@ function CollectionsPanel({
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <FolderIcon
               className="w-7 h-7 mb-2"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
-            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+            <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
               No collections yet
             </p>
             <button
               onClick={() => router.push("/collections")}
               className="mt-2 text-[11px] font-medium"
-              style={{ color: colors.accentLight }}
+              style={{ color: "var(--accent-light)" }}
             >
               Create one →
             </button>
@@ -458,7 +455,7 @@ function CollectionsPanel({
             {(
               collections as (Doc<"collections"> & { documentCount?: number })[]
             ).map((col) => {
-              const accentColor = col.color ?? colors.accent;
+              const accentColor = col.color ?? "var(--primary)";
               return (
                 <div key={col._id}>
                   <div className="flex items-center gap-1">
@@ -467,8 +464,7 @@ function CollectionsPanel({
                       className="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left"
                       style={{ minHeight: 44 }}
                       onMouseEnter={(e) =>
-                        (e.currentTarget.style.background =
-                          "rgba(255,255,255,0.03)")
+                        (e.currentTarget.style.background = "var(--bg-muted)")
                       }
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.background = "transparent")
@@ -491,15 +487,15 @@ function CollectionsPanel({
                       </span>
                       <span
                         className="flex-1 text-[12px] font-medium truncate"
-                        style={{ color: colors.textSecondary }}
+                        style={{ color: "var(--text-secondary)" }}
                       >
                         {col.name}
                       </span>
                       <span
                         className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
                         style={{
-                          background: "rgba(255,255,255,0.06)",
-                          color: colors.textDim,
+                          background: "var(--bg-input)",
+                          color: "var(--text-dim)",
                         }}
                       >
                         {col.documentCount ?? 0}
@@ -510,7 +506,7 @@ function CollectionsPanel({
                         setExpandedId(expandedId === col._id ? null : col._id)
                       }
                       className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       <ChevronRightIcon
                         className="w-3 h-3 transition-transform duration-150"
@@ -535,15 +531,15 @@ function CollectionsPanel({
       </div>
       <div
         className="px-4 py-3 shrink-0"
-        style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderTop: `1px solid var(--border-subtle)` }}
       >
         <button
           onClick={() => router.push("/collections")}
           className="w-full text-[12px] font-medium py-2.5 rounded-xl text-center transition-colors"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           Manage collections →
@@ -559,8 +555,8 @@ function CollectionsPanel({
         className="hidden md:flex shrink-0 flex-col transition-all duration-200 overflow-hidden"
         style={{
           width: open ? 268 : 0,
-          borderLeft: open ? `1px solid ${colors.borderSubtle}` : "none",
-          background: colors.bgSidebar,
+          borderLeft: open ? `1px solid var(--border-subtle)` : "none",
+          background: "var(--bg-sidebar)",
         }}
       >
         {open && inner}
@@ -579,8 +575,8 @@ function CollectionsPanel({
       <div
         className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl flex flex-col"
         style={{
-          background: "#15151e",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-hover)",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
           maxHeight: "80vh",
@@ -590,7 +586,7 @@ function CollectionsPanel({
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div
             className="w-9 h-1 rounded-full"
-            style={{ background: "rgba(255,255,255,0.15)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
         {inner}
@@ -613,7 +609,7 @@ function CollectionExpandedDocs({
       <div className="ml-6 px-3 py-2">
         <div
           className="h-7 rounded-lg animate-pulse"
-          style={{ background: "rgba(255,255,255,0.04)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
       </div>
     );
@@ -621,7 +617,7 @@ function CollectionExpandedDocs({
     return (
       <p
         className="ml-6 text-[11px] px-3 py-1.5"
-        style={{ color: colors.textDim }}
+        style={{ color: "var(--text-dim)" }}
       >
         Empty collection
       </p>
@@ -635,7 +631,7 @@ function CollectionExpandedDocs({
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
           style={{ minHeight: 36 }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+            (e.currentTarget.style.background = "var(--bg-muted)")
           }
           onMouseLeave={(e) =>
             (e.currentTarget.style.background = "transparent")
@@ -644,23 +640,26 @@ function CollectionExpandedDocs({
           <span className="text-sm shrink-0">{doc.icon ?? "📄"}</span>
           <span
             className="flex-1 text-[11px] font-medium truncate"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             {doc.title}
           </span>
         </button>
       ))}
       {docs.length > 5 && (
-        <p className="px-3 py-1 text-[10px]" style={{ color: colors.textDim }}>
+        <p
+          className="px-3 py-1 text-[10px]"
+          style={{ color: "var(--text-dim)" }}
+        >
           +{docs.length - 5} more
         </p>
       )}
       <button
         onClick={() => router.push(`/collections/${collectionId}`)}
         className="w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
-        style={{ color: colors.textDim }}
+        style={{ color: "var(--text-dim)" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
-        onMouseLeave={(e) => (e.currentTarget.style.color = colors.textDim)}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
       >
         <FolderOpenIcon className="w-3 h-3" /> Open collection →
       </button>
@@ -692,14 +691,14 @@ function SelectCheckbox({
         width: 16,
         height: 16,
         background:
-          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
-        border: `1.5px solid ${checked || indeterminate ? colors.accent : "rgba(255,255,255,0.2)"}`,
+          checked || indeterminate ? "var(--primary)" : "var(--bg-input)",
+        border: `1.5px solid ${checked || indeterminate ? "var(--primary)" : "var(--border-hover)"}`,
       }}
     >
       {indeterminate ? (
-        <MinusIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <MinusIcon style={{ width: 9, height: 9, color: "var(--text)" }} />
       ) : checked ? (
-        <CheckIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <CheckIcon style={{ width: 9, height: 9, color: "var(--text)" }} />
       ) : null}
     </button>
   );
@@ -710,7 +709,7 @@ function AIDot({ status }: { status?: string }) {
     return (
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: colors.accentLight }}
+        style={{ background: "var(--accent-light)" }}
         title="AI summary ready"
       />
     );
@@ -718,7 +717,7 @@ function AIDot({ status }: { status?: string }) {
     return (
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-        style={{ background: colors.warning }}
+        style={{ background: "var(--warning)" }}
         title="Generating…"
       />
     );
@@ -744,9 +743,9 @@ function CollectionBadges({
           key={col._id}
           className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium whitespace-nowrap"
           style={{
-            background: col.color ? `${col.color}18` : "rgba(255,255,255,0.06)",
-            color: col.color ?? colors.textMuted,
-            border: `1px solid ${col.color ? `${col.color}28` : colors.border}`,
+            background: col.color ? `${col.color}18` : "var(--bg-input)",
+            color: col.color ?? "var(--text-muted)",
+            border: `1px solid ${col.color ? `${col.color}28` : "var(--border-subtle)"}`,
           }}
         >
           {(() => {
@@ -769,9 +768,9 @@ function CollectionBadges({
           }}
           className="text-[10px] px-1.5 py-px rounded-md font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textDim,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            color: "var(--text-dim)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           +{overflow}
@@ -806,19 +805,19 @@ function PaperMenu({
           onClick={(e) => e.stopPropagation()}
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            border: `1px solid var(--border-subtle)`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
         >
           <MoreHorizontalIcon
             className="w-3.5 h-3.5"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           />
         </button>
       </DropdownMenuTrigger>
@@ -949,11 +948,11 @@ function GridCard({
           background: selected
             ? "rgba(99,102,241,0.09)"
             : hovered
-              ? colors.bgCardHover
-              : colors.bgCard,
-          border: `1px solid ${selected ? colors.accentBorder : hovered ? colors.borderHover : colors.border}`,
+              ? "var(--bg-card-hover)"
+              : "var(--bg-card)",
+          border: `1px solid ${selected ? "var(--accent-border)" : hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
           boxShadow: selected
-            ? `0 0 0 2px ${colors.accent}28`
+            ? `0 0 0 2px var(--primary)28`
             : hovered
               ? shadows.cardHover
               : "none",
@@ -963,16 +962,16 @@ function GridCard({
         onMouseLeave={() => setHovered(false)}
       >
         {/* Top accent line matching first collection color */}
-        <div
+        {/* <div
           className="h-0.5 w-full shrink-0"
           style={{
             background:
               cols[0]?.color ??
               (document.organizationId
-                ? colors.accent
-                : "rgba(255,255,255,0.06)"),
+                ? "var(--primary)"
+                : "var(--bg-input)"),
           }}
-        />
+        /> */}
 
         <div className="p-3.5 flex flex-col gap-2.5 flex-1">
           {/* Header: icon + title + select/menu */}
@@ -995,15 +994,20 @@ function GridCard({
 
             <div
               className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
-              style={{ background: "rgba(255,255,255,0.07)" }}
+              style={{ background: "var(--bg-input)" }}
             >
-              {document.icon ?? "📄"}
+             
+                <FileTextIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--text-muted)" }}
+                />
+              
             </div>
 
             <div className="flex-1 min-w-0">
               <p
                 className="text-[13px] font-semibold leading-snug line-clamp-2"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {document.title}
               </p>
@@ -1011,7 +1015,7 @@ function GridCard({
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.45)" }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {smartDate(document._creationTime)}
                 </span>
@@ -1020,8 +1024,8 @@ function GridCard({
                   <span
                     className="text-[9px] font-semibold px-1.5 py-px rounded"
                     style={{
-                      background: colors.warningBg,
-                      color: colors.warning,
+                      background: "var(--warning-bg)",
+                      color: "var(--warning)",
                     }}
                   >
                     ARCHIVED
@@ -1031,8 +1035,8 @@ function GridCard({
                   <span
                     className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded"
                     style={{
-                      background: colors.accentBg,
-                      color: colors.accentLight,
+                      background: "var(--accent-bg)",
+                      color: "var(--accent-light)",
                     }}
                   >
                     <UsersIcon style={{ width: 9, height: 9 }} />
@@ -1086,14 +1090,14 @@ function GridCard({
               style={{
                 color:
                   document.aiSummaryStatus === "done"
-                    ? colors.accentLight
-                    : "rgba(255,255,255,0.2)",
+                    ? "var(--accent-light)"
+                    : "var(--border-hover)",
               }}
             />
             {document.aiSummaryStatus === "done" && document.aiSummary ? (
               <p
                 className="text-[11px] leading-relaxed line-clamp-3"
-                style={{ color: "rgba(255,255,255,0.5)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {document.aiSummary}
               </p>
@@ -1101,19 +1105,16 @@ function GridCard({
               <div className="flex items-center gap-1">
                 <div
                   className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
-                  style={{ color: colors.accentLight }}
+                  style={{ color: "var(--accent-light)" }}
                 />
-                <p
-                  className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.3)" }}
-                >
+                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Generating summary…
                 </p>
               </div>
             ) : (
               <p
                 className="text-[11px] italic"
-                style={{ color: "rgba(255,255,255,0.18)" }}
+                style={{ color: "var(--text-placeholder)" }}
               >
                 No summary yet
               </p>
@@ -1209,11 +1210,11 @@ function ListRow({
       <div
         className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150 group"
         style={{
-          borderBottom: `1px solid ${colors.border}`,
+          borderBottom: `1px solid var(--border-subtle)`,
           background: selected
             ? "rgba(99,102,241,0.06)"
             : hovered
-              ? "rgba(255,255,255,0.02)"
+              ? "var(--bg-muted)"
               : "transparent",
         }}
         onClick={handleClick}
@@ -1239,9 +1240,12 @@ function ListRow({
         {/* Paper icon */}
         <span
           className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0 mt-0.5"
-          style={{ background: "rgba(255,255,255,0.06)" }}
+          style={{ background: "var(--bg-input)" }}
         >
-          {document.icon ?? "📄"}
+            <FileTextIcon
+              className="w-4 h-4"
+              style={{ color: "var(--text-muted)" }}
+            />
         </span>
 
         {/* Content block */}
@@ -1250,7 +1254,7 @@ function ListRow({
           <div className="flex items-center gap-2 flex-wrap">
             <p
               className="text-[13px] font-semibold"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               {document.title}
             </p>
@@ -1259,7 +1263,10 @@ function ListRow({
             {document.isArchived && (
               <span
                 className="text-[9px] font-semibold px-1.5 py-px rounded shrink-0"
-                style={{ background: colors.warningBg, color: colors.warning }}
+                style={{
+                  background: "var(--warning-bg)",
+                  color: "var(--warning)",
+                }}
               >
                 ARCHIVED
               </span>
@@ -1268,8 +1275,8 @@ function ListRow({
               <span
                 className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded shrink-0"
                 style={{
-                  background: colors.accentBg,
-                  color: colors.accentLight,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
                 }}
               >
                 <UsersIcon style={{ width: 9, height: 9 }} />
@@ -1285,14 +1292,14 @@ function ListRow({
               style={{
                 color:
                   document.aiSummaryStatus === "done"
-                    ? colors.accentLight
-                    : "rgba(255,255,255,0.15)",
+                    ? "var(--accent-light)"
+                    : "var(--border-subtle)",
               }}
             />
             {document.aiSummaryStatus === "done" && document.aiSummary ? (
               <p
                 className="text-[11px] leading-relaxed line-clamp-2"
-                style={{ color: "rgba(255,255,255,0.45)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {document.aiSummary}
               </p>
@@ -1300,19 +1307,16 @@ function ListRow({
               <div className="flex items-center gap-1">
                 <div
                   className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
-                  style={{ color: colors.accentLight }}
+                  style={{ color: "var(--accent-light)" }}
                 />
-                <p
-                  className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.3)" }}
-                >
+                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Generating summary…
                 </p>
               </div>
             ) : (
               <p
                 className="text-[11px] italic"
-                style={{ color: "rgba(255,255,255,0.2)" }}
+                style={{ color: "var(--text-dim)" }}
               >
                 No summary yet
               </p>
@@ -1329,7 +1333,7 @@ function ListRow({
             )}
             <span
               className="text-[11px] ml-auto shrink-0 tabular-nums"
-              style={{ color: "rgba(255,255,255,0.38)" }}
+              style={{ color: "var(--text-muted)" }}
             >
               {smartDate(document._creationTime)}
             </span>
@@ -1344,9 +1348,9 @@ function ListRow({
           <button
             onClick={() => onAddToCollection(document._id, document.title)}
             className="hidden sm:flex w-7 h-7 rounded-lg items-center justify-center transition-colors"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
+              (e.currentTarget.style.background = "var(--bg-input)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -1447,7 +1451,7 @@ function BulkBar({
       className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
       style={{
         transform: "translateX(-50%)",
-        background: "#1c1c28",
+        background: "var(--bg-card)",
         border: "1px solid rgba(99,102,241,0.3)",
         boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
         backdropFilter: "blur(16px)",
@@ -1456,7 +1460,7 @@ function BulkBar({
     >
       <span
         className="text-[12px] font-semibold tabular-nums"
-        style={{ color: colors.accentPale }}
+        style={{ color: "var(--accent-pale)" }}
       >
         {count} selected
       </span>
@@ -1464,27 +1468,27 @@ function BulkBar({
         <button
           onClick={onSelectAll}
           className="text-[11px] font-medium"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           Select all {total}
         </button>
       )}
       <div
         className="w-px h-4 mx-0.5"
-        style={{ background: "rgba(255,255,255,0.1)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <button
         onClick={onAddToCollection}
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
         style={{
-          background: "rgba(255,255,255,0.06)",
-          color: colors.textSecondary,
+          background: "var(--bg-input)",
+          color: "var(--text-secondary)",
         }}
         onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+          (e.currentTarget.style.background = "var(--bg-input)")
         }
         onMouseLeave={(e) =>
-          (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+          (e.currentTarget.style.background = "var(--bg-input)")
         }
       >
         <FolderPlusIcon className="w-3.5 h-3.5" />
@@ -1495,7 +1499,7 @@ function BulkBar({
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
         style={{
           background: "rgba(251,191,36,0.08)",
-          color: colors.warning,
+          color: "var(--warning)",
           border: "1px solid rgba(251,191,36,0.2)",
         }}
         onMouseEnter={(e) =>
@@ -1513,7 +1517,7 @@ function BulkBar({
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
         style={{
           background: "rgba(248,113,113,0.08)",
-          color: colors.danger,
+          color: "var(--danger)",
           border: "1px solid rgba(248,113,113,0.2)",
         }}
         onMouseEnter={(e) =>
@@ -1530,8 +1534,8 @@ function BulkBar({
         onClick={onClear}
         className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
         style={{
-          background: "rgba(255,255,255,0.06)",
-          color: colors.textMuted,
+          background: "var(--bg-input)",
+          color: "var(--text-muted)",
         }}
       >
         <XIcon className="w-3.5 h-3.5" />
@@ -1589,11 +1593,11 @@ function Pagination({
   return (
     <div
       className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-      style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+      style={{ borderTop: `1px solid var(--border-subtle)` }}
     >
       <span
         className="text-[11px] tabular-nums"
-        style={{ color: colors.textDim }}
+        style={{ color: "var(--text-dim)" }}
       >
         {from}–{to} of {total}
       </span>
@@ -1603,9 +1607,9 @@ function Pagination({
           disabled={page === 1}
           className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: page === 1 ? colors.textDim : colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: page === 1 ? "var(--text-dim)" : "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
             opacity: page === 1 ? 0.4 : 1,
           }}
         >
@@ -1616,7 +1620,7 @@ function Pagination({
             <span
               key={`ellipsis-${i}`}
               className="text-[11px] px-1"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               …
             </span>
@@ -1627,11 +1631,9 @@ function Pagination({
               className="h-7 min-w-[28px] px-2 rounded-lg text-[11px] font-medium transition-all"
               style={{
                 background:
-                  p === page
-                    ? "rgba(99,102,241,0.2)"
-                    : "rgba(255,255,255,0.03)",
-                color: p === page ? colors.accentLight : colors.textMuted,
-                border: `1px solid ${p === page ? colors.accentBorder : colors.border}`,
+                  p === page ? "rgba(99,102,241,0.2)" : "var(--bg-muted)",
+                color: p === page ? "var(--accent-light)" : "var(--text-muted)",
+                border: `1px solid ${p === page ? "var(--accent-border)" : "var(--border-subtle)"}`,
               }}
             >
               {p}
@@ -1643,9 +1645,10 @@ function Pagination({
           disabled={page === totalPages}
           className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: page === totalPages ? colors.textDim : colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color:
+              page === totalPages ? "var(--text-dim)" : "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
             opacity: page === totalPages ? 0.4 : 1,
           }}
         >
@@ -1665,57 +1668,54 @@ function GridSkeleton() {
     <div
       className="rounded-2xl overflow-hidden animate-pulse"
       style={{
-        background: colors.bgCard,
-        border: `1px solid ${colors.border}`,
+        background: "var(--bg-card)",
+        border: `1px solid var(--border-subtle)`,
       }}
     >
-      <div
-        className="h-0.5 w-full"
-        style={{ background: "rgba(255,255,255,0.06)" }}
-      />
+      <div className="h-0.5 w-full" style={{ background: "var(--bg-input)" }} />
       <div className="p-3.5 space-y-2.5">
         <div className="flex items-center gap-2.5">
           <div
             className="w-8 h-8 rounded-lg shrink-0"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div className="flex-1 space-y-1.5">
             <div
               className="h-3.5 rounded-md w-3/4"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: "var(--bg-input)" }}
             />
             <div
               className="h-2.5 rounded-md w-1/3"
-              style={{ background: "rgba(255,255,255,0.05)" }}
+              style={{ background: "var(--bg-muted)" }}
             />
           </div>
           <div
             className="w-7 h-7 rounded-lg shrink-0"
-            style={{ background: "rgba(255,255,255,0.05)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
         <div className="space-y-1.5">
           <div
             className="h-2.5 rounded w-full"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-2.5 rounded w-4/5"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-2.5 rounded w-2/3"
-            style={{ background: "rgba(255,255,255,0.03)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
         <div className="flex gap-1.5">
           <div
             className="h-4 w-16 rounded-md"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-4 w-12 rounded-md"
-            style={{ background: "rgba(255,255,255,0.03)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
       </div>
@@ -1727,35 +1727,35 @@ function ListSkeleton() {
   return (
     <div
       className="flex items-start gap-3 px-4 sm:px-5 py-3 animate-pulse"
-      style={{ borderBottom: `1px solid ${colors.border}` }}
+      style={{ borderBottom: `1px solid var(--border-subtle)` }}
     >
       <div
         className="w-8 h-8 rounded-lg shrink-0 mt-0.5"
-        style={{ background: "rgba(255,255,255,0.07)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="flex-1 space-y-2">
         <div
           className="h-3.5 rounded w-1/2"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div
           className="h-2.5 rounded w-3/4"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div className="flex gap-1.5">
           <div
             className="h-4 w-14 rounded-md"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-4 w-10 rounded-md"
-            style={{ background: "rgba(255,255,255,0.03)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
       </div>
       <div
         className="w-7 h-7 rounded-lg shrink-0"
-        style={{ background: "rgba(255,255,255,0.05)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
     </div>
   );
@@ -2014,39 +2014,39 @@ export default function DocumentsPage() {
   );
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* ── Header ── */}
       <div
         className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div>
           <h1
             className="text-[15px] sm:text-base font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Papers
           </h1>
           {!isLoading && (
             <p
               className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               <span>
                 {totalDocs} {totalDocs === 1 ? "paper" : "papers"}
               </span>
               {sharedCount > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
-                  <span style={{ color: colors.accentLight }}>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span style={{ color: "var(--accent-light)" }}>
                     {sharedCount} shared
                   </span>
                 </>
               )}
               {showArchived && archivedCount > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
-                  <span style={{ color: colors.warning }}>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span style={{ color: "var(--warning)" }}>
                     {archivedCount} archived shown
                   </span>
                 </>
@@ -2059,19 +2059,19 @@ export default function DocumentsPage() {
           disabled={isCreating}
           className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
           style={{
-            background: colors.accentBg,
-            color: colors.accentPale,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            color: "var(--accent-pale)",
+            border: `1px solid var(--accent-border)`,
             whiteSpace: "nowrap",
           }}
           onMouseEnter={(e) => {
             if (!isCreating) {
-              e.currentTarget.style.background = colors.accentBgHover;
+              e.currentTarget.style.background = "var(--accent-bg-hover)";
               e.currentTarget.style.boxShadow = shadows.glow;
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = colors.accentBg;
+            e.currentTarget.style.background = "var(--accent-bg)";
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -2088,8 +2088,8 @@ export default function DocumentsPage() {
       <div
         className="shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: "rgba(255,255,255,0.01)",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-muted)",
         }}
       >
         {/* Row 1: search + view + select mode */}
@@ -2097,7 +2097,7 @@ export default function DocumentsPage() {
           <div className="relative flex-1 max-w-md">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
               placeholder="Search papers…"
@@ -2105,22 +2105,22 @@ export default function DocumentsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                (e.currentTarget.style.border = `1px solid var(--accent-border)`)
               }
               onBlur={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -2131,8 +2131,8 @@ export default function DocumentsPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {[
@@ -2147,7 +2147,7 @@ export default function DocumentsPage() {
                 style={{
                   background:
                     view === v ? "rgba(99,102,241,0.2)" : "transparent",
-                  color: view === v ? colors.accentLight : colors.textDim,
+                  color: view === v ? "var(--accent-light)" : "var(--text-dim)",
                 }}
               >
                 <Icon className="w-4 h-4" />
@@ -2165,11 +2165,9 @@ export default function DocumentsPage() {
             }}
             className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
             style={{
-              background: selectMode
-                ? colors.accentBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
-              color: selectMode ? colors.accentLight : colors.textMuted,
+              background: selectMode ? "var(--accent-bg)" : "var(--bg-muted)",
+              border: `1px solid ${selectMode ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              color: selectMode ? "var(--accent-light)" : "var(--text-muted)",
             }}
           >
             <CheckSquareIcon className="w-3.5 h-3.5" />
@@ -2185,8 +2183,8 @@ export default function DocumentsPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {(
@@ -2199,7 +2197,8 @@ export default function DocumentsPage() {
                 style={{
                   background:
                     filter === f ? "rgba(99,102,241,0.2)" : "transparent",
-                  color: filter === f ? colors.accentLight : colors.textMuted,
+                  color:
+                    filter === f ? "var(--accent-light)" : "var(--text-muted)",
                 }}
               >
                 {f === "all" ? "All" : f === "mine" ? "Mine" : orgFilterLabel}
@@ -2212,9 +2211,9 @@ export default function DocumentsPage() {
               <button
                 className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
               >
                 {SORT_LABELS[sort]}
@@ -2227,7 +2226,7 @@ export default function DocumentsPage() {
                   {sort === key && (
                     <CheckIcon
                       className="w-3 h-3 mr-2"
-                      style={{ color: colors.accentLight }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   )}
                   {SORT_LABELS[key]}
@@ -2241,10 +2240,10 @@ export default function DocumentsPage() {
             className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
             style={{
               background: showArchived
-                ? colors.warningBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${showArchived ? "rgba(251,191,36,0.25)" : colors.border}`,
-              color: showArchived ? colors.warning : colors.textMuted,
+                ? "var(--warning-bg)"
+                : "var(--bg-muted)",
+              border: `1px solid ${showArchived ? "rgba(251,191,36,0.25)" : "var(--border-subtle)"}`,
+              color: showArchived ? "var(--warning)" : "var(--text-muted)",
             }}
           >
             <ArchiveIcon className="w-3.5 h-3.5" />
@@ -2255,8 +2254,8 @@ export default function DocumentsPage() {
                 style={{
                   background: showArchived
                     ? "rgba(251,191,36,0.2)"
-                    : "rgba(255,255,255,0.08)",
-                  color: showArchived ? colors.warning : colors.textDim,
+                    : "var(--bg-input)",
+                  color: showArchived ? "var(--warning)" : "var(--text-dim)",
                 }}
               >
                 {archivedCount}
@@ -2269,12 +2268,12 @@ export default function DocumentsPage() {
             className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
             style={{
               background: collectionsPanelOpen
-                ? colors.accentBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${collectionsPanelOpen ? colors.accentBorder : colors.border}`,
+                ? "var(--accent-bg)"
+                : "var(--bg-muted)",
+              border: `1px solid ${collectionsPanelOpen ? "var(--accent-border)" : "var(--border-subtle)"}`,
               color: collectionsPanelOpen
-                ? colors.accentLight
-                : colors.textMuted,
+                ? "var(--accent-light)"
+                : "var(--text-muted)",
             }}
           >
             <FolderIcon className="w-3.5 h-3.5" />
@@ -2288,19 +2287,19 @@ export default function DocumentsPage() {
         <div
           className="flex items-center gap-2 px-4 sm:px-6 py-2 shrink-0 flex-wrap"
           style={{
-            borderBottom: `1px solid ${colors.border}`,
-            background: "rgba(255,255,255,0.01)",
+            borderBottom: `1px solid var(--border-subtle)`,
+            background: "var(--bg-muted)",
           }}
         >
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             {filteredDocs.length} result{filteredDocs.length !== 1 ? "s" : ""}
           </span>
           {debouncedSearch && (
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textMuted,
+                background: "var(--bg-input)",
+                color: "var(--text-muted)",
               }}
             >
               &ldquo;{debouncedSearch}&rdquo;
@@ -2312,7 +2311,10 @@ export default function DocumentsPage() {
           {filter !== "all" && (
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
-              style={{ background: colors.accentBg, color: colors.accentLight }}
+              style={{
+                background: "var(--accent-bg)",
+                color: "var(--accent-light)",
+              }}
             >
               {filter === "mine" ? "Mine only" : orgFilterLabel}
               <button onClick={() => setFilter("all")}>
@@ -2327,7 +2329,7 @@ export default function DocumentsPage() {
               setShowArchived(false);
             }}
             className="text-[11px] ml-auto"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             Clear all
           </button>
@@ -2339,8 +2341,8 @@ export default function DocumentsPage() {
         <div
           className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
           style={{
-            background: colors.bgSidebar,
-            borderBottom: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-sidebar)",
+            borderBottom: `1px solid var(--border-subtle)`,
           }}
         >
           <SelectCheckbox
@@ -2351,7 +2353,7 @@ export default function DocumentsPage() {
               else setSelected(new Set());
             }}
           />
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             Click papers to select
           </span>
           <button
@@ -2360,7 +2362,7 @@ export default function DocumentsPage() {
               setSelected(new Set());
             }}
             className="ml-auto text-[11px]"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             Cancel
           </button>
@@ -2389,22 +2391,22 @@ export default function DocumentsPage() {
               <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
                 <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
+                  style={{ background: "var(--bg-muted)" }}
                 >
                   <FileIcon
                     className="w-6 h-6"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   />
                 </div>
                 <p
                   className="text-[14px] font-semibold mb-1.5"
-                  style={{ color: colors.textSecondary }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   {search ? "No papers found" : "No papers yet"}
                 </p>
                 <p
                   className="text-[12px] mb-6 max-w-[240px] leading-relaxed"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   {search
                     ? `No results for "${search}".`
@@ -2416,9 +2418,9 @@ export default function DocumentsPage() {
                     disabled={isCreating}
                     className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
                     style={{
-                      background: colors.accentBg,
-                      color: colors.accentPale,
-                      border: `1px solid ${colors.accentBorder}`,
+                      background: "var(--accent-bg)",
+                      color: "var(--accent-pale)",
+                      border: `1px solid var(--accent-border)`,
                     }}
                   >
                     <PlusIcon className="w-3.5 h-3.5" />

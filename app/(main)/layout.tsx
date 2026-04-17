@@ -6,22 +6,20 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen" style={{ background: "#0a0a0c" }}>
-      {/* Subtle grid overlay — same as landing page */}
+    <div className="flex min-h-screen" style={{ background: "var(--bg)" }}>
       <div
         className="fixed inset-0 pointer-events-none z-0"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
+            "linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px)",
           backgroundSize: "64px 64px",
         }}
       />
-      {/* Ambient glow */}
       <div
         className="fixed top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none z-0"
         style={{
           background:
-            "radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)",
+            "radial-gradient(circle, var(--ambient-glow) 0%, transparent 70%)",
         }}
       />
 
@@ -32,3 +30,4 @@ export default function MainLayout({
     </div>
   );
 }
+
