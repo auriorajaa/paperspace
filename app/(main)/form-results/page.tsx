@@ -37,7 +37,6 @@ import {
   PlayIcon,
 } from "lucide-react";
 import { format, startOfDay, endOfDay } from "date-fns";
-import { colors } from "@/lib/design-tokens";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -128,7 +127,10 @@ function BottomSheet({
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-end sm:p-4"
-      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      style={{
+        background: "var(--overlay-backdrop)",
+        backdropFilter: "blur(4px)",
+      }}
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
@@ -137,20 +139,20 @@ function BottomSheet({
       <div
         className="w-full sm:w-56 rounded-t-2xl sm:rounded-2xl overflow-hidden"
         style={{
-          background: "#1a1a28",
-          border: `1px solid ${colors.border}`,
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+          background: "var(--popover)",
+          border: `1px solid var(--border-subtle)`,
+          boxShadow: "var(--shadow-flyout)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div
             className="px-4 pt-4 pb-2"
-            style={{ borderBottom: `1px solid ${colors.border}` }}
+            style={{ borderBottom: `1px solid var(--border-subtle)` }}
           >
             <p
               className="text-xs font-semibold truncate"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               {title}
             </p>
@@ -160,7 +162,7 @@ function BottomSheet({
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div
             className="w-8 h-1 rounded-full"
-            style={{ background: "rgba(255,255,255,0.15)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
         <div className="py-2">
@@ -176,14 +178,14 @@ function BottomSheet({
                 disabled={item.disabled}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors text-left"
                 style={{
-                  color: item.danger ? "#f87171" : colors.text,
+                  color: item.danger ? "var(--danger)" : "var(--text)",
                   opacity: item.disabled ? 0.4 : 1,
                 }}
                 onMouseEnter={(e) => {
                   if (!item.disabled)
                     e.currentTarget.style.background = item.danger
-                      ? "rgba(248,113,113,0.08)"
-                      : "rgba(255,255,255,0.05)";
+                      ? "var(--danger-bg)"
+                      : "var(--accent-soft)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "transparent";
@@ -191,7 +193,9 @@ function BottomSheet({
               >
                 <span
                   className="w-4 h-4 shrink-0"
-                  style={{ color: item.danger ? "#f87171" : colors.textMuted }}
+                  style={{
+                    color: item.danger ? "var(--danger)" : "var(--text-muted)",
+                  }}
                 >
                   {item.icon}
                 </span>
@@ -202,14 +206,14 @@ function BottomSheet({
         {/* iOS-style cancel row on mobile */}
         <div
           className="sm:hidden px-4 py-3"
-          style={{ borderTop: `1px solid ${colors.border}` }}
+          style={{ borderTop: `1px solid var(--border-subtle)` }}
         >
           <button
             onClick={onClose}
             className="w-full py-3 rounded-xl text-sm font-semibold"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textSecondary,
+              background: "var(--bg-input)",
+              color: "var(--text-secondary)",
             }}
           >
             Cancel
@@ -227,15 +231,21 @@ function StatusIcon({ status }: { status: string }) {
     return (
       <CheckCircleIcon
         className="w-4 h-4 shrink-0"
-        style={{ color: "#34d399" }}
+        style={{ color: "var(--success)" }}
       />
     );
   if (status === "error")
     return (
-      <XCircleIcon className="w-4 h-4 shrink-0" style={{ color: "#f87171" }} />
+      <XCircleIcon
+        className="w-4 h-4 shrink-0"
+        style={{ color: "var(--danger)" }}
+      />
     );
   return (
-    <ClockIcon className="w-4 h-4 shrink-0" style={{ color: "#fbbf24" }} />
+    <ClockIcon
+      className="w-4 h-4 shrink-0"
+      style={{ color: "var(--warning)" }}
+    />
   );
 }
 
@@ -243,20 +253,24 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = (
     {
       generated: {
-        bg: "rgba(52,211,153,0.1)",
-        color: "#34d399",
+        bg: "var(--success-bg)",
+        color: "var(--success)",
         label: "Done",
       },
-      error: { bg: "rgba(248,113,113,0.1)", color: "#f87171", label: "Failed" },
+      error: {
+        bg: "var(--danger-bg)",
+        color: "var(--danger)",
+        label: "Failed",
+      },
       pending: {
-        bg: "rgba(251,191,36,0.1)",
-        color: "#fbbf24",
+        bg: "var(--warning-bg)",
+        color: "var(--warning)",
         label: "Processing",
       },
     } as Record<string, { bg: string; color: string; label: string }>
   )[status] ?? {
-    bg: "rgba(255,255,255,0.06)",
-    color: colors.textDim,
+    bg: "var(--bg-input)",
+    color: "var(--text-dim)",
     label: status,
   };
 
@@ -292,16 +306,20 @@ function SelectCheckbox({
         width: 18,
         height: 18,
         background:
-          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
+          checked || indeterminate ? "var(--primary)" : "var(--bg-input)",
         border: `1.5px solid ${
-          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.2)"
+          checked || indeterminate ? "var(--primary)" : "var(--border-hover)"
         }`,
       }}
     >
       {indeterminate ? (
-        <MinusIcon style={{ width: 10, height: 10, color: "#fff" }} />
+        <MinusIcon
+          style={{ width: 10, height: 10, color: "var(--primary-foreground)" }}
+        />
       ) : checked ? (
-        <CheckIcon style={{ width: 10, height: 10, color: "#fff" }} />
+        <CheckIcon
+          style={{ width: 10, height: 10, color: "var(--primary-foreground)" }}
+        />
       ) : null}
     </button>
   );
@@ -361,7 +379,10 @@ function PreviewModal({
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+      style={{
+        background: "var(--overlay-backdrop)",
+        backdropFilter: "blur(8px)",
+      }}
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
@@ -369,24 +390,24 @@ function PreviewModal({
       <div
         className="flex flex-col w-full max-w-5xl rounded-2xl overflow-hidden"
         style={{
-          background: "#13131a",
-          border: `1px solid ${colors.border}`,
-          boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+          background: "var(--bg-card)",
+          border: `1px solid var(--border-subtle)`,
+          boxShadow: "var(--shadow-elevated)",
           maxHeight: "95vh",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
           className="flex items-center gap-3 px-4 py-3 shrink-0"
-          style={{ borderBottom: `1px solid ${colors.border}` }}
+          style={{ borderBottom: `1px solid var(--border-subtle)` }}
         >
           <EyeIcon
             className="w-4 h-4 shrink-0"
-            style={{ color: colors.accentLight }}
+            style={{ color: "var(--accent-light)" }}
           />
           <p
             className="flex-1 text-sm font-medium truncate"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
             title={`${filename}.docx`}
           >
             {filename}.docx
@@ -397,15 +418,16 @@ function PreviewModal({
             aria-label="Download document"
             className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all"
             style={{
-              background: "rgba(52,211,153,0.1)",
-              color: "#34d399",
-              border: "1px solid rgba(52,211,153,0.2)",
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              border: `1px solid color-mix(in srgb, var(--success) 20%, transparent)`,
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(52,211,153,0.18)")
+              (e.currentTarget.style.background =
+                "color-mix(in srgb, var(--success) 12%, transparent)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(52,211,153,0.1)")
+              (e.currentTarget.style.background = "var(--success-bg)")
             }
             onClick={async (e) => {
               e.preventDefault();
@@ -426,9 +448,11 @@ function PreviewModal({
             onClick={onClose}
             aria-label="Close preview"
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
-            style={{ color: colors.textDim }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = colors.text)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = colors.textDim)}
+            style={{ color: "var(--text-dim)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.color = "var(--text-dim)")
+            }
           >
             <XIcon className="w-4 h-4" />
           </button>
@@ -438,13 +462,13 @@ function PreviewModal({
           {isLoading && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10"
-              style={{ background: "#13131a" }}
+              style={{ background: "var(--bg-card)" }}
             >
               <div
                 className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.accentLight }}
+                style={{ borderColor: "var(--accent-light)" }}
               />
-              <p className="text-sm" style={{ color: colors.textMuted }}>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 Loading document preview…
               </p>
             </div>
@@ -455,8 +479,8 @@ function PreviewModal({
               <div
                 className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${colors.border}`,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
                 }}
               >
                 📄
@@ -464,16 +488,16 @@ function PreviewModal({
               <div>
                 <p
                   className="text-sm font-semibold mb-1"
-                  style={{ color: colors.text }}
+                  style={{ color: "var(--text)" }}
                 >
                   Preview not available
                 </p>
                 <p
                   className="text-xs max-w-xs leading-relaxed"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
-                  The document viewer couldn't load this file. Download it to
-                  view it locally.
+                  The document viewer couldn&apos;t load this file. Download it
+                  to view it locally.
                 </p>
               </div>
             </div>
@@ -514,8 +538,8 @@ function EmptyState({
       <div
         className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl"
         style={{
-          background: "rgba(255,255,255,0.04)",
-          border: `1px solid ${colors.border}`,
+          background: "var(--bg-muted)",
+          border: `1px solid var(--border-subtle)`,
         }}
       >
         📭
@@ -523,13 +547,13 @@ function EmptyState({
       <div>
         <p
           className="text-sm font-semibold mb-1"
-          style={{ color: colors.textSecondary }}
+          style={{ color: "var(--text-secondary)" }}
         >
           {title}
         </p>
         <p
           className="text-xs max-w-xs mx-auto leading-relaxed"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           {description}
         </p>
@@ -540,9 +564,9 @@ function EmptyState({
             href={action.href}
             className="text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] flex items-center transition-all duration-150"
             style={{
-              background: colors.accentBg,
-              color: colors.accentPale,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              color: "var(--accent-pale)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             {action.label}
@@ -552,9 +576,9 @@ function EmptyState({
             onClick={action.onClick}
             className="text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
             style={{
-              background: colors.accentBg,
-              color: colors.accentPale,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              color: "var(--accent-pale)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             {action.label}
@@ -658,7 +682,7 @@ function SubmissionRow({
       icon: deleting ? (
         <div
           className="w-4 h-4 rounded-full border border-t-transparent animate-spin"
-          style={{ borderColor: "#f87171" }}
+          style={{ borderColor: "var(--danger)" }}
         />
       ) : (
         <Trash2Icon className="w-4 h-4" />
@@ -672,14 +696,14 @@ function SubmissionRow({
 
   return (
     <>
-      <div style={{ borderBottom: `1px solid ${colors.border}` }}>
+      <div style={{ borderBottom: `1px solid var(--border-subtle)` }}>
         <div
           className="flex items-start gap-3 px-4 sm:px-5 py-3.5 transition-colors cursor-pointer"
           style={{
             background: selected
-              ? "rgba(99,102,241,0.06)"
+              ? "var(--nav-active-bg)"
               : hovered
-                ? "rgba(255,255,255,0.02)"
+                ? "var(--bg-muted)"
                 : "transparent",
           }}
           onClick={handleRowClick}
@@ -709,7 +733,7 @@ function SubmissionRow({
           <div className="flex-1 min-w-0 space-y-0.5">
             <p
               className="text-sm font-medium leading-snug"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
               title={`${submission.filename}.docx`}
             >
               <span className="line-clamp-2 sm:line-clamp-1">
@@ -718,13 +742,16 @@ function SubmissionRow({
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               {submission.respondentEmail && (
-                <span className="text-xs" style={{ color: colors.textMuted }}>
+                <span
+                  className="text-xs"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   {submission.respondentEmail}
                 </span>
               )}
               <span
                 className="text-xs tabular-nums"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 {format(
                   new Date(submission.submittedAt),
@@ -739,7 +766,7 @@ function SubmissionRow({
                   setExpanded((v) => !v);
                 }}
                 className="text-xs flex items-center gap-1 mt-0.5 min-h-[44px]"
-                style={{ color: "#f87171" }}
+                style={{ color: "var(--danger)" }}
               >
                 {expanded ? (
                   <ChevronUpIcon className="w-3 h-3" />
@@ -761,15 +788,15 @@ function SubmissionRow({
               <DropdownMenuTrigger
                 className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-input)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.12)";
+                  e.currentTarget.style.background = "var(--bg-card)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                  e.currentTarget.style.background = "var(--bg-input)";
                 }}
               >
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
@@ -799,36 +826,37 @@ function SubmissionRow({
             <div
               className="rounded-xl p-3"
               style={{
-                background: "rgba(248,113,113,0.06)",
-                border: "1px solid rgba(248,113,113,0.15)",
+                background: "var(--danger-bg)",
+                border:
+                  "1px solid color-mix(in srgb, var(--danger) 15%, transparent)",
               }}
             >
               <p
                 className="text-xs font-semibold mb-1"
-                style={{ color: "#f87171" }}
+                style={{ color: "var(--danger)" }}
               >
                 Error details
               </p>
               <p
                 className="text-xs font-mono break-words leading-relaxed"
-                style={{ color: "#fca5a5" }}
+                style={{ color: "var(--danger)" }}
               >
                 {submission.errorMessage}
               </p>
               {submission.errorMessage?.toLowerCase().includes("token") && (
                 <p
                   className="text-xs mt-2 leading-relaxed"
-                  style={{ color: colors.textMuted }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   💡 This may be caused by an expired Google token. Try
-                  reconnecting your Google account from the template's Connect
-                  Form page.
+                  reconnecting your Google account from the template&apos;s
+                  Connect Form page.
                 </p>
               )}
               {submission.errorMessage?.toLowerCase().includes("template") && (
                 <p
                   className="text-xs mt-2 leading-relaxed"
-                  style={{ color: colors.textMuted }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   💡 The template file may be missing or corrupt. Check your
                   template in the editor.
@@ -1040,21 +1068,20 @@ function ConnectionGroup({
       <div
         className="rounded-2xl overflow-hidden"
         style={{
-          border: `1px solid ${colors.border}`,
-          background: "rgba(255,255,255,0.015)",
+          border: `1px solid var(--border-subtle)`,
+          background: "var(--bg-card)",
         }}
       >
-        {/* Connection header - menggunakan div role="button" */}
+        {/* Connection header */}
         <div
           className="w-full flex items-start gap-3 p-4 text-left transition-colors cursor-pointer"
           style={{
-            borderBottom: expanded
-              ? `1px solid ${colors.borderSubtle}`
-              : "none",
+            borderBottom: expanded ? `1px solid var(--border-subtle)` : "none",
+            background: "transparent",
           }}
           onClick={() => setExpanded((v) => !v)}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.02)")
+            (e.currentTarget.style.background = "var(--bg-muted)")
           }
           onMouseLeave={(e) =>
             (e.currentTarget.style.background = "transparent")
@@ -1068,20 +1095,11 @@ function ConnectionGroup({
             }
           }}
         >
-          {/* <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
-            style={{
-              background: "rgba(99,102,241,0.12)",
-              border: `1px solid ${colors.accentBorder}`,
-            }}
-          >
-            📋
-          </div> */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p
                 className="text-sm font-semibold"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {connection.formTitle}
               </p>
@@ -1089,35 +1107,37 @@ function ConnectionGroup({
                 className="text-xs font-medium px-1.5 py-0.5 rounded-full"
                 style={{
                   background: connection.isActive
-                    ? "rgba(52,211,153,0.1)"
-                    : "rgba(255,255,255,0.06)",
-                  color: connection.isActive ? "#34d399" : colors.textDim,
+                    ? "var(--success-bg)"
+                    : "var(--bg-input)",
+                  color: connection.isActive
+                    ? "var(--success)"
+                    : "var(--text-dim)",
                 }}
               >
                 {connection.isActive ? "active" : "paused"}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-              <span className="text-xs" style={{ color: colors.textMuted }}>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {counts.total} total
               </span>
-              <span className="text-xs" style={{ color: "#34d399" }}>
+              <span className="text-xs" style={{ color: "var(--success)" }}>
                 {counts.generated} generated
               </span>
               {counts.error > 0 && (
-                <span className="text-xs" style={{ color: "#f87171" }}>
+                <span className="text-xs" style={{ color: "var(--danger)" }}>
                   {counts.error} errors
                 </span>
               )}
               {counts.pending > 0 && (
-                <span className="text-xs" style={{ color: "#fbbf24" }}>
+                <span className="text-xs" style={{ color: "var(--warning)" }}>
                   {counts.pending} pending
                 </span>
               )}
             </div>
           </div>
 
-          {/* Kanan: tiga titik + chevron */}
+          {/* Right: menu + chevron */}
           <div
             className="flex items-center gap-1.5 shrink-0"
             onClick={(e) => e.stopPropagation()}
@@ -1126,15 +1146,15 @@ function ConnectionGroup({
               <DropdownMenuTrigger
                 className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-input)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.12)";
+                  e.currentTarget.style.background = "var(--bg-muted)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                  e.currentTarget.style.background = "var(--bg-input)";
                 }}
               >
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
@@ -1158,7 +1178,7 @@ function ConnectionGroup({
 
             <div
               className="flex items-center justify-center w-7 h-7"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? (
@@ -1175,7 +1195,7 @@ function ConnectionGroup({
           <>
             {filtered.length === 0 ? (
               <div className="px-4 sm:px-5 py-10 text-center">
-                <p className="text-sm" style={{ color: colors.textDim }}>
+                <p className="text-sm" style={{ color: "var(--text-dim)" }}>
                   {submissions.length === 0
                     ? "No responses yet. Submit the form or tap Sync to check for new responses."
                     : "No submissions match the current filters."}
@@ -1187,8 +1207,8 @@ function ConnectionGroup({
                   <div
                     className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
                     style={{
-                      borderBottom: `1px solid ${colors.borderSubtle}`,
-                      background: "rgba(255,255,255,0.01)",
+                      borderBottom: `1px solid var(--border-subtle)`,
+                      background: "var(--bg-muted)",
                     }}
                   >
                     <SelectCheckbox
@@ -1196,7 +1216,10 @@ function ConnectionGroup({
                       indeterminate={someDisplayedSelected}
                       onChange={handleSelectAll}
                     />
-                    <span className="text-xs" style={{ color: colors.textDim }}>
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--text-dim)" }}
+                    >
                       {filtered.length} submission
                       {filtered.length !== 1 ? "s" : ""}
                       {selectedCount > 0 && ` · ${selectedCount} selected`}
@@ -1222,7 +1245,7 @@ function ConnectionGroup({
                 {hasMore && (
                   <div
                     className="flex items-center justify-center px-4 py-3"
-                    style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+                    style={{ borderTop: `1px solid var(--border-subtle)` }}
                   >
                     <button
                       onClick={() =>
@@ -1230,17 +1253,15 @@ function ConnectionGroup({
                       }
                       className="text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 min-h-[40px]"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        color: colors.textMuted,
-                        border: `1px solid ${colors.border}`,
+                        background: "var(--bg-muted)",
+                        color: "var(--text-muted)",
+                        border: `1px solid var(--border-subtle)`,
                       }}
                       onMouseEnter={(e) =>
-                        (e.currentTarget.style.background =
-                          "rgba(255,255,255,0.08)")
+                        (e.currentTarget.style.background = "var(--bg-input)")
                       }
                       onMouseLeave={(e) =>
-                        (e.currentTarget.style.background =
-                          "rgba(255,255,255,0.04)")
+                        (e.currentTarget.style.background = "var(--bg-muted)")
                       }
                     >
                       Load more ({filtered.length - displayLimit} remaining)
@@ -1365,17 +1386,16 @@ function BulkActions({
         className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
         style={{
           transform: "translateX(-50%)",
-          background: "#1c1c28",
-          border: "1px solid rgba(99,102,241,0.3)",
-          boxShadow:
-            "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--accent-border)",
+          boxShadow: "var(--shadow-elevated)",
           backdropFilter: "blur(16px)",
           whiteSpace: "nowrap",
         }}
       >
         <span
           className="text-[12px] font-semibold tabular-nums"
-          style={{ color: colors.accentPale }}
+          style={{ color: "var(--accent-pale)" }}
         >
           {count} selected
         </span>
@@ -1384,7 +1404,7 @@ function BulkActions({
           <button
             onClick={onSelectAll}
             className="text-[11px] font-medium"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             Select all {total}
           </button>
@@ -1392,7 +1412,7 @@ function BulkActions({
 
         <div
           className="w-px h-4 mx-0.5"
-          style={{ background: "rgba(255,255,255,0.1)" }}
+          style={{ background: "var(--border-subtle)" }}
         />
 
         {downloadable.length > 0 && (
@@ -1402,21 +1422,22 @@ function BulkActions({
             aria-label="Download selected as ZIP"
             className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all min-h-[44px]"
             style={{
-              background: "rgba(52,211,153,0.12)",
-              color: "#34d399",
-              border: "1px solid rgba(52,211,153,0.22)",
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              border: `1px solid color-mix(in srgb, var(--success) 20%, transparent)`,
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(52,211,153,0.2)")
+              (e.currentTarget.style.background =
+                "color-mix(in srgb, var(--success) 12%, transparent)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(52,211,153,0.12)")
+              (e.currentTarget.style.background = "var(--success-bg)")
             }
           >
             {downloading ? (
               <div
                 className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: "#34d399" }}
+                style={{ borderColor: "var(--success)" }}
               />
             ) : (
               <ArchiveIcon className="w-3.5 h-3.5" />
@@ -1438,15 +1459,16 @@ function BulkActions({
           aria-label="Delete selected submissions"
           className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
           style={{
-            background: "rgba(248,113,113,0.08)",
-            color: "#f87171",
-            border: "1px solid rgba(248,113,113,0.2)",
+            background: "var(--danger-bg)",
+            color: "var(--danger)",
+            border: `1px solid color-mix(in srgb, var(--danger) 15%, transparent)`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
+            (e.currentTarget.style.background =
+              "color-mix(in srgb, var(--danger) 10%, transparent)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
+            (e.currentTarget.style.background = "var(--danger-bg)")
           }
         >
           <Trash2Icon className="w-3.5 h-3.5" />
@@ -1458,11 +1480,13 @@ function BulkActions({
           aria-label="Clear selection"
           className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center ml-0.5"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textMuted,
+            background: "var(--bg-input)",
+            color: "var(--text-muted)",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = colors.text)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.color = "var(--text-muted)")
+          }
         >
           <XIcon className="w-3.5 h-3.5" />
         </button>
@@ -1501,23 +1525,23 @@ function GroupSkeleton() {
     <div
       className="rounded-2xl overflow-hidden animate-pulse"
       style={{
-        background: "rgba(255,255,255,0.015)",
-        border: `1px solid ${colors.border}`,
+        background: "var(--bg-card)",
+        border: `1px solid var(--border-subtle)`,
       }}
     >
       <div className="flex items-start gap-3 p-4">
         <div
           className="w-9 h-9 rounded-xl shrink-0"
-          style={{ background: "rgba(99,102,241,0.1)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div className="flex-1 space-y-2">
           <div
             className="h-4 rounded w-1/2"
-            style={{ background: "rgba(255,255,255,0.08)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div
             className="h-3 rounded w-1/3"
-            style={{ background: "rgba(255,255,255,0.05)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
       </div>
@@ -1713,31 +1737,31 @@ export default function FormResultsPage() {
     (hasDateFilter ? 1 : 0);
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5 shrink-0"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div>
           <h1
             className="text-[15px] sm:text-base font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Form results
           </h1>
           {!isLoading && (
             <p
               className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               <span>
                 {globalCounts.all} submission{globalCounts.all !== 1 ? "s" : ""}
               </span>
               {globalCounts.error > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
-                  <span style={{ color: "#f87171" }}>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span style={{ color: "var(--danger)" }}>
                     {globalCounts.error} errors
                   </span>
                 </>
@@ -1759,11 +1783,9 @@ export default function FormResultsPage() {
             aria-label="Toggle selection mode"
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl min-h-[44px] transition-colors"
             style={{
-              background: selectMode
-                ? "rgba(99,102,241,0.15)"
-                : "rgba(255,255,255,0.05)",
-              color: selectMode ? colors.accentLight : colors.textMuted,
-              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
+              background: selectMode ? "var(--accent-bg)" : "var(--bg-muted)",
+              color: selectMode ? "var(--accent-light)" : "var(--text-muted)",
+              border: `1px solid ${selectMode ? "var(--accent-border)" : "var(--border-subtle)"}`,
             }}
           >
             <CheckSquareIcon className="w-3.5 h-3.5" />
@@ -1776,18 +1798,19 @@ export default function FormResultsPage() {
             aria-label="Toggle filters"
             className="relative flex items-center justify-center w-[44px] h-[44px] rounded-xl transition-colors"
             style={{
-              background: showFilters
-                ? "rgba(99,102,241,0.12)"
-                : "rgba(255,255,255,0.05)",
-              color: showFilters ? colors.accentLight : colors.textMuted,
-              border: `1px solid ${showFilters ? colors.accentBorder : colors.border}`,
+              background: showFilters ? "var(--accent-bg)" : "var(--bg-muted)",
+              color: showFilters ? "var(--accent-light)" : "var(--text-muted)",
+              border: `1px solid ${showFilters ? "var(--accent-border)" : "var(--border-subtle)"}`,
             }}
           >
             <FilterIcon className="w-3.5 h-3.5" />
             {activeFilterCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center"
-                style={{ background: colors.accent, color: "#fff" }}
+                style={{
+                  background: "var(--primary)",
+                  color: "var(--primary-foreground)",
+                }}
               >
                 {activeFilterCount}
               </span>
@@ -1800,8 +1823,8 @@ export default function FormResultsPage() {
       <div
         className="shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: "rgba(255,255,255,0.01)",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-card)",
         }}
       >
         <div
@@ -1811,30 +1834,30 @@ export default function FormResultsPage() {
           <div className="relative flex-1 max-w-sm">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by filename or email…"
-              className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
+              className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none transition-colors"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.borderColor = colors.accentBorder)
+                (e.currentTarget.style.borderColor = "var(--accent-border)")
               }
               onBlur={(e) =>
-                (e.currentTarget.style.borderColor = colors.border)
+                (e.currentTarget.style.borderColor = "var(--border-subtle)")
               }
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
                 aria-label="Clear search"
               >
                 <XIcon className="w-3.5 h-3.5" />
@@ -1846,8 +1869,8 @@ export default function FormResultsPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {(["all", "generated", "pending", "error"] as const).map((f) => (
@@ -1857,9 +1880,11 @@ export default function FormResultsPage() {
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all capitalize whitespace-nowrap"
                 style={{
                   background:
-                    statusFilter === f ? "rgba(99,102,241,0.2)" : "transparent",
+                    statusFilter === f ? "var(--accent-bg)" : "transparent",
                   color:
-                    statusFilter === f ? colors.accentLight : colors.textMuted,
+                    statusFilter === f
+                      ? "var(--accent-light)"
+                      : "var(--text-muted)",
                 }}
               >
                 {f}
@@ -1874,11 +1899,11 @@ export default function FormResultsPage() {
           <div className="flex items-center gap-1.5 shrink-0">
             <CalendarIcon
               className="w-3.5 h-3.5 shrink-0"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <span
               className="text-[11px] shrink-0"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               From
             </span>
@@ -1887,26 +1912,25 @@ export default function FormResultsPage() {
               value={dateFromStr}
               onChange={(e) => setDateFromStr(e.target.value)}
               aria-label="From date"
-              className="h-9 px-2 text-[12px] rounded-xl outline-none"
+              className="h-9 px-2 text-[12px] rounded-xl outline-none transition-colors"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${dateFromStr ? colors.accentBorder : colors.border}`,
-                color: dateFromStr ? colors.text : colors.textDim,
-                colorScheme: "dark",
+                background: "var(--bg-muted)",
+                border: `1px solid ${dateFromStr ? "var(--accent-border)" : "var(--border-subtle)"}`,
+                color: dateFromStr ? "var(--text)" : "var(--text-dim)",
                 width: 128,
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.borderColor = colors.accentBorder)
+                (e.currentTarget.style.borderColor = "var(--accent-border)")
               }
               onBlur={(e) =>
                 (e.currentTarget.style.borderColor = dateFromStr
-                  ? colors.accentBorder
-                  : colors.border)
+                  ? "var(--accent-border)"
+                  : "var(--border-subtle)")
               }
             />
             <span
               className="text-[11px] shrink-0"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               To
             </span>
@@ -1915,21 +1939,20 @@ export default function FormResultsPage() {
               value={dateToStr}
               onChange={(e) => setDateToStr(e.target.value)}
               aria-label="To date"
-              className="h-9 px-2 text-[12px] rounded-xl outline-none"
+              className="h-9 px-2 text-[12px] rounded-xl outline-none transition-colors"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${dateToStr ? colors.accentBorder : colors.border}`,
-                color: dateToStr ? colors.text : colors.textDim,
-                colorScheme: "dark",
+                background: "var(--bg-muted)",
+                border: `1px solid ${dateToStr ? "var(--accent-border)" : "var(--border-subtle)"}`,
+                color: dateToStr ? "var(--text)" : "var(--text-dim)",
                 width: 128,
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.borderColor = colors.accentBorder)
+                (e.currentTarget.style.borderColor = "var(--accent-border)")
               }
               onBlur={(e) =>
                 (e.currentTarget.style.borderColor = dateToStr
-                  ? colors.accentBorder
-                  : colors.border)
+                  ? "var(--accent-border)"
+                  : "var(--border-subtle)")
               }
             />
             {hasDateFilter && (
@@ -1940,10 +1963,12 @@ export default function FormResultsPage() {
                 }}
                 aria-label="Clear date filter"
                 className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
-                style={{ color: colors.textDim }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                style={{ color: "var(--text-dim)" }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = "var(--danger)")
+                }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = colors.textDim)
+                  (e.currentTarget.style.color = "var(--text-dim)")
                 }
               >
                 <XIcon className="w-3.5 h-3.5" />
@@ -1961,11 +1986,9 @@ export default function FormResultsPage() {
             }}
             className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
             style={{
-              background: selectMode
-                ? colors.accentBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
-              color: selectMode ? colors.accentLight : colors.textMuted,
+              background: selectMode ? "var(--accent-bg)" : "var(--bg-muted)",
+              border: `1px solid ${selectMode ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              color: selectMode ? "var(--accent-light)" : "var(--text-muted)",
             }}
           >
             <CheckSquareIcon className="w-3.5 h-3.5" />
@@ -1982,9 +2005,9 @@ export default function FormResultsPage() {
               <span
                 className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
                 style={{
-                  background: "rgba(99,102,241,0.1)",
-                  color: colors.accentLight,
-                  border: `1px solid ${colors.accentBorder}`,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
+                  border: `1px solid var(--accent-border)`,
                 }}
               >
                 Status: {statusFilter}
@@ -2000,9 +2023,9 @@ export default function FormResultsPage() {
               <span
                 className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
                 style={{
-                  background: "rgba(99,102,241,0.1)",
-                  color: colors.accentLight,
-                  border: `1px solid ${colors.accentBorder}`,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
+                  border: `1px solid var(--accent-border)`,
                 }}
               >
                 From: {dateFromStr}
@@ -2018,9 +2041,9 @@ export default function FormResultsPage() {
               <span
                 className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
                 style={{
-                  background: "rgba(99,102,241,0.1)",
-                  color: colors.accentLight,
-                  border: `1px solid ${colors.accentBorder}`,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
+                  border: `1px solid var(--accent-border)`,
                 }}
               >
                 To: {dateToStr}
@@ -2035,7 +2058,7 @@ export default function FormResultsPage() {
             <button
               onClick={clearAllFilters}
               className="text-[11px]"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               Clear all
             </button>
@@ -2048,11 +2071,11 @@ export default function FormResultsPage() {
         <div
           className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
           style={{
-            background: colors.bgSidebar,
-            borderBottom: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            borderBottom: `1px solid var(--border-subtle)`,
           }}
         >
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             Tap submissions to select
           </span>
           <button
@@ -2062,9 +2085,9 @@ export default function FormResultsPage() {
             }}
             className="ml-auto text-[11px] font-medium px-3 py-1.5 rounded-lg min-h-[36px]"
             style={{
-              color: colors.textMuted,
-              background: "rgba(255,255,255,0.05)",
-              border: `1px solid ${colors.border}`,
+              color: "var(--text-muted)",
+              background: "var(--bg-card)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             Cancel

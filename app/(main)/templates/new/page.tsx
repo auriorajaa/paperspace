@@ -1,5 +1,3 @@
-// D:\Skripsi\paperspace\app\(main)\templates\new\page.tsx
-
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
@@ -25,7 +23,6 @@ import {
   InfoIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { colors } from "@/lib/design-tokens";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FileKind = "docx" | "pdf";
@@ -77,16 +74,16 @@ function ErrorBanner({
     <div
       className="flex items-start gap-3 p-4 rounded-2xl"
       style={{
-        background: "rgba(239,68,68,0.08)",
-        border: "1px solid rgba(239,68,68,0.25)",
+        background: "var(--danger-bg)",
+        border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)",
       }}
     >
       <AlertTriangleIcon
         className="w-4 h-4 shrink-0 mt-0.5"
-        style={{ color: "#f87171" }}
+        style={{ color: "var(--danger)" }}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-sm" style={{ color: "#fca5a5" }}>
+        <p className="text-sm" style={{ color: "var(--danger)" }}>
           {message}
         </p>
         {onRetry && (
@@ -95,9 +92,10 @@ function ErrorBanner({
             onClick={onRetry}
             className="mt-2 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors active:scale-95"
             style={{
-              background: "rgba(239,68,68,0.15)",
-              color: "#f87171",
-              border: "1px solid rgba(239,68,68,0.2)",
+              background: "var(--danger-bg)",
+              color: "var(--danger)",
+              border:
+                "1px solid color-mix(in srgb, var(--danger) 25%, transparent)",
             }}
           >
             <RefreshCwIcon className="w-3 h-3" />
@@ -110,7 +108,7 @@ function ErrorBanner({
           type="button"
           onClick={onDismiss}
           className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors hover:bg-white/5 active:scale-90"
-          style={{ color: "rgba(248,113,113,0.6)" }}
+          style={{ color: "var(--danger)", opacity: 0.6 }}
         >
           <XIcon className="w-3.5 h-3.5" />
         </button>
@@ -139,16 +137,20 @@ function StepIndicator({
                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 shrink-0"
                 style={{
                   background: done
-                    ? "rgba(52,211,153,0.15)"
+                    ? "var(--success-bg)"
                     : active
-                      ? "rgba(99,102,241,0.25)"
-                      : "rgba(255,255,255,0.05)",
+                      ? "var(--accent-soft)"
+                      : "var(--bg-muted)",
                   border: done
-                    ? "1.5px solid rgba(52,211,153,0.4)"
+                    ? "1.5px solid color-mix(in srgb, var(--success) 40%, transparent)"
                     : active
-                      ? "1.5px solid rgba(99,102,241,0.5)"
-                      : "1.5px solid rgba(255,255,255,0.1)",
-                  color: done ? "#34d399" : active ? "#818cf8" : colors.textDim,
+                      ? "1.5px solid color-mix(in srgb, var(--accent-light) 50%, transparent)"
+                      : "1.5px solid var(--border-hover)",
+                  color: done
+                    ? "var(--success)"
+                    : active
+                      ? "var(--accent-light)"
+                      : "var(--text-dim)",
                 }}
               >
                 {done ? <CheckIcon className="w-3 h-3" /> : i + 1}
@@ -157,10 +159,10 @@ function StepIndicator({
                 className="text-[11px] font-medium hidden sm:block"
                 style={{
                   color: done
-                    ? "#34d399"
+                    ? "var(--success)"
                     : active
-                      ? colors.textSecondary
-                      : colors.textDim,
+                      ? "var(--text-secondary)"
+                      : "var(--text-dim)",
                 }}
               >
                 {step.label}
@@ -171,8 +173,8 @@ function StepIndicator({
                 className="w-6 sm:w-10 h-px mx-2 transition-all duration-300"
                 style={{
                   background: done
-                    ? "rgba(52,211,153,0.3)"
-                    : "rgba(255,255,255,0.08)",
+                    ? "color-mix(in srgb, var(--success) 30%, transparent)"
+                    : "var(--bg-input)",
                 }}
               />
             )}
@@ -204,12 +206,10 @@ function ThumbnailCard({
       disabled={disabled}
       className="relative rounded-xl overflow-hidden transition-all duration-150 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.97] disabled:pointer-events-none"
       style={{
-        border: `2px solid ${selected ? "rgba(99,102,241,0.65)" : "rgba(255,255,255,0.07)"}`,
-        background: selected
-          ? "rgba(99,102,241,0.07)"
-          : "rgba(255,255,255,0.02)",
+        border: `2px solid ${selected ? "var(--accent-dash)" : "var(--border-subtle)"}`,
+        background: selected ? "var(--accent-soft)" : "var(--bg-muted)",
         boxShadow: selected
-          ? "0 0 0 2px rgba(99,102,241,0.15), 0 4px 12px rgba(99,102,241,0.1)"
+          ? "0 0 0 2px var(--accent-soft), 0 4px 12px color-mix(in srgb, var(--accent-light) 10%, transparent)"
           : "none",
         transform: selected ? "scale(1.02)" : "scale(1)",
       }}
@@ -224,12 +224,12 @@ function ThumbnailCard({
       ) : (
         <div
           className="w-full aspect-[3/4] animate-pulse"
-          style={{ background: "rgba(255,255,255,0.04)" }}
+          style={{ background: "var(--bg-muted)" }}
         >
           <div className="w-full h-full flex items-center justify-center">
             <Loader2Icon
               className="w-4 h-4 animate-spin"
-              style={{ color: "rgba(255,255,255,0.12)" }}
+              style={{ color: "var(--border-hover)" }}
             />
           </div>
         </div>
@@ -240,7 +240,7 @@ function ThumbnailCard({
       >
         <span
           className="text-[10px] font-semibold tabular-nums"
-          style={{ color: "rgba(255,255,255,0.6)" }}
+          style={{ color: "var(--text-secondary)" }}
         >
           {index + 1}
         </span>
@@ -248,8 +248,8 @@ function ThumbnailCard({
       <div
         className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center transition-all duration-150"
         style={{
-          background: selected ? "#6366f1" : "rgba(0,0,0,0.4)",
-          border: `1.5px solid ${selected ? "#818cf8" : "rgba(255,255,255,0.15)"}`,
+          background: selected ? "var(--accent-light)" : "rgba(0,0,0,0.4)",
+          border: `1.5px solid ${selected ? "var(--accent-pale)" : "var(--border-subtle)"}`,
         }}
       >
         {selected && <CheckIcon className="w-3 h-3 text-white" />}
@@ -285,23 +285,23 @@ function PageSelector({
     <div
       className="rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid rgba(99,102,241,0.15)`,
-        background: "rgba(99,102,241,0.025)",
+        border: `1px solid var(--accent-border)`,
+        background: "var(--accent-soft)",
       }}
     >
       {/* Header */}
       <div
         className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-        style={{ borderBottom: "1px solid rgba(99,102,241,0.1)" }}
+        style={{ borderBottom: "1px solid var(--accent-border)" }}
       >
         <div className="flex items-center gap-2">
           <LayoutGridIcon
             className="w-3.5 h-3.5"
-            style={{ color: "#818cf8" }}
+            style={{ color: "var(--accent-light)" }}
           />
           <span
             className="text-[12px] font-semibold"
-            style={{ color: colors.textSecondary }}
+            style={{ color: "var(--text-secondary)" }}
           >
             Select pages
           </span>
@@ -309,8 +309,8 @@ function PageSelector({
             <span
               className="text-[10px] px-2 py-0.5 rounded-full"
               style={{
-                background: "rgba(99,102,241,0.12)",
-                color: "#818cf8",
+                background: "var(--accent-soft)",
+                color: "var(--accent-light)",
               }}
             >
               {loadedCount}/{displayLimit} loaded
@@ -318,7 +318,7 @@ function PageSelector({
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px]" style={{ color: colors.textMuted }}>
+          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
             {selectedPages.size}/{displayLimit}
           </span>
           <button
@@ -327,9 +327,9 @@ function PageSelector({
             disabled={disabled}
             className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors active:scale-95 disabled:opacity-40 min-h-[30px]"
             style={{
-              background: "rgba(99,102,241,0.12)",
-              color: "#818cf8",
-              border: "1px solid rgba(99,102,241,0.2)",
+              background: "var(--accent-soft)",
+              color: "var(--accent-light)",
+              border: "1px solid var(--accent-border)",
             }}
           >
             All
@@ -340,9 +340,9 @@ function PageSelector({
             disabled={disabled}
             className="text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors active:scale-95 disabled:opacity-40 min-h-[30px]"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             None
@@ -354,17 +354,18 @@ function PageSelector({
         <div
           className="flex items-start gap-2.5 px-4 py-2.5"
           style={{
-            background: "rgba(251,191,36,0.05)",
-            borderBottom: "1px solid rgba(251,191,36,0.1)",
+            background: "var(--warning-bg)",
+            borderBottom:
+              "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
           }}
         >
           <InfoIcon
             className="w-3.5 h-3.5 shrink-0 mt-0.5"
-            style={{ color: "#fbbf24" }}
+            style={{ color: "var(--warning)" }}
           />
           <p
             className="text-[11px] leading-relaxed"
-            style={{ color: "#fbbf24" }}
+            style={{ color: "var(--warning)" }}
           >
             This PDF has {totalPages} pages. Preview shows first {MAX_PDF_PAGES}{" "}
             pages only.
@@ -389,13 +390,13 @@ function PageSelector({
       {/* Footer hint */}
       <div
         className="px-4 py-2.5 flex items-center gap-2"
-        style={{ borderTop: "1px solid rgba(99,102,241,0.08)" }}
+        style={{ borderTop: "1px solid var(--accent-border)" }}
       >
         <InfoIcon
           className="w-3 h-3 shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         />
-        <p className="text-[10px]" style={{ color: colors.textDim }}>
+        <p className="text-[10px]" style={{ color: "var(--text-dim)" }}>
           Tap pages to select · Selected pages will be merged and converted to
           editable format
         </p>
@@ -474,8 +475,8 @@ function TagsInput({
           disabled ? "pointer-events-none opacity-50" : ""
         }`}
         style={{
-          background: "rgba(255,255,255,0.04)",
-          border: `1px solid ${colors.border}`,
+          background: "var(--bg-muted)",
+          border: `1px solid var(--border-subtle)`,
         }}
         onClick={() => document.getElementById("tags-input")?.focus()}
       >
@@ -484,9 +485,10 @@ function TagsInput({
             key={tag}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
             style={{
-              background: "rgba(52,211,153,0.1)",
-              color: "#34d399",
-              border: "1px solid rgba(52,211,153,0.18)",
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              border:
+                "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
             }}
           >
             {tag}
@@ -516,7 +518,7 @@ function TagsInput({
           disabled={disabled}
           placeholder={value.length === 0 ? "invoice, hr, contract…" : ""}
           className="flex-1 min-w-[80px] text-xs bg-transparent outline-none disabled:opacity-50"
-          style={{ color: colors.text }}
+          style={{ color: "var(--text)" }}
         />
       </div>
 
@@ -524,8 +526,8 @@ function TagsInput({
         <div
           className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20 shadow-xl"
           style={{
-            background: "#18182a",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-card)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           {filteredSuggestions.map((sug) => (
@@ -539,16 +541,19 @@ function TagsInput({
                 setShowSuggestions(false);
               }}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-[12px] transition-colors hover:bg-white/5 active:bg-white/10 min-h-[40px]"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             >
-              <TagIcon className="w-3 h-3" style={{ color: "#34d399" }} />
+              <TagIcon
+                className="w-3 h-3"
+                style={{ color: "var(--success)" }}
+              />
               {sug}
             </button>
           ))}
         </div>
       )}
 
-      <p className="text-[10px] mt-1.5" style={{ color: colors.textDim }}>
+      <p className="text-[10px] mt-1.5" style={{ color: "var(--text-dim)" }}>
         Press Enter or comma to add · Backspace removes last
       </p>
     </div>
@@ -561,9 +566,9 @@ function FieldError({ message }: { message: string }) {
     <div className="flex items-center gap-1.5 mt-1.5">
       <AlertCircleIcon
         className="w-3 h-3 shrink-0"
-        style={{ color: "#f87171" }}
+        style={{ color: "var(--danger)" }}
       />
-      <p className="text-[11px]" style={{ color: "#f87171" }}>
+      <p className="text-[11px]" style={{ color: "var(--danger)" }}>
         {message}
       </p>
     </div>
@@ -591,9 +596,9 @@ function ProgressSteps({
               className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300"
               style={{
                 background: isDone
-                  ? "rgba(52,211,153,0.08)"
+                  ? "var(--success-bg)"
                   : isActive
-                    ? "rgba(99,102,241,0.12)"
+                    ? "var(--accent-soft)"
                     : "transparent",
                 opacity: isDone ? 0.5 : isActive ? 1 : 0.25,
               }}
@@ -602,20 +607,20 @@ function ProgressSteps({
                 className="w-1.5 h-1.5 rounded-full"
                 style={{
                   background: isDone
-                    ? "#34d399"
+                    ? "var(--success)"
                     : isActive
-                      ? "#818cf8"
-                      : "rgba(255,255,255,0.2)",
+                      ? "var(--accent-light)"
+                      : "var(--border-hover)",
                 }}
               />
               <span
                 className="text-[10px] font-medium"
                 style={{
                   color: isDone
-                    ? "#34d399"
+                    ? "var(--success)"
                     : isActive
-                      ? "#818cf8"
-                      : colors.textDim,
+                      ? "var(--accent-light)"
+                      : "var(--text-dim)",
                 }}
               >
                 {STAGE_LABEL[s].replace("…", "")}
@@ -624,7 +629,7 @@ function ProgressSteps({
             {i < stages.length - 1 && (
               <ChevronRightIcon
                 className="w-2.5 h-2.5"
-                style={{ color: "rgba(255,255,255,0.08)" }}
+                style={{ color: "var(--bg-input)" }}
               />
             )}
           </div>
@@ -1062,26 +1067,26 @@ export default function TemplateNewPage() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div
         className="shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <Link
               href="/templates"
               className="flex items-center gap-1 text-xs transition-colors hover:opacity-80 min-h-[32px]"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               <ChevronLeftIcon className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Templates</span>
             </Link>
-            <span style={{ color: colors.textDim, fontSize: 11 }}>/</span>
+            <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
             <span
               className="text-sm font-semibold"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               New template
             </span>
@@ -1132,20 +1137,20 @@ export default function TemplateNewPage() {
               <div className="mb-3">
                 <h2
                   className="text-sm font-semibold"
-                  style={{ color: colors.text }}
+                  style={{ color: "var(--text)" }}
                 >
                   1. Upload file
                 </h2>
                 <p
                   className="text-xs mt-0.5"
-                  style={{ color: colors.textMuted }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   Supports{" "}
                   <code
                     className="font-mono text-[11px] px-1 rounded"
                     style={{
-                      background: "rgba(99,102,241,0.12)",
-                      color: "#818cf8",
+                      background: "var(--accent-soft)",
+                      color: "var(--accent-light)",
                     }}
                   >
                     .docx
@@ -1154,8 +1159,8 @@ export default function TemplateNewPage() {
                   <code
                     className="font-mono text-[11px] px-1 rounded"
                     style={{
-                      background: "rgba(52,211,153,0.1)",
-                      color: "#34d399",
+                      background: "var(--success-bg)",
+                      color: "var(--success)",
                     }}
                   >
                     .pdf
@@ -1174,11 +1179,11 @@ export default function TemplateNewPage() {
                   }`}
                   style={{
                     borderColor: dragOver
-                      ? colors.accent
-                      : "rgba(255,255,255,0.09)",
+                      ? "var(--primary)"
+                      : "var(--bg-input)",
                     background: dragOver
-                      ? "rgba(99,102,241,0.06)"
-                      : "rgba(255,255,255,0.018)",
+                      ? "var(--accent-soft)"
+                      : "var(--bg-muted)",
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -1198,26 +1203,26 @@ export default function TemplateNewPage() {
                   <div
                     className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-transform duration-200"
                     style={{
-                      background: "rgba(99,102,241,0.1)",
-                      border: "1px solid rgba(99,102,241,0.2)",
+                      background: "var(--accent-soft)",
+                      border: "1px solid var(--accent-border)",
                       transform: dragOver ? "scale(1.08)" : "scale(1)",
                     }}
                   >
                     <UploadCloudIcon
                       className="w-7 h-7"
-                      style={{ color: "#818cf8" }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   </div>
 
                   <p
                     className="text-sm font-semibold mb-1 text-center"
-                    style={{ color: colors.textSecondary }}
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     {dragOver ? "Release to upload" : "Drop a file here"}
                   </p>
                   <p
                     className="text-xs mb-4 text-center"
-                    style={{ color: colors.textMuted }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     or tap to browse your device
                   </p>
@@ -1226,32 +1231,33 @@ export default function TemplateNewPage() {
                     <span
                       className="text-[11px] px-2.5 py-1 rounded-lg font-medium"
                       style={{
-                        background: "rgba(99,102,241,0.1)",
-                        color: "#818cf8",
-                        border: "1px solid rgba(99,102,241,0.18)",
+                        background: "var(--accent-soft)",
+                        color: "var(--accent-light)",
+                        border: "1px solid var(--accent-border)",
                       }}
                     >
                       .docx
                     </span>
                     <span
                       className="text-[11px]"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       or
                     </span>
                     <span
                       className="text-[11px] px-2.5 py-1 rounded-lg font-medium"
                       style={{
-                        background: "rgba(52,211,153,0.08)",
-                        color: "#34d399",
-                        border: "1px solid rgba(52,211,153,0.18)",
+                        background: "var(--success-bg)",
+                        color: "var(--success)",
+                        border:
+                          "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
                       }}
                     >
                       .pdf
                     </span>
                     <span
                       className="text-[11px]"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       · max {MAX_FILE_MB} MB
                     </span>
@@ -1276,12 +1282,12 @@ export default function TemplateNewPage() {
                   style={{
                     background:
                       fileKind === "pdf"
-                        ? "rgba(52,211,153,0.04)"
-                        : "rgba(99,102,241,0.05)",
+                        ? "var(--success-bg)"
+                        : "var(--accent-soft)",
                     border: `1px solid ${
                       fileKind === "pdf"
-                        ? "rgba(52,211,153,0.16)"
-                        : "rgba(99,102,241,0.16)"
+                        ? "color-mix(in srgb, var(--success) 20%, transparent)"
+                        : "var(--accent-border)"
                     }`,
                   }}
                 >
@@ -1290,19 +1296,19 @@ export default function TemplateNewPage() {
                     style={{
                       background:
                         fileKind === "pdf"
-                          ? "rgba(52,211,153,0.1)"
-                          : "rgba(99,102,241,0.14)",
+                          ? "var(--success-bg)"
+                          : "var(--accent-soft)",
                     }}
                   >
                     {fileKind === "pdf" ? (
                       <FileIcon
                         className="w-4 h-4"
-                        style={{ color: "#34d399" }}
+                        style={{ color: "var(--success)" }}
                       />
                     ) : (
                       <FileTextIcon
                         className="w-4 h-4"
-                        style={{ color: "#818cf8" }}
+                        style={{ color: "var(--accent-light)" }}
                       />
                     )}
                   </div>
@@ -1310,7 +1316,7 @@ export default function TemplateNewPage() {
                   <div className="flex-1 min-w-0">
                     <p
                       className="text-sm font-medium truncate"
-                      style={{ color: colors.text }}
+                      style={{ color: "var(--text)" }}
                     >
                       {file.name}
                     </p>
@@ -1320,25 +1326,28 @@ export default function TemplateNewPage() {
                         style={{
                           background:
                             fileKind === "pdf"
-                              ? "rgba(52,211,153,0.12)"
-                              : "rgba(99,102,241,0.12)",
-                          color: fileKind === "pdf" ? "#34d399" : "#818cf8",
+                              ? "var(--success-bg)"
+                              : "var(--accent-soft)",
+                          color:
+                            fileKind === "pdf"
+                              ? "var(--success)"
+                              : "var(--accent-light)",
                         }}
                       >
                         {fileKind}
                       </span>
                       <span
                         className="text-[11px]"
-                        style={{ color: colors.textMuted }}
+                        style={{ color: "var(--text-muted)" }}
                       >
                         {fileSizeMB(file.size)} MB
                       </span>
                       {fileKind === "pdf" && pdfTotalPages > 0 && (
                         <>
-                          <span style={{ color: colors.textDim }}>·</span>
+                          <span style={{ color: "var(--text-dim)" }}>·</span>
                           <span
                             className="text-[11px]"
-                            style={{ color: colors.textMuted }}
+                            style={{ color: "var(--text-muted)" }}
                           >
                             {pdfTotalPages} page
                             {pdfTotalPages !== 1 ? "s" : ""}
@@ -1352,7 +1361,7 @@ export default function TemplateNewPage() {
                     onClick={resetFile}
                     disabled={isProcessing}
                     className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5 active:bg-white/10 active:scale-90 disabled:opacity-40"
-                    style={{ color: colors.textMuted }}
+                    style={{ color: "var(--text-muted)" }}
                     title="Remove file"
                   >
                     <XIcon className="w-4 h-4" />
@@ -1368,15 +1377,18 @@ export default function TemplateNewPage() {
                 <div
                   className="flex items-center justify-center gap-3 p-8 rounded-2xl"
                   style={{
-                    border: "1px dashed rgba(99,102,241,0.18)",
-                    background: "rgba(99,102,241,0.02)",
+                    border: "1px dashed var(--accent-border)",
+                    background: "var(--accent-soft)",
                   }}
                 >
                   <Loader2Icon
                     className="w-4 h-4 animate-spin"
-                    style={{ color: "#818cf8" }}
+                    style={{ color: "var(--accent-light)" }}
                   />
-                  <span className="text-sm" style={{ color: colors.textMuted }}>
+                  <span
+                    className="text-sm"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Loading page previews…
                   </span>
                 </div>
@@ -1388,13 +1400,13 @@ export default function TemplateNewPage() {
                 <div className="mb-3">
                   <h2
                     className="text-sm font-semibold"
-                    style={{ color: colors.text }}
+                    style={{ color: "var(--text)" }}
                   >
                     2. Choose pages
                   </h2>
                   <p
                     className="text-xs mt-0.5"
-                    style={{ color: colors.textMuted }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     Select which pages to include in the template
                   </p>
@@ -1419,17 +1431,18 @@ export default function TemplateNewPage() {
                 <div
                   className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl mt-3"
                   style={{
-                    background: "rgba(251,191,36,0.04)",
-                    border: "1px solid rgba(251,191,36,0.1)",
+                    background: "var(--warning-bg)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
                   }}
                 >
                   <AlertCircleIcon
                     className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                    style={{ color: "#fbbf24" }}
+                    style={{ color: "var(--warning)" }}
                   />
                   <p
                     className="text-[11px] leading-relaxed"
-                    style={{ color: "#fbbf24" }}
+                    style={{ color: "var(--warning)" }}
                   >
                     <span className="font-semibold">Conversion note:</span>{" "}
                     Complex layouts, tables, or scanned/image-based pages may
@@ -1445,13 +1458,13 @@ export default function TemplateNewPage() {
                 <div className="mb-3">
                   <h2
                     className="text-sm font-semibold"
-                    style={{ color: colors.text }}
+                    style={{ color: "var(--text)" }}
                   >
                     {fileKind === "pdf" ? "3." : "2."} Template details
                   </h2>
                   <p
                     className="text-xs mt-0.5"
-                    style={{ color: colors.textMuted }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     Name and categorize your template
                   </p>
@@ -1460,8 +1473,8 @@ export default function TemplateNewPage() {
                 <div
                   className="rounded-2xl p-4 space-y-4"
                   style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: `1px solid ${colors.borderSubtle}`,
+                    background: "var(--bg-muted)",
+                    border: `1px solid var(--border-subtle)`,
                   }}
                 >
                   {/* Name */}
@@ -1469,10 +1482,10 @@ export default function TemplateNewPage() {
                     <label
                       htmlFor="template-name"
                       className="text-xs font-semibold flex items-center gap-1"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       Template name
-                      <span style={{ color: "#f87171" }}>*</span>
+                      <span style={{ color: "var(--danger)" }}>*</span>
                     </label>
                     <input
                       id="template-name"
@@ -1488,16 +1501,16 @@ export default function TemplateNewPage() {
                       disabled={isProcessing}
                       className="w-full rounded-xl px-3.5 py-3 text-sm outline-none disabled:opacity-50 transition-colors min-h-[44px]"
                       style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: `1px solid ${nameError ? "rgba(239,68,68,0.5)" : colors.border}`,
-                        color: colors.text,
+                        background: "var(--bg-muted)",
+                        border: `1px solid ${nameError ? "color-mix(in srgb, var(--danger) 60%, transparent)" : "var(--border-subtle)"}`,
+                        color: "var(--text)",
                       }}
                       onFocus={(e) =>
                         !nameError &&
-                        (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                        (e.currentTarget.style.border = `1px solid var(--accent-border)`)
                       }
                       onBlur={(e) =>
-                        (e.currentTarget.style.border = `1px solid ${nameError ? "rgba(239,68,68,0.5)" : colors.border}`)
+                        (e.currentTarget.style.border = `1px solid ${nameError ? "color-mix(in srgb, var(--danger) 60%, transparent)" : "var(--border-subtle)"}`)
                       }
                     />
                     {nameError && <FieldError message={nameError} />}
@@ -1507,10 +1520,12 @@ export default function TemplateNewPage() {
                   <div className="space-y-1.5">
                     <label
                       className="text-xs font-semibold"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       Description{" "}
-                      <span style={{ color: colors.textDim, fontWeight: 400 }}>
+                      <span
+                        style={{ color: "var(--text-dim)", fontWeight: 400 }}
+                      >
                         (optional)
                       </span>
                     </label>
@@ -1522,15 +1537,15 @@ export default function TemplateNewPage() {
                       disabled={isProcessing}
                       className="w-full rounded-xl px-3.5 py-3 text-sm outline-none resize-none disabled:opacity-50 transition-colors"
                       style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: `1px solid ${colors.border}`,
-                        color: colors.text,
+                        background: "var(--bg-muted)",
+                        border: `1px solid var(--border-subtle)`,
+                        color: "var(--text)",
                       }}
                       onFocus={(e) =>
-                        (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                        (e.currentTarget.style.border = `1px solid var(--accent-border)`)
                       }
                       onBlur={(e) =>
-                        (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                        (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                       }
                     />
                   </div>
@@ -1539,11 +1554,13 @@ export default function TemplateNewPage() {
                   <div className="space-y-1.5">
                     <label
                       className="text-xs font-semibold flex items-center gap-1.5"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       <TagIcon className="w-3 h-3" />
                       Labels{" "}
-                      <span style={{ color: colors.textDim, fontWeight: 400 }}>
+                      <span
+                        style={{ color: "var(--text-dim)", fontWeight: 400 }}
+                      >
                         (optional)
                       </span>
                     </label>
@@ -1567,17 +1584,17 @@ export default function TemplateNewPage() {
                   className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[52px]"
                   style={{
                     background: canSave
-                      ? "rgba(99,102,241,0.22)"
-                      : "rgba(99,102,241,0.06)",
-                    color: canSave ? colors.accentPale : colors.textDim,
-                    border: `1.5px solid ${canSave ? colors.accentBorder : "rgba(99,102,241,0.09)"}`,
+                      ? "var(--accent-strong-bg)"
+                      : "var(--accent-soft)",
+                    color: canSave ? "var(--accent-pale)" : "var(--text-dim)",
+                    border: `1.5px solid ${canSave ? "var(--accent-border)" : "color-mix(in srgb, var(--accent-light) 10%, transparent)"}`,
                   }}
                 >
                   {saving ? (
                     <>
                       <Loader2Icon
                         className="w-4 h-4 animate-spin"
-                        style={{ color: colors.accentLight }}
+                        style={{ color: "var(--accent-light)" }}
                       />
                       <span>{STAGE_LABEL[stage] || "Saving…"}</span>
                     </>
@@ -1604,7 +1621,7 @@ export default function TemplateNewPage() {
                 {fileKind === "docx" && !saving && (
                   <p
                     className="text-[11px] text-center mt-2"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     Your DOCX will be used as-is · placeholders detected
                     automatically
@@ -1621,7 +1638,7 @@ export default function TemplateNewPage() {
         <div
           className="fixed inset-0 z-[999] flex items-center justify-center p-4"
           style={{
-            background: "rgba(8,8,18,0.85)",
+            background: "var(--overlay-backdrop)",
             backdropFilter: "blur(8px)",
             WebkitBackdropFilter: "blur(8px)",
             animation: "fadeIn 0.2s ease-out",
@@ -1646,10 +1663,9 @@ export default function TemplateNewPage() {
           <div
             className="w-full max-w-sm rounded-3xl p-8 flex flex-col items-center gap-6 text-center"
             style={{
-              background: "rgba(18,18,32,0.98)",
-              border: "1px solid rgba(99,102,241,0.25)",
-              boxShadow:
-                "0 0 0 1px rgba(99,102,241,0.1), 0 24px 64px rgba(0,0,0,0.6), 0 0 80px rgba(99,102,241,0.08)",
+              background: "var(--popover)",
+              border: "1px solid var(--accent-border)",
+              boxShadow: "var(--shadow-elevated)",
               animation: "slideUp 0.25s ease-out",
             }}
           >
@@ -1660,7 +1676,7 @@ export default function TemplateNewPage() {
                 className="absolute w-20 h-20 rounded-full"
                 style={{
                   background:
-                    "radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)",
+                    "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
                 }}
               />
               {/* Track ring */}
@@ -1675,7 +1691,7 @@ export default function TemplateNewPage() {
                   cx="32"
                   cy="32"
                   r="26"
-                  stroke="rgba(99,102,241,0.12)"
+                  stroke="var(--accent-soft)"
                   strokeWidth="3"
                 />
                 <path
@@ -1686,8 +1702,16 @@ export default function TemplateNewPage() {
                 />
                 <defs>
                   <linearGradient id="spinGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0" />
-                    <stop offset="100%" stopColor="#818cf8" stopOpacity="1" />
+                    <stop
+                      offset="0%"
+                      stopColor="var(--primary)"
+                      stopOpacity="0"
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="var(--accent-light)"
+                      stopOpacity="1"
+                    />
                   </linearGradient>
                 </defs>
               </svg>
@@ -1695,11 +1719,14 @@ export default function TemplateNewPage() {
               <div
                 className="absolute w-9 h-9 rounded-xl flex items-center justify-center"
                 style={{
-                  background: "rgba(99,102,241,0.15)",
-                  border: "1px solid rgba(99,102,241,0.25)",
+                  background: "var(--accent-soft)",
+                  border: "1px solid var(--accent-border)",
                 }}
               >
-                <Loader2Icon className="w-4 h-4" style={{ color: "#818cf8" }} />
+                <Loader2Icon
+                  className="w-4 h-4"
+                  style={{ color: "var(--accent-light)" }}
+                />
               </div>
             </div>
 
@@ -1707,13 +1734,13 @@ export default function TemplateNewPage() {
             <div className="space-y-1.5">
               <p
                 className="text-base font-semibold"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {STAGE_LABEL[stage] || "Processing…"}
               </p>
               <p
                 className="text-xs leading-relaxed"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 Please wait, this may take a moment.
                 <br />
@@ -1726,8 +1753,8 @@ export default function TemplateNewPage() {
               <div
                 className="w-full rounded-2xl p-4 space-y-2"
                 style={{
-                  background: "rgba(255,255,255,0.025)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
                 }}
               >
                 {(fileKind === "pdf" ? STAGE_ORDER_PDF : STAGE_ORDER_DOCX).map(
@@ -1746,36 +1773,36 @@ export default function TemplateNewPage() {
                           className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-300"
                           style={{
                             background: isDone
-                              ? "rgba(52,211,153,0.15)"
+                              ? "var(--success-bg)"
                               : isActive
-                                ? "rgba(99,102,241,0.25)"
-                                : "rgba(255,255,255,0.05)",
+                                ? "var(--accent-soft)"
+                                : "var(--bg-muted)",
                             border: `1.5px solid ${
                               isDone
-                                ? "rgba(52,211,153,0.5)"
+                                ? "color-mix(in srgb, var(--success) 50%, transparent)"
                                 : isActive
-                                  ? "rgba(99,102,241,0.6)"
-                                  : "rgba(255,255,255,0.1)"
+                                  ? "color-mix(in srgb, var(--accent-light) 60%, transparent)"
+                                  : "var(--bg-input)"
                             }`,
                           }}
                         >
                           {isDone ? (
                             <CheckIcon
                               className="w-2.5 h-2.5"
-                              style={{ color: "#34d399" }}
+                              style={{ color: "var(--success)" }}
                             />
                           ) : isActive ? (
                             <div
                               className="w-1.5 h-1.5 rounded-full"
                               style={{
-                                background: "#818cf8",
+                                background: "var(--accent-light)",
                                 animation: "spinPulse 1s ease-in-out infinite",
                               }}
                             />
                           ) : (
                             <div
                               className="w-1.5 h-1.5 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.2)" }}
+                              style={{ background: "var(--bg-input)" }}
                             />
                           )}
                         </div>
@@ -1785,10 +1812,10 @@ export default function TemplateNewPage() {
                           className="text-[12px] font-medium flex-1 text-left"
                           style={{
                             color: isDone
-                              ? "#34d399"
+                              ? "var(--success)"
                               : isActive
-                                ? colors.textSecondary
-                                : colors.textDim,
+                                ? "var(--text-secondary)"
+                                : "var(--text-dim)",
                           }}
                         >
                           {STAGE_LABEL[s].replace("…", "")}
@@ -1799,9 +1826,9 @@ export default function TemplateNewPage() {
                           <span
                             className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                             style={{
-                              background: "rgba(99,102,241,0.15)",
-                              color: "#818cf8",
-                              border: "1px solid rgba(99,102,241,0.2)",
+                              background: "var(--accent-soft)",
+                              color: "var(--accent-light)",
+                              border: "1px solid var(--accent-border)",
                             }}
                           >
                             In progress
@@ -1811,9 +1838,10 @@ export default function TemplateNewPage() {
                           <span
                             className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                             style={{
-                              background: "rgba(52,211,153,0.1)",
-                              color: "#34d399",
-                              border: "1px solid rgba(52,211,153,0.15)",
+                              background: "var(--success-bg)",
+                              color: "var(--success)",
+                              border:
+                                "1px solid color-mix(in srgb, var(--success) 18%, transparent)",
                             }}
                           >
                             Done

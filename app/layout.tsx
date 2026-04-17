@@ -1,9 +1,14 @@
+// app/layout.tsx (Tambahkan suppressHydrationWarning di body juga)
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
-import "./globals.css";
+import Script from "next/script";
+
 import ConvexClientProvider from "@/components/ConvexClientProvider";
-import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ClerkThemeProvider } from "@/components/ClerkThemeProvider";
 import { Toaster } from "sonner";
+
+import "./globals.css";
 
 const jakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -16,6 +21,26 @@ export const metadata: Metadata = {
   description: "Your modern document workspace",
 };
 
+const themeInitScript = `
+(function() {
+  try {
+    var savedTheme = localStorage.getItem("theme");
+    var theme = savedTheme === "light" ? "light" : "dark";
+    var root = document.documentElement;
+    
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    
+    root.classList.remove("theme-dark", "theme-light", "dark");
+    root.classList.add(theme === "light" ? "theme-light" : "theme-dark");
+    
+    if (theme === "dark") {
+      root.classList.add("dark");
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -23,13 +48,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={jakartaSans.className}>
-        <ClerkProvider>
-          <ConvexClientProvider>
-            {children}
-            <Toaster richColors position="bottom-right" />
-          </ConvexClientProvider>
-        </ClerkProvider>
+      <head>
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+      </head>
+      <body className={jakartaSans.className} suppressHydrationWarning>
+        <ThemeProvider>
+          <ClerkThemeProvider>
+            <ConvexClientProvider>
+              {children}
+              <Toaster richColors position="bottom-right" />
+            </ConvexClientProvider>
+          </ClerkThemeProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

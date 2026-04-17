@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import Link from "next/link";
 import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
-
+import { shadows } from "@/lib/design-tokens";
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 
@@ -54,38 +54,38 @@ function PaperCardSkeleton() {
     <div
       className="rounded-2xl p-4 flex flex-col gap-3 animate-pulse"
       style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--bg-muted)",
+        border: "1px solid var(--border-subtle)",
         minHeight: 172,
       }}
     >
       <div className="flex items-center gap-3">
         <div
           className="w-9 h-9 rounded-xl shrink-0"
-          style={{ background: "rgba(255,255,255,0.07)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div className="flex-1 space-y-2">
           <div
             className="h-3.5 rounded-md w-3/4"
-            style={{ background: "rgba(255,255,255,0.08)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div
             className="h-2.5 rounded-md w-1/3"
-            style={{ background: "rgba(255,255,255,0.05)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
         <div
           className="w-7 h-7 rounded-lg shrink-0"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
       </div>
       <div
         className="rounded-xl h-14"
-        style={{ background: "rgba(255,255,255,0.04)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
       <div
         className="h-4 rounded-md w-1/2"
-        style={{ background: "rgba(255,255,255,0.04)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
     </div>
   );
@@ -96,23 +96,23 @@ function RowSkeleton() {
     <div
       className="rounded-xl p-3.5 flex items-center gap-3 animate-pulse"
       style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(255,255,255,0.05)",
+        background: "var(--bg-muted)",
+        border: "1px solid var(--border-subtle)",
         minHeight: 60,
       }}
     >
       <div
         className="w-8 h-8 rounded-lg shrink-0"
-        style={{ background: "rgba(255,255,255,0.07)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="flex-1 space-y-1.5">
         <div
           className="h-3 rounded w-2/3"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div
           className="h-2.5 rounded w-1/3"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
       </div>
     </div>
@@ -166,13 +166,9 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
       <div
         className="rounded-2xl p-4 flex flex-col gap-3 cursor-pointer transition-all duration-200 h-full"
         style={{
-          background: hovered
-            ? "rgba(255,255,255,0.045)"
-            : "rgba(255,255,255,0.025)",
-          border: `1px solid ${hovered ? "rgba(255,255,255,0.11)" : "rgba(255,255,255,0.06)"}`,
-          boxShadow: hovered
-            ? "0 0 0 1px rgba(99,102,241,0.08), 0 8px 32px rgba(0,0,0,0.35)"
-            : "none",
+          background: hovered ? "var(--bg-card-hover)" : "var(--bg-card)",
+          border: `1px solid ${hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
+          boxShadow: hovered ? "var(--shadow-elevated)" : "none",
         }}
         onClick={() => router.push(`/documents/${document._id}`)}
         onMouseEnter={() => setHovered(true)}
@@ -182,26 +178,23 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
         <div className="flex items-start gap-3">
           <div
             className="text-lg shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           >
             {document.icon ?? "📄"}
           </div>
           <div className="flex-1 min-w-0">
             <p
               className="text-sm font-medium leading-snug line-clamp-2"
-              style={{ color: "rgba(255,255,255,0.9)" }}
+              style={{ color: "var(--text)" }}
             >
               {document.title}
             </p>
             <div className="flex items-center gap-1.5 mt-1">
               <ClockIcon
                 className="w-2.5 h-2.5 shrink-0"
-                style={{ color: "rgba(255,255,255,0.28)" }}
+                style={{ color: "var(--text-dim)" }}
               />
-              <p
-                className="text-[11px]"
-                style={{ color: "rgba(255,255,255,0.38)" }}
-              >
+              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                 {formatDistanceToNow(new Date(document._creationTime), {
                   addSuffix: true,
                 })}
@@ -216,19 +209,19 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
                 onClick={(e) => e.stopPropagation()}
                 className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-hover)",
                 }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
               >
                 <MoreHorizontalIcon
                   className="w-3.5 h-3.5"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
+                  style={{ color: "var(--text-muted)" }}
                 />
               </button>
             </DropdownMenuTrigger>
@@ -288,7 +281,7 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
           {document.aiSummaryStatus === "done" && document.aiSummary ? (
             <p
               className="text-[11px] leading-relaxed line-clamp-3"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              style={{ color: "var(--text-secondary)" }}
             >
               {document.aiSummary}
             </p>
@@ -298,17 +291,14 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
                 className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin shrink-0"
                 style={{ color: "#818cf8" }}
               />
-              <p
-                className="text-[11px]"
-                style={{ color: "rgba(255,255,255,0.45)" }}
-              >
+              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                 Generating summary…
               </p>
             </div>
           ) : (
             <p
               className="text-[11px] italic"
-              style={{ color: "rgba(255,255,255,0.28)" }}
+              style={{ color: "var(--text-dim)" }}
             >
               No AI summary yet
             </p>
@@ -325,9 +315,9 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
                   style={{
                     background: col.color
                       ? `${col.color}22`
-                      : "rgba(255,255,255,0.07)",
-                    color: col.color ?? "rgba(255,255,255,0.55)",
-                    border: `1px solid ${col.color ? `${col.color}35` : "rgba(255,255,255,0.08)"}`,
+                      : "var(--bg-input)",
+                    color: col.color ?? "var(--text-muted)",
+                    border: `1px solid ${col.color ? `${col.color}35` : "var(--border-hover)"}`,
                   }}
                 >
                   <span>
@@ -346,10 +336,7 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
               ))
             : null}
           {collections && collections.length > 2 && (
-            <span
-              className="text-[10px]"
-              style={{ color: "rgba(255,255,255,0.28)" }}
-            >
+            <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
               +{collections.length - 2}
             </span>
           )}
@@ -409,10 +396,8 @@ function CollectionRow({
       <div
         className="rounded-xl px-3.5 py-3 flex items-center gap-3 transition-all duration-150 cursor-pointer"
         style={{
-          background: hovered
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(255,255,255,0.02)",
-          border: `1px solid ${hovered ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)"}`,
+          background: hovered ? "var(--bg-muted)" : "var(--bg-muted)",
+          border: `1px solid ${hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
           minHeight: 60,
         }}
         onMouseEnter={() => setHovered(true)}
@@ -441,7 +426,7 @@ function CollectionRow({
           <div className="flex items-center gap-1.5">
             <p
               className="text-[13px] font-medium truncate"
-              style={{ color: "rgba(255,255,255,0.85)" }}
+              style={{ color: "var(--text)" }}
             >
               {col.name}
             </p>
@@ -450,16 +435,13 @@ function CollectionRow({
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <p
-              className="text-[11px]"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-            >
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {col.documentCount ?? 0} paper
               {(col.documentCount ?? 0) !== 1 ? "s" : ""}
             </p>
             {col.tags && col.tags.length > 0 && (
               <>
-                <span style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
+                <span style={{ color: "var(--text-placeholder)" }}>·</span>
                 <div className="flex items-center gap-1 flex-wrap">
                   {col.tags.slice(0, 2).map((tag) => (
                     <span
@@ -477,7 +459,7 @@ function CollectionRow({
                   {col.tags.length > 2 && (
                     <span
                       className="text-[10px]"
-                      style={{ color: "rgba(255,255,255,0.25)" }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       +{col.tags.length - 2}
                     </span>
@@ -490,7 +472,7 @@ function CollectionRow({
         <ArrowRightIcon
           className="w-3.5 h-3.5 shrink-0 transition-transform duration-150"
           style={{
-            color: "rgba(255,255,255,0.2)",
+            color: "var(--text-dim)",
             transform: hovered ? "translateX(2px)" : "none",
           }}
         />
@@ -544,15 +526,12 @@ function TemplateRow({ template }: { template: Doc<"templates"> }) {
         <div className="flex-1 min-w-0">
           <p
             className="text-[13px] font-medium truncate"
-            style={{ color: "rgba(255,255,255,0.85)" }}
+            style={{ color: "var(--text)" }}
           >
             {template.name}
           </p>
           <div className="flex items-center gap-2 mt-0.5">
-            <p
-              className="text-[11px]"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-            >
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {template.fields.length} field
               {template.fields.length !== 1 ? "s" : ""}
             </p>
@@ -606,7 +585,7 @@ function SectionHeader({
       <div className="flex items-center gap-2">
         <h2
           className="text-[11px] font-semibold tracking-widest uppercase"
-          style={{ color: "rgba(255,255,255,0.38)", letterSpacing: "0.07em" }}
+          style={{ color: "var(--text-muted)", letterSpacing: "0.07em" }}
         >
           {title}
         </h2>
@@ -614,8 +593,8 @@ function SectionHeader({
           <span
             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.35)",
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
             }}
           >
             {count}
@@ -625,7 +604,7 @@ function SectionHeader({
       <Link
         href={href}
         className="flex items-center gap-1 text-[11px] font-medium transition-colors"
-        style={{ color: hovered ? "#818cf8" : "rgba(255,255,255,0.3)" }}
+        style={{ color: hovered ? "#818cf8" : "var(--text-dim)" }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -655,23 +634,23 @@ function EmptyState({
   return (
     <div
       className="flex flex-col items-center justify-center py-7 px-4 text-center rounded-xl"
-      style={{ border: "1px dashed rgba(255,255,255,0.08)", minHeight: 120 }}
+      style={{ border: "1px dashed var(--border-subtle)", minHeight: 120 }}
     >
       <div
         className="w-8 h-8 rounded-xl flex items-center justify-center mb-2.5"
-        style={{ background: "rgba(255,255,255,0.04)" }}
+        style={{ background: "var(--bg-muted)" }}
       >
-        <Icon className="w-4 h-4" style={{ color: "rgba(255,255,255,0.22)" }} />
+        <Icon className="w-4 h-4" style={{ color: "var(--text-dim)" }} />
       </div>
       <p
         className="text-[12px] font-medium mb-1"
-        style={{ color: "rgba(255,255,255,0.45)" }}
+        style={{ color: "var(--text-muted)" }}
       >
         {title}
       </p>
       <p
         className="text-[11px] mb-4 max-w-[180px] leading-relaxed"
-        style={{ color: "rgba(255,255,255,0.22)" }}
+        style={{ color: "var(--text-dim)" }}
       >
         {description}
       </p>
@@ -832,25 +811,28 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div
+      className="flex flex-col h-full min-h-0"
+      style={{ background: "var(--bg)" }}
+    >
       {/* ── Page header ── */}
       <div
         className="shrink-0 px-4 sm:px-6 lg:px-7 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        style={{ borderBottom: "1px solid var(--border-subtle)" }}
       >
         {/* Greeting + button — stack on very small screens, row on sm+ */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="min-w-0">
             <h1
               className="text-[15px] sm:text-base font-semibold leading-tight truncate"
-              style={{ color: "rgba(255,255,255,0.9)" }}
+              style={{ color: "var(--text)" }}
             >
               {user ? `${greeting}, ${user.firstName ?? "there"}` : "Home"}
               <span style={{ color: "#6366f1" }}> ✦</span>
             </h1>
             <p
               className="text-[11px] mt-0.5"
-              style={{ color: "rgba(255,255,255,0.3)" }}
+              style={{ color: "var(--text-dim)" }}
             >
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
@@ -865,20 +847,19 @@ export default function HomePage() {
             disabled={isCreating}
             className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0 self-start sm:self-auto"
             style={{
-              background: "rgba(99,102,241,0.18)",
-              color: "#a5b4fc",
-              border: "1px solid rgba(99,102,241,0.28)",
+              background: "var(--accent-bg)",
+              color: "var(--accent-pale)",
+              border: `1px solid var(--accent-border)`,
               whiteSpace: "nowrap",
             }}
             onMouseEnter={(e) => {
               if (!isCreating) {
-                e.currentTarget.style.background = "rgba(99,102,241,0.28)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 20px rgba(99,102,241,0.25)";
+                e.currentTarget.style.background = "var(--accent-bg-hover)";
+                e.currentTarget.style.boxShadow = shadows.glow;
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(99,102,241,0.18)";
+              e.currentTarget.style.background = "var(--accent-bg)";
               e.currentTarget.style.boxShadow = "none";
             }}
           >
@@ -938,7 +919,7 @@ export default function HomePage() {
                   </span>
                   <span
                     className="text-[11px] font-medium"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     {label}
                   </span>
@@ -979,7 +960,7 @@ export default function HomePage() {
                   )}
                   <p
                     className="text-[12px] font-medium truncate"
-                    style={{ color: "rgba(255,255,255,0.65)" }}
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     {organization.name}
                   </p>
@@ -996,7 +977,7 @@ export default function HomePage() {
                 {orgDocs !== undefined && orgDocs.length > 0 && (
                   <p
                     className="text-[11px] shrink-0"
-                    style={{ color: "rgba(255,255,255,0.3)" }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     {orgDocs.length} shared
                   </p>
@@ -1032,7 +1013,7 @@ export default function HomePage() {
                 </div>
                 <span
                   className="text-[12px] font-medium text-center sm:text-left leading-tight"
-                  style={{ color: "rgba(255,255,255,0.72)" }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   {label}
                 </span>

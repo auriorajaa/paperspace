@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { colors } from "@/lib/design-tokens";
 import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,14 +192,14 @@ function CollectionFormDialog({
                 <div
                   className="absolute top-14 left-0 z-50 rounded-2xl p-3 shadow-2xl"
                   style={{
-                    background: "#1a1a24",
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--bg-card)",
+                    border: `1px solid var(--border-subtle)`,
                     width: 280,
                   }}
                 >
                   <p
                     className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-1"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     Choose icon
                   </p>
@@ -225,7 +224,7 @@ function CollectionFormDialog({
                         onMouseEnter={(e) => {
                           if (form.iconKey !== key)
                             e.currentTarget.style.background =
-                              "rgba(255,255,255,0.06)";
+                              "var(--bg-input)";
                         }}
                         onMouseLeave={(e) => {
                           if (form.iconKey !== key)
@@ -238,7 +237,7 @@ function CollectionFormDialog({
                             color:
                               form.iconKey === key
                                 ? form.color
-                                : colors.textMuted,
+                                : "var(--text-muted)",
                           }}
                         />
                       </button>
@@ -251,7 +250,7 @@ function CollectionFormDialog({
             <div className="flex-1 space-y-1.5">
               <Label
                 className="text-[11px]"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 Name <span className="text-red-400">*</span>
               </Label>
@@ -265,15 +264,15 @@ function CollectionFormDialog({
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.text,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text)",
                 }}
                 onFocus={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                  (e.currentTarget.style.border = `1px solid var(--accent-border)`)
                 }
                 onBlur={(e) =>
-                  (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                  (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
                 }
               />
             </div>
@@ -281,7 +280,7 @@ function CollectionFormDialog({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Label className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               Description
             </Label>
             <textarea
@@ -293,16 +292,16 @@ function CollectionFormDialog({
               rows={2}
               className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none resize-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
             />
           </div>
 
           {/* Color */}
           <div className="space-y-2">
-            <Label className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Label className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               Accent color
             </Label>
             <div className="flex gap-2.5 flex-wrap">
@@ -330,14 +329,14 @@ function CollectionFormDialog({
 
           {/* Tags */}
           <div className="space-y-1.5">
-            <Label className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Label className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               Tags
             </Label>
             <div
               className="flex flex-wrap gap-1.5 p-2.5 rounded-xl min-h-[44px] cursor-text"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
               }}
               onClick={(e) => {
                 (
@@ -375,7 +374,7 @@ function CollectionFormDialog({
                   form.tags.length ? "" : "Add tags… (Enter or comma)"
                 }
                 className="flex-1 min-w-[100px] text-[12px] bg-transparent outline-none"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               />
             </div>
           </div>
@@ -390,9 +389,9 @@ function CollectionFormDialog({
             style={{
               background: form.isFavorite
                 ? "rgba(251,191,36,0.1)"
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${form.isFavorite ? "rgba(251,191,36,0.3)" : colors.border}`,
-              color: form.isFavorite ? "#fbbf24" : colors.textMuted,
+                : "var(--bg-muted)",
+              border: `1px solid ${form.isFavorite ? "rgba(251,191,36,0.3)" : "var(--border-subtle)"}`,
+              color: form.isFavorite ? "#fbbf24" : "var(--text-muted)",
             }}
           >
             <StarIcon
@@ -408,9 +407,9 @@ function CollectionFormDialog({
             disabled={loading}
             className="px-4 py-2 rounded-xl text-[13px] font-medium"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             Cancel
@@ -420,16 +419,16 @@ function CollectionFormDialog({
             disabled={loading}
             className="px-4 py-2 rounded-xl text-[13px] font-medium transition-all"
             style={{
-              background: colors.accentBg,
-              color: colors.accentLight,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              color: "var(--accent-light)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             {loading ? (
               <span className="flex items-center gap-2">
                 <div
                   className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                  style={{ borderColor: colors.accentLight }}
+                  style={{ borderColor: "var(--accent-light)" }}
                 />
                 Saving…
               </span>
@@ -471,19 +470,19 @@ function CollectionCard({
         className="rounded-2xl flex flex-col overflow-hidden h-full transition-all duration-200 cursor-pointer"
         style={{
           background: hovered
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(255,255,255,0.025)",
-          border: `1px solid ${hovered ? accent + "40" : colors.border}`,
+            ? "var(--bg-card-hover)"
+            : "var(--bg-card)",
+          border: `1px solid ${hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
           boxShadow: hovered
-            ? `0 0 0 1px ${accent}15, 0 8px 28px rgba(0,0,0,0.3)`
+            ? "var(--shadow-elevated)"
             : "none",
-          transform: hovered ? "translateY(-1px)" : "none",
+          transform: "none",
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         {/* Accent top bar */}
-        <div className="h-1 w-full shrink-0" style={{ background: accent }} />
+        {/* <div className="h-1 w-full shrink-0" style={{ background: accent }} /> */}
 
         <div className="flex flex-col gap-3 p-4 flex-1">
           {/* Header row */}
@@ -501,7 +500,7 @@ function CollectionCard({
               <div className="flex items-center gap-1.5 flex-wrap">
                 <p
                   className="text-[13px] font-semibold truncate"
-                  style={{ color: colors.text }}
+                  style={{ color: "var(--text)" }}
                 >
                   {col.name}
                 </p>
@@ -511,7 +510,7 @@ function CollectionCard({
               </div>
               <p
                 className="text-[11px] mt-0.5"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {col.documentCount} paper{col.documentCount !== 1 ? "s" : ""} ·{" "}
                 {smartDate(col._creationTime)}
@@ -531,9 +530,9 @@ function CollectionCard({
                   toggleFavorite({ id: col._id });
                 }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-                style={{ color: col.isFavorite ? "#fbbf24" : colors.textDim }}
+                style={{ color: col.isFavorite ? "#fbbf24" : "var(--text-dim)" }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
                 onMouseLeave={(e) =>
                   (e.currentTarget.style.background = "transparent")
@@ -553,17 +552,17 @@ function CollectionCard({
                     }}
                     className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
                     style={{
-                      background: "rgba(255,255,255,0.06)",
-                      border: `1px solid ${colors.border}`,
-                      color: colors.textDim,
+                      background: "var(--bg-input)",
+                      border: `1px solid var(--border-subtle)`,
+                      color: "var(--text-dim)",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.12)")
+                        "var(--border-hover)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.06)")
+                        "var(--bg-input)")
                     }
                   >
                     <MoreHorizontalIcon className="w-3.5 h-3.5" />
@@ -601,7 +600,7 @@ function CollectionCard({
           {col.description && (
             <p
               className="text-[11px] leading-relaxed line-clamp-2"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               {col.description}
             </p>
@@ -634,9 +633,9 @@ function CollectionCard({
                   onClick={() => setTagsExpanded(true)}
                   className="text-[10px] px-1.5 py-0.5 rounded-md font-medium transition-colors"
                   style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: colors.textDim,
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--bg-input)",
+                    color: "var(--text-dim)",
+                    border: `1px solid var(--border-subtle)`,
                   }}
                 >
                   +{overflowCount}
@@ -649,7 +648,7 @@ function CollectionCard({
           <div className="mt-auto pt-1 flex items-center gap-2">
             <div
               className="flex-1 h-1 rounded-full overflow-hidden"
-              style={{ background: "rgba(255,255,255,0.06)" }}
+              style={{ background: "var(--bg-input)" }}
             >
               <div
                 className="h-full rounded-full transition-all duration-500"
@@ -700,8 +699,8 @@ function CollectionListRow({
       <div
         className="flex items-center gap-3 px-4 sm:px-5 cursor-pointer transition-all duration-150"
         style={{
-          borderBottom: `1px solid ${colors.border}`,
-          background: hovered ? "rgba(255,255,255,0.02)" : "transparent",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: hovered ? "var(--bg-card-hover)" : "transparent",
           minHeight: 60,
         }}
         onMouseEnter={() => setHovered(true)}
@@ -721,7 +720,7 @@ function CollectionListRow({
           <div className="flex items-center gap-1.5">
             <p
               className="text-[13px] font-semibold truncate"
-              style={{ color: colors.text }}
+              style={{ color: "var(--text)" }}
             >
               {col.name}
             </p>
@@ -730,15 +729,15 @@ function CollectionListRow({
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
+            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {col.documentCount} paper{col.documentCount !== 1 ? "s" : ""}
             </span>
             {col.description && (
               <>
-                <span style={{ color: colors.textDim }}>·</span>
+                <span style={{ color: "var(--text-dim)" }}>·</span>
                 <span
                   className="text-[11px] truncate max-w-[160px] sm:max-w-[220px]"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   {col.description}
                 </span>
@@ -761,7 +760,7 @@ function CollectionListRow({
         </div>
         <span
           className="hidden sm:block text-[11px] tabular-nums shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           {smartDate(col._creationTime)}
         </span>
@@ -776,9 +775,9 @@ function CollectionListRow({
           <button
             onClick={() => toggleFavorite({ id: col._id })}
             className="hidden sm:flex w-7 h-7 rounded-lg items-center justify-center transition-colors"
-            style={{ color: col.isFavorite ? "#fbbf24" : colors.textDim }}
+            style={{ color: col.isFavorite ? "#fbbf24" : "var(--text-dim)" }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.07)")
+              (e.currentTarget.style.background = "var(--bg-input)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -797,15 +796,15 @@ function CollectionListRow({
                 }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textDim,
+                  background: "var(--bg-input)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-dim)",
                 }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
               >
                 <MoreHorizontalIcon className="w-3.5 h-3.5" />
@@ -851,48 +850,48 @@ function GridSkeleton() {
     <div
       className="rounded-2xl overflow-hidden animate-pulse"
       style={{
-        background: "rgba(255,255,255,0.025)",
-        border: `1px solid ${colors.border}`,
+        background: "var(--bg-card)",
+        border: `1px solid var(--border-subtle)`,
       }}
     >
       <div
         className="h-1 w-full"
-        style={{ background: "rgba(255,255,255,0.06)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="p-4 space-y-3">
         <div className="flex items-start gap-3">
           <div
             className="w-10 h-10 rounded-xl shrink-0"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div className="flex-1 space-y-1.5">
             <div
               className="h-3.5 rounded w-2/3"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: "var(--bg-input)" }}
             />
             <div
               className="h-2.5 rounded w-1/3"
-              style={{ background: "rgba(255,255,255,0.05)" }}
+              style={{ background: "var(--bg-muted)" }}
             />
           </div>
         </div>
         <div
           className="h-2.5 rounded w-full"
-          style={{ background: "rgba(255,255,255,0.04)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div className="flex gap-1">
           <div
             className="h-4 rounded-md w-14"
-            style={{ background: "rgba(255,255,255,0.06)" }}
+            style={{ background: "var(--bg-input)" }}
           />
           <div
             className="h-4 rounded-md w-10"
-            style={{ background: "rgba(255,255,255,0.05)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
         <div
           className="h-1 rounded-full"
-          style={{ background: "rgba(255,255,255,0.06)" }}
+          style={{ background: "var(--bg-input)" }}
         />
       </div>
     </div>
@@ -903,29 +902,29 @@ function ListSkeleton() {
   return (
     <div
       className="flex items-center gap-3 px-4 sm:px-5 py-3 animate-pulse"
-      style={{ borderBottom: `1px solid ${colors.border}`, minHeight: 60 }}
+      style={{ borderBottom: `1px solid var(--border-subtle)`, minHeight: 60 }}
     >
       <div
         className="w-1 h-8 rounded-full shrink-0"
-        style={{ background: "rgba(255,255,255,0.08)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div
         className="w-9 h-9 rounded-xl shrink-0"
-        style={{ background: "rgba(255,255,255,0.07)" }}
+        style={{ background: "var(--bg-input)" }}
       />
       <div className="flex-1 space-y-1.5">
         <div
           className="h-3.5 rounded w-1/3"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div
           className="h-2.5 rounded w-1/5"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
       </div>
       <div
         className="hidden sm:block h-3 rounded w-20"
-        style={{ background: "rgba(255,255,255,0.05)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
     </div>
   );
@@ -1070,23 +1069,23 @@ export default function CollectionsPage() {
     sort === "favorites" && pinnedCols.length > 0 && regularCols.length > 0;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* ── Header ── */}
       <div
         className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div>
           <h1
             className="text-[15px] sm:text-base font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Collections
           </h1>
           {!isLoading && (
             <p
               className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               <span>
                 {collections?.length ?? 0} collection
@@ -1094,13 +1093,13 @@ export default function CollectionsPage() {
               </span>
               {totalPapers > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
                   <span>{totalPapers} papers total</span>
                 </>
               )}
               {pinnedCount > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
                   <span style={{ color: "#fbbf24" }}>{pinnedCount} pinned</span>
                 </>
               )}
@@ -1111,17 +1110,17 @@ export default function CollectionsPage() {
           onClick={() => setCreateOpen(true)}
           className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
           style={{
-            background: colors.accentBg,
-            color: colors.accentPale,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            color: "var(--accent-pale)",
+            border: `1px solid var(--accent-border)`,
             whiteSpace: "nowrap",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.accentBgHover;
+            e.currentTarget.style.background = "var(--accent-bg-hover)";
             e.currentTarget.style.boxShadow = "0 0 20px rgba(99,102,241,0.25)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = colors.accentBg;
+            e.currentTarget.style.background = "var(--accent-bg)";
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -1135,8 +1134,8 @@ export default function CollectionsPage() {
       <div
         className="shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: "rgba(255,255,255,0.01)",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-muted)",
         }}
       >
         {/* Row 1: search + view */}
@@ -1144,7 +1143,7 @@ export default function CollectionsPage() {
           <div className="relative flex-1 max-w-sm">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
               placeholder="Search collections…"
@@ -1152,22 +1151,22 @@ export default function CollectionsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                (e.currentTarget.style.border = `1px solid var(--accent-border)`)
               }
               onBlur={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -1176,8 +1175,8 @@ export default function CollectionsPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {[
@@ -1191,7 +1190,7 @@ export default function CollectionsPage() {
                 style={{
                   background:
                     view === v ? "rgba(99,102,241,0.2)" : "transparent",
-                  color: view === v ? colors.accentLight : colors.textDim,
+                  color: view === v ? "var(--accent-light)" : "var(--text-dim)",
                 }}
               >
                 <Icon className="w-4 h-4" />
@@ -1209,9 +1208,9 @@ export default function CollectionsPage() {
               <button
                 className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
               >
                 {SORT_LABELS[sort]}
@@ -1224,7 +1223,7 @@ export default function CollectionsPage() {
                   {sort === key && (
                     <CheckIcon
                       className="w-3 h-3 mr-2"
-                      style={{ color: colors.accentLight }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   )}
                   {SORT_LABELS[key]}
@@ -1237,7 +1236,7 @@ export default function CollectionsPage() {
             <>
               <div
                 className="w-px h-4 shrink-0"
-                style={{ background: "rgba(255,255,255,0.1)" }}
+                style={{ background: "var(--bg-input)" }}
               />
               <button
                 onClick={() => setActiveTag(null)}
@@ -1246,10 +1245,10 @@ export default function CollectionsPage() {
                   background:
                     activeTag === null
                       ? "rgba(99,102,241,0.2)"
-                      : "rgba(255,255,255,0.04)",
+                      : "var(--bg-muted)",
                   color:
-                    activeTag === null ? colors.accentLight : colors.textDim,
-                  border: `1px solid ${activeTag === null ? colors.accentBorder : "transparent"}`,
+                    activeTag === null ? "var(--accent-light)" : "var(--text-dim)",
+                  border: `1px solid ${activeTag === null ? "var(--accent-border)" : "transparent"}`,
                 }}
               >
                 All
@@ -1263,10 +1262,10 @@ export default function CollectionsPage() {
                     background:
                       activeTag === tag
                         ? "rgba(99,102,241,0.2)"
-                        : "rgba(255,255,255,0.04)",
+                        : "var(--bg-muted)",
                     color:
-                      activeTag === tag ? colors.accentLight : colors.textDim,
-                    border: `1px solid ${activeTag === tag ? colors.accentBorder : "transparent"}`,
+                      activeTag === tag ? "var(--accent-light)" : "var(--text-dim)",
+                    border: `1px solid ${activeTag === tag ? "var(--accent-border)" : "transparent"}`,
                   }}
                 >
                   <TagIcon className="w-2.5 h-2.5" />
@@ -1298,16 +1297,16 @@ export default function CollectionsPage() {
           <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: "rgba(255,255,255,0.04)" }}
+              style={{ background: "var(--bg-muted)" }}
             >
               <FolderIcon
                 className="w-6 h-6"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               />
             </div>
             <p
               className="text-[14px] font-semibold mb-1.5"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             >
               {search || activeTag
                 ? "No collections found"
@@ -1315,7 +1314,7 @@ export default function CollectionsPage() {
             </p>
             <p
               className="text-[12px] mb-6 max-w-[240px] leading-relaxed"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               {search
                 ? `No results for "${search}".`
@@ -1328,9 +1327,9 @@ export default function CollectionsPage() {
                 onClick={() => setCreateOpen(true)}
                 className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
                 style={{
-                  background: colors.accentBg,
-                  color: colors.accentPale,
-                  border: `1px solid ${colors.accentBorder}`,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-pale)",
+                  border: `1px solid var(--accent-border)`,
                 }}
               >
                 <PlusIcon className="w-3.5 h-3.5" />
@@ -1364,7 +1363,7 @@ export default function CollectionsPage() {
                 <div>
                   <p
                     className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     All collections
                   </p>
@@ -1458,3 +1457,9 @@ export default function CollectionsPage() {
     </div>
   );
 }
+
+
+
+
+
+

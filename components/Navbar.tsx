@@ -25,6 +25,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: HomeIcon },
@@ -138,10 +139,9 @@ function OrgDropdown({
         overflowY: "auto",
         // Align from top or from bottom depending on available space
         transform: pos.alignBottom ? "translateY(-100%)" : "none",
-        background: "#15151e",
-        border: "1px solid rgba(255,255,255,0.1)",
-        boxShadow:
-          "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.08)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-hover)",
+        boxShadow: "var(--shadow-elevated)",
       }}
     >
       {/* Personal option */}
@@ -153,11 +153,11 @@ function OrgDropdown({
           }}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all"
           style={{
-            background: isPersonal ? "rgba(99,102,241,0.12)" : "transparent",
+            background: isPersonal ? "var(--accent-bg)" : "transparent",
           }}
           onMouseEnter={(e) => {
             if (!isPersonal)
-              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+              e.currentTarget.style.background = "var(--bg-muted)";
           }}
           onMouseLeave={(e) => {
             if (!isPersonal) e.currentTarget.style.background = "transparent";
@@ -167,14 +167,14 @@ function OrgDropdown({
             className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
             style={{
               background: isPersonal
-                ? "rgba(99,102,241,0.2)"
-                : "rgba(255,255,255,0.08)",
+                ? "var(--accent-strong-bg)"
+                : "var(--bg-input)",
             }}
           >
             <UserIcon
               className="w-3.5 h-3.5"
               style={{
-                color: isPersonal ? "#818cf8" : "rgba(255,255,255,0.45)",
+                color: isPersonal ? "var(--accent-light)" : "var(--text-muted)",
               }}
             />
           </div>
@@ -182,14 +182,14 @@ function OrgDropdown({
             <p
               className="text-[13px] font-semibold leading-tight"
               style={{
-                color: isPersonal ? "#a5b4fc" : "rgba(255,255,255,0.85)",
+                color: isPersonal ? "var(--accent-pale)" : "var(--text)",
               }}
             >
               Personal
             </p>
             <p
               className="text-[11px] leading-tight"
-              style={{ color: "rgba(255,255,255,0.35)" }}
+              style={{ color: "var(--text-muted)" }}
             >
               Private workspace
             </p>
@@ -197,7 +197,7 @@ function OrgDropdown({
           {isPersonal && (
             <CheckIcon
               className="w-4 h-4 shrink-0"
-              style={{ color: "#34d399" }}
+              style={{ color: "var(--success)" }}
             />
           )}
         </button>
@@ -209,7 +209,7 @@ function OrgDropdown({
           <div className="px-4 pt-2 pb-1">
             <p
               className="text-[10px] font-semibold uppercase tracking-widest"
-              style={{ color: "rgba(255,255,255,0.25)" }}
+              style={{ color: "var(--text-dim)" }}
             >
               Organizations
             </p>
@@ -227,14 +227,11 @@ function OrgDropdown({
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all"
                   style={{
-                    background: isActive
-                      ? "rgba(99,102,241,0.12)"
-                      : "transparent",
+                    background: isActive ? "var(--accent-soft)" : "transparent",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive)
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.05)";
+                      e.currentTarget.style.background = "var(--bg-muted)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive)
@@ -245,8 +242,8 @@ function OrgDropdown({
                     className="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
                     style={{
                       background: isActive
-                        ? "rgba(99,102,241,0.2)"
-                        : "rgba(255,255,255,0.08)",
+                        ? "var(--accent-strong-bg)"
+                        : "var(--bg-input)",
                     }}
                   >
                     {org.imageUrl ? (
@@ -259,7 +256,9 @@ function OrgDropdown({
                       <span
                         className="text-sm font-bold"
                         style={{
-                          color: isActive ? "#818cf8" : "rgba(255,255,255,0.6)",
+                          color: isActive
+                            ? "var(--accent-light)"
+                            : "var(--text-secondary)",
                         }}
                       >
                         {org.name.charAt(0).toUpperCase()}
@@ -270,14 +269,14 @@ function OrgDropdown({
                     <p
                       className="text-[13px] font-semibold truncate leading-tight"
                       style={{
-                        color: isActive ? "#a5b4fc" : "rgba(255,255,255,0.85)",
+                        color: isActive ? "var(--accent-pale)" : "var(--text)",
                       }}
                     >
                       {org.name}
                     </p>
                     <p
                       className="text-[11px] leading-tight"
-                      style={{ color: "rgba(255,255,255,0.35)" }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       {membership.role === "org:admin" ? "Admin" : "Member"}
                     </p>
@@ -285,7 +284,7 @@ function OrgDropdown({
                   {isActive && (
                     <CheckIcon
                       className="w-4 h-4 shrink-0"
-                      style={{ color: "#34d399" }}
+                      style={{ color: "var(--success)" }}
                     />
                   )}
                 </button>
@@ -298,7 +297,7 @@ function OrgDropdown({
       {/* Footer actions */}
       <div
         className="px-1.5 pt-1 space-y-0.5"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ borderTop: "1px solid var(--border-subtle)" }}
       >
         {organization && (
           <button
@@ -308,7 +307,7 @@ function OrgDropdown({
             }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all"
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+              (e.currentTarget.style.background = "var(--bg-muted)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -316,19 +315,16 @@ function OrgDropdown({
           >
             <SettingsIcon
               className="w-3.5 h-3.5 shrink-0"
-              style={{ color: "rgba(255,255,255,0.4)" }}
+              style={{ color: "var(--text-muted)" }}
             />
             <div className="flex-1 min-w-0">
               <p
                 className="text-[12px] font-medium"
-                style={{ color: "rgba(255,255,255,0.6)" }}
+                style={{ color: "var(--text-secondary)" }}
               >
                 Manage organization
               </p>
-              <p
-                className="text-[10px]"
-                style={{ color: "rgba(255,255,255,0.3)" }}
-              >
+              <p className="text-[10px]" style={{ color: "var(--text-dim)" }}>
                 Members, roles, invites & settings
               </p>
             </div>
@@ -341,7 +337,7 @@ function OrgDropdown({
           }}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all"
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+            (e.currentTarget.style.background = "var(--bg-muted)")
           }
           onMouseLeave={(e) =>
             (e.currentTarget.style.background = "transparent")
@@ -349,13 +345,16 @@ function OrgDropdown({
         >
           <div
             className="w-3.5 h-3.5 shrink-0 rounded flex items-center justify-center"
-            style={{ border: "1.5px dashed rgba(99,102,241,0.5)" }}
+            style={{ border: "1.5px dashed var(--accent-border)" }}
           >
-            <PlusIcon className="w-2 h-2" style={{ color: "#818cf8" }} />
+            <PlusIcon
+              className="w-2 h-2"
+              style={{ color: "var(--accent-light)" }}
+            />
           </div>
           <p
             className="text-[12px] font-medium"
-            style={{ color: "rgba(255,255,255,0.5)" }}
+            style={{ color: "var(--text-muted)" }}
           >
             Create organization
           </p>
@@ -392,19 +391,21 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
         className="w-full flex items-center rounded-xl transition-all"
         style={{
           gap: collapsed ? 0 : 10,
-          padding: collapsed ? "8px 0" : "8px 10px",
+          padding: collapsed ? "10px" : "8px 10px",
           justifyContent: collapsed ? "center" : "flex-start",
-          background: open ? "rgba(99,102,241,0.1)" : "rgba(255,255,255,0.04)",
-          border: `1px solid ${open ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.07)"}`,
+          background: open ? "var(--accent-bg)" : "var(--bg-muted)",
+          border: `1px solid ${open ? "var(--accent-border)" : "var(--border-subtle)"}`,
+          minHeight: 44,
+          height: collapsed ? 44 : "auto",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = "rgba(255,255,255,0.07)";
-          e.currentTarget.style.border = "1px solid rgba(255,255,255,0.12)";
+          e.currentTarget.style.background = "var(--bg-input)";
+          e.currentTarget.style.border = "1px solid var(--border-hover)";
         }}
         onMouseLeave={(e) => {
           if (!open) {
-            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-            e.currentTarget.style.border = "1px solid rgba(255,255,255,0.07)";
+            e.currentTarget.style.background = "var(--bg-muted)";
+            e.currentTarget.style.border = "1px solid var(--border-subtle)";
           }
         }}
         title={collapsed ? `${currentName} — click to switch` : undefined}
@@ -413,8 +414,8 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden relative"
           style={{
             background: isPersonal
-              ? "rgba(255,255,255,0.1)"
-              : "rgba(99,102,241,0.2)",
+              ? "var(--bg-input)"
+              : "var(--accent-strong-bg)",
           }}
         >
           {currentImage ? (
@@ -426,17 +427,23 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
           ) : isPersonal ? (
             <UserIcon
               className="w-3.5 h-3.5"
-              style={{ color: "rgba(255,255,255,0.5)" }}
+              style={{ color: "var(--text-muted)" }}
             />
           ) : (
-            <span className="text-sm font-bold" style={{ color: "#818cf8" }}>
+            <span
+              className="text-sm font-bold"
+              style={{ color: "var(--accent-light)" }}
+            >
               {currentName.charAt(0).toUpperCase()}
             </span>
           )}
           {!isPersonal && (
             <span
               className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-              style={{ background: "#818cf8", border: "1.5px solid #0e0e12" }}
+              style={{
+                background: "var(--accent-light)",
+                border: "1.5px solid var(--bg-sidebar)",
+              }}
             />
           )}
         </div>
@@ -445,13 +452,13 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             <div className="flex-1 min-w-0 text-left">
               <p
                 className="text-[12px] font-semibold truncate leading-tight"
-                style={{ color: "rgba(255,255,255,0.88)" }}
+                style={{ color: "var(--text)" }}
               >
                 {currentName}
               </p>
               <p
                 className="text-[10px] leading-tight"
-                style={{ color: "rgba(255,255,255,0.35)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {isPersonal ? "Personal" : "Organization"}
               </p>
@@ -459,7 +466,7 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             <ChevronDownIcon
               className="w-3.5 h-3.5 shrink-0 transition-transform duration-200"
               style={{
-                color: "rgba(255,255,255,0.3)",
+                color: "var(--text-dim)",
                 transform: open ? "rotate(180deg)" : "none",
               }}
             />
@@ -524,8 +531,8 @@ function MobileAccountSheet({
       <div
         className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
         style={{
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(4px)",
+          background: "var(--overlay-backdrop)",
+          backdropFilter: "blur(16px)",
           opacity: open ? 1 : 0,
           pointerEvents: open ? "auto" : "none",
         }}
@@ -536,8 +543,8 @@ function MobileAccountSheet({
       <div
         className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl overflow-hidden"
         style={{
-          background: "#15151e",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-hover)",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
           maxHeight: "85vh",
@@ -549,29 +556,29 @@ function MobileAccountSheet({
         <div className="flex justify-center pt-3 pb-1">
           <div
             className="w-9 h-1 rounded-full"
-            style={{ background: "rgba(255,255,255,0.15)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
 
         {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
         >
           <p
             className="text-[15px] font-semibold"
-            style={{ color: "rgba(255,255,255,0.9)" }}
+            style={{ color: "var(--text)" }}
           >
             Account & Workspace
           </p>
           <button
             onClick={onClose}
             className="w-7 h-7 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.08)" }}
+            style={{ background: "var(--bg-input)" }}
           >
             <XIcon
               className="w-3.5 h-3.5"
-              style={{ color: "rgba(255,255,255,0.5)" }}
+              style={{ color: "var(--text-muted)" }}
             />
           </button>
         </div>
@@ -580,23 +587,23 @@ function MobileAccountSheet({
         <div className="px-5 pt-4 pb-2">
           <p
             className="text-[10px] font-semibold uppercase tracking-widest mb-2"
-            style={{ color: "rgba(255,255,255,0.25)" }}
+            style={{ color: "var(--text-dim)" }}
           >
             Current Workspace
           </p>
           <div
             className="flex items-center gap-3 px-3 py-3 rounded-2xl"
             style={{
-              background: "rgba(99,102,241,0.08)",
-              border: "1px solid rgba(99,102,241,0.15)",
+              background: "var(--accent-bg)",
+              border: "1px solid var(--accent-mid)",
             }}
           >
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0"
               style={{
                 background: isPersonal
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(99,102,241,0.2)",
+                  ? "var(--bg-input)"
+                  : "var(--accent-strong-bg)",
               }}
             >
               {currentImage ? (
@@ -608,12 +615,12 @@ function MobileAccountSheet({
               ) : isPersonal ? (
                 <UserIcon
                   className="w-4 h-4"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
+                  style={{ color: "var(--text-muted)" }}
                 />
               ) : (
                 <span
                   className="text-base font-bold"
-                  style={{ color: "#818cf8" }}
+                  style={{ color: "var(--accent-light)" }}
                 >
                   {currentName.charAt(0).toUpperCase()}
                 </span>
@@ -622,14 +629,11 @@ function MobileAccountSheet({
             <div className="flex-1 min-w-0">
               <p
                 className="text-[14px] font-semibold truncate"
-                style={{ color: "rgba(255,255,255,0.9)" }}
+                style={{ color: "var(--text)" }}
               >
                 {currentName}
               </p>
-              <p
-                className="text-[11px]"
-                style={{ color: "rgba(255,255,255,0.35)" }}
-              >
+              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                 {isPersonal ? "Personal workspace" : "Organization"}
               </p>
             </div>
@@ -640,7 +644,7 @@ function MobileAccountSheet({
         <div className="px-5 py-2">
           <p
             className="text-[10px] font-semibold uppercase tracking-widest mb-2"
-            style={{ color: "rgba(255,255,255,0.25)" }}
+            style={{ color: "var(--text-dim)" }}
           >
             Switch To
           </p>
@@ -651,20 +655,20 @@ function MobileAccountSheet({
             }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
             style={{
-              background: isPersonal
-                ? "rgba(99,102,241,0.12)"
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${isPersonal ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.07)"}`,
+              background: isPersonal ? "var(--accent-soft)" : "var(--bg-muted)",
+              border: `1px solid ${isPersonal ? "var(--accent-border)" : "var(--border-subtle)"}`,
             }}
           >
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: "var(--bg-input)" }}
             >
               <UserIcon
                 className="w-3.5 h-3.5"
                 style={{
-                  color: isPersonal ? "#818cf8" : "rgba(255,255,255,0.4)",
+                  color: isPersonal
+                    ? "var(--accent-light)"
+                    : "var(--text-muted)",
                 }}
               />
             </div>
@@ -672,22 +676,21 @@ function MobileAccountSheet({
               <p
                 className="text-[13px] font-semibold"
                 style={{
-                  color: isPersonal ? "#a5b4fc" : "rgba(255,255,255,0.8)",
+                  color: isPersonal
+                    ? "var(--accent-pale)"
+                    : "var(--text-secondary)",
                 }}
               >
                 Personal
               </p>
-              <p
-                className="text-[11px]"
-                style={{ color: "rgba(255,255,255,0.35)" }}
-              >
+              <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                 Private workspace
               </p>
             </div>
             {isPersonal && (
               <CheckIcon
                 className="w-4 h-4 shrink-0"
-                style={{ color: "#34d399" }}
+                style={{ color: "var(--success)" }}
               />
             )}
           </button>
@@ -705,14 +708,14 @@ function MobileAccountSheet({
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
                 style={{
                   background: isActive
-                    ? "rgba(99,102,241,0.12)"
-                    : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${isActive ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.07)"}`,
+                    ? "var(--accent-soft)"
+                    : "var(--bg-muted)",
+                  border: `1px solid ${isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
                 }}
               >
                 <div
                   className="w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
-                  style={{ background: "rgba(99,102,241,0.2)" }}
+                  style={{ background: "var(--accent-bg-hover)" }}
                 >
                   {org.imageUrl ? (
                     <img
@@ -723,7 +726,7 @@ function MobileAccountSheet({
                   ) : (
                     <span
                       className="text-sm font-bold"
-                      style={{ color: "#818cf8" }}
+                      style={{ color: "var(--accent-light)" }}
                     >
                       {org.name.charAt(0).toUpperCase()}
                     </span>
@@ -733,14 +736,16 @@ function MobileAccountSheet({
                   <p
                     className="text-[13px] font-semibold truncate"
                     style={{
-                      color: isActive ? "#a5b4fc" : "rgba(255,255,255,0.8)",
+                      color: isActive
+                        ? "var(--accent-pale)"
+                        : "var(--text-secondary)",
                     }}
                   >
                     {org.name}
                   </p>
                   <p
                     className="text-[11px]"
-                    style={{ color: "rgba(255,255,255,0.35)" }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     {membership.role === "org:admin" ? "Admin" : "Member"}
                   </p>
@@ -748,7 +753,7 @@ function MobileAccountSheet({
                 {isActive && (
                   <CheckIcon
                     className="w-4 h-4 shrink-0"
-                    style={{ color: "#34d399" }}
+                    style={{ color: "var(--success)" }}
                   />
                 )}
               </button>
@@ -759,14 +764,17 @@ function MobileAccountSheet({
         {/* Actions */}
         <div
           className="px-5 py-2"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
         >
           <p
             className="text-[10px] font-semibold uppercase tracking-widest mb-2 pt-2"
-            style={{ color: "rgba(255,255,255,0.25)" }}
+            style={{ color: "var(--text-dim)" }}
           >
-            Actions
+            Preferences
           </p>
+
+          {/* Theme Switcher Mobile Version */}
+          <ThemeSwitcher mobile className="mb-2" />
 
           <button
             onClick={() => {
@@ -775,22 +783,25 @@ function MobileAccountSheet({
             }}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "var(--bg-muted)",
+              border: "1px solid var(--border-subtle)",
             }}
           >
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style={{
-                background: "rgba(99,102,241,0.12)",
-                border: "1.5px dashed rgba(99,102,241,0.4)",
+                background: "var(--accent-bg)",
+                border: "1.5px dashed var(--accent-dash)",
               }}
             >
-              <PlusIcon className="w-3.5 h-3.5" style={{ color: "#818cf8" }} />
+              <PlusIcon
+                className="w-3.5 h-3.5"
+                style={{ color: "var(--accent-light)" }}
+              />
             </div>
             <p
               className="text-[13px] font-medium"
-              style={{ color: "rgba(255,255,255,0.7)" }}
+              style={{ color: "var(--text-secondary)" }}
             >
               Create organization
             </p>
@@ -804,30 +815,27 @@ function MobileAccountSheet({
               }}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2"
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--bg-muted)",
+                border: "1px solid var(--border-subtle)",
               }}
             >
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: "rgba(255,255,255,0.06)" }}
+                style={{ background: "var(--bg-input)" }}
               >
                 <SettingsIcon
                   className="w-3.5 h-3.5"
-                  style={{ color: "rgba(255,255,255,0.45)" }}
+                  style={{ color: "var(--text-muted)" }}
                 />
               </div>
               <div className="flex-1 min-w-0">
                 <p
                   className="text-[13px] font-medium"
-                  style={{ color: "rgba(255,255,255,0.7)" }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   Manage organization
                 </p>
-                <p
-                  className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.3)" }}
-                >
+                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Members, roles & settings
                 </p>
               </div>
@@ -838,7 +846,7 @@ function MobileAccountSheet({
         {/* User account row */}
         <div
           className="px-5 py-4 flex items-center gap-3"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
         >
           <UserButton
             appearance={{ elements: { avatarBox: "w-9 h-9 rounded-xl" } }}
@@ -846,14 +854,11 @@ function MobileAccountSheet({
           <div className="flex-1 min-w-0">
             <p
               className="text-[13px] font-medium"
-              style={{ color: "rgba(255,255,255,0.7)" }}
+              style={{ color: "var(--text-secondary)" }}
             >
               My account
             </p>
-            <p
-              className="text-[11px]"
-              style={{ color: "rgba(255,255,255,0.3)" }}
-            >
+            <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
               Profile, security & billing
             </p>
           </div>
@@ -875,9 +880,9 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
     <header
       className="md:hidden fixed top-0 inset-x-0 z-50 flex items-center px-4 h-12"
       style={{
-        background: "rgba(10,10,14,0.92)",
+        background: "var(--mobile-header-bg)",
         backdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        borderBottom: "1px solid var(--border-subtle)",
         paddingTop: "env(safe-area-inset-top)",
       }}
     >
@@ -885,7 +890,10 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
       <div className="flex items-center gap-2 flex-1">
         <div
           className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+          style={{
+            background:
+              "linear-gradient(135deg, var(--primary), var(--chart-2))",
+          }}
         >
           <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
             <path
@@ -910,7 +918,7 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
         </div>
         <span
           className="text-[13px] font-semibold tracking-tight"
-          style={{ color: "rgba(255,255,255,0.9)" }}
+          style={{ color: "var(--text)" }}
         >
           Paperspace
         </span>
@@ -923,16 +931,16 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
           onClick={onOpenAccount}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all"
           style={{
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--bg-muted)",
+            border: "1px solid var(--border-hover)",
           }}
         >
           <div
             className="w-5 h-5 rounded-md flex items-center justify-center overflow-hidden shrink-0"
             style={{
               background: isPersonal
-                ? "rgba(255,255,255,0.1)"
-                : "rgba(99,102,241,0.25)",
+                ? "var(--bg-input)"
+                : "var(--accent-highlight-bg)",
             }}
           >
             {currentImage ? (
@@ -944,12 +952,12 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
             ) : isPersonal ? (
               <UserIcon
                 className="w-3 h-3"
-                style={{ color: "rgba(255,255,255,0.5)" }}
+                style={{ color: "var(--text-muted)" }}
               />
             ) : (
               <span
                 className="text-[10px] font-bold"
-                style={{ color: "#818cf8" }}
+                style={{ color: "var(--accent-light)" }}
               >
                 {currentName.charAt(0).toUpperCase()}
               </span>
@@ -957,13 +965,13 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
           </div>
           <span
             className="text-[11px] font-medium max-w-[80px] truncate"
-            style={{ color: "rgba(255,255,255,0.7)" }}
+            style={{ color: "var(--text-secondary)" }}
           >
             {currentName}
           </span>
           <ChevronDownIcon
             className="w-3 h-3 shrink-0"
-            style={{ color: "rgba(255,255,255,0.3)" }}
+            style={{ color: "var(--text-dim)" }}
           />
         </button>
 
@@ -1018,8 +1026,8 @@ export function Navbar() {
         className="hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-200 overflow-visible"
         style={{
           width: collapsed ? 60 : 216,
-          background: "#0e0e12",
-          borderRight: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-sidebar)",
+          borderRight: "1px solid var(--border-subtle)",
           zIndex: 40,
         }}
       >
@@ -1027,7 +1035,7 @@ export function Navbar() {
         <div
           className="flex items-center h-14 shrink-0"
           style={{
-            borderBottom: "1px solid rgba(255,255,255,0.05)",
+            borderBottom: "1px solid var(--border-subtle)",
             padding: collapsed ? "0" : "0 12px",
             justifyContent: collapsed ? "center" : "space-between",
           }}
@@ -1037,8 +1045,9 @@ export function Navbar() {
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                 style={{
-                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                  boxShadow: "0 0 14px rgba(99,102,241,0.4)",
+                  background:
+                    "linear-gradient(135deg, var(--primary), var(--chart-2))",
+                  boxShadow: "var(--shadow-logo-glow)",
                 }}
               >
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1064,7 +1073,7 @@ export function Navbar() {
               </div>
               <span
                 className="text-sm font-semibold tracking-tight whitespace-nowrap"
-                style={{ color: "rgba(255,255,255,0.9)" }}
+                style={{ color: "var(--text)" }}
               >
                 Paperspace
               </span>
@@ -1073,13 +1082,13 @@ export function Navbar() {
           <button
             onClick={toggle}
             className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all"
-            style={{ color: "rgba(255,255,255,0.3)" }}
+            style={{ color: "var(--text-dim)" }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "rgba(255,255,255,0.8)";
-              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.color = "var(--text-secondary)";
+              e.currentTarget.style.background = "var(--bg-input)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = "rgba(255,255,255,0.3)";
+              e.currentTarget.style.color = "var(--text-dim)";
               e.currentTarget.style.background = "transparent";
             }}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -1097,8 +1106,8 @@ export function Navbar() {
           <div
             className="flex items-center shrink-0 transition-all duration-200"
             style={{
-              background: "rgba(99,102,241,0.07)",
-              borderBottom: "1px solid rgba(99,102,241,0.12)",
+              background: "var(--org-strip-bg)",
+              borderBottom: "1px solid var(--org-strip-border)",
               padding: collapsed ? "4px 0" : "5px 12px",
               justifyContent: collapsed ? "center" : "flex-start",
               minHeight: collapsed ? 14 : "auto",
@@ -1107,25 +1116,25 @@ export function Navbar() {
             {collapsed ? (
               <span
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ background: "#818cf8" }}
+                style={{ background: "var(--accent-light)" }}
               />
             ) : (
               <>
                 <BuildingIcon
                   className="w-3 h-3 shrink-0 mr-1.5"
-                  style={{ color: "#818cf8" }}
+                  style={{ color: "var(--accent-light)" }}
                 />
                 <span
                   className="text-[10px] font-medium truncate flex-1"
-                  style={{ color: "rgba(129,140,248,0.8)" }}
+                  style={{ color: "var(--accent-light)" }}
                 >
                   {organization.name}
                 </span>
                 <span
                   className="text-[9px] px-1.5 py-px rounded ml-2 font-semibold shrink-0"
                   style={{
-                    background: "rgba(99,102,241,0.2)",
-                    color: "#818cf8",
+                    background: "var(--accent-bg-hover)",
+                    color: "var(--accent-light)",
                   }}
                 >
                   ORG
@@ -1150,22 +1159,20 @@ export function Navbar() {
                   gap: collapsed ? 0 : 10,
                   padding: collapsed ? "9px 0" : "8px 12px",
                   justifyContent: collapsed ? "center" : "flex-start",
-                  color: active
-                    ? "rgba(255,255,255,0.95)"
-                    : "rgba(255,255,255,0.4)",
-                  background: active ? "rgba(99,102,241,0.13)" : "transparent",
+                  color: active ? "var(--text)" : "var(--text-muted)",
+                  background: active ? "var(--nav-active-bg)" : "transparent",
                   fontWeight: active ? 500 : 400,
                   fontSize: 13,
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = "rgba(255,255,255,0.75)";
-                    e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    e.currentTarget.style.color = "var(--text-secondary)";
+                    e.currentTarget.style.background = "var(--bg-muted)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = "rgba(255,255,255,0.4)";
+                    e.currentTarget.style.color = "var(--text-muted)";
                     e.currentTarget.style.background = "transparent";
                   }
                 }}
@@ -1173,12 +1180,12 @@ export function Navbar() {
                 {active && (
                   <span
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
-                    style={{ background: "#6366f1" }}
+                    style={{ background: "var(--primary)" }}
                   />
                 )}
                 <Icon
                   className="w-4 h-4 shrink-0"
-                  style={{ color: active ? "#818cf8" : "inherit" }}
+                  style={{ color: active ? "var(--accent-light)" : "inherit" }}
                 />
                 {!collapsed && <span className="truncate">{label}</span>}
                 {collapsed && (
@@ -1187,10 +1194,10 @@ export function Navbar() {
                       pointer-events-none z-50 whitespace-nowrap
                       opacity-0 group-hover/nav:opacity-100 transition-opacity duration-100"
                     style={{
-                      background: "#1e1e28",
-                      color: "rgba(255,255,255,0.85)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                      background: "var(--bg-card)",
+                      color: "var(--text)",
+                      border: "1px solid var(--border-hover)",
+                      boxShadow: "var(--shadow-flyout)",
                     }}
                   >
                     {label}
@@ -1204,9 +1211,10 @@ export function Navbar() {
         {/* Bottom section */}
         <div
           className="shrink-0 flex flex-col gap-2 px-2 py-3"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
         >
           <WorkspaceSwitcher collapsed={collapsed} />
+          <ThemeSwitcher collapsed={collapsed} />
           <div
             className="flex items-center gap-2.5 px-1 py-0.5"
             style={{ justifyContent: collapsed ? "center" : "flex-start" }}
@@ -1217,7 +1225,7 @@ export function Navbar() {
             {!collapsed && (
               <span
                 className="text-[12px]"
-                style={{ color: "rgba(255,255,255,0.35)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 Account
               </span>
@@ -1229,9 +1237,9 @@ export function Navbar() {
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-50"
         style={{
-          background: "rgba(10,10,14,0.96)",
+          background: "var(--mobile-tab-bg)",
           backdropFilter: "blur(24px)",
-          borderTop: "1px solid rgba(255,255,255,0.07)",
+          borderTop: "1px solid var(--border-subtle)",
         }}
       >
         <div
@@ -1246,7 +1254,7 @@ export function Navbar() {
                 href={href}
                 className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative transition-colors min-w-0"
                 style={{
-                  color: active ? "#818cf8" : "rgba(255,255,255,0.3)",
+                  color: active ? "var(--accent-light)" : "var(--text-dim)",
                   // Ensure touch target is at least 44px tall
                   minHeight: 52,
                 }}
@@ -1254,7 +1262,7 @@ export function Navbar() {
                 {active && (
                   <span
                     className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
-                    style={{ background: "#6366f1" }}
+                    style={{ background: "var(--primary)" }}
                   />
                 )}
                 <Icon

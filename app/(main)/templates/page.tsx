@@ -1,5 +1,3 @@
-// D:\Skripsi\paperspace\app\(main)\templates\page.tsx
-
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -58,11 +56,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { colors } from "@/lib/design-tokens";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Utilities
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function smartDate(ts: number): string {
   if (differenceInHours(Date.now(), ts) < 24)
@@ -80,9 +77,9 @@ function extractLabels(tags: string[] | undefined): string[] {
   return tags?.slice(1) ?? [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Export helper
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 async function handleExport(template: Doc<"templates">, fmt: "docx" | "pdf") {
   if (!template.fileUrl) {
@@ -104,9 +101,9 @@ async function handleExport(template: Doc<"templates">, fmt: "docx" | "pdf") {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Downloading template file…");
+    toast.success("Downloading template file");
   } else {
-    const id = toast.loading("Converting to PDF…");
+    const id = toast.loading("Converting to PDF");
     try {
       const res = await fetch("/api/onlyoffice-convert", {
         method: "POST",
@@ -135,9 +132,9 @@ async function handleExport(template: Doc<"templates">, fmt: "docx" | "pdf") {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Checkbox
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function SelectCheckbox({
   checked,
@@ -159,22 +156,22 @@ function SelectCheckbox({
         width: 16,
         height: 16,
         background:
-          checked || indeterminate ? colors.accent : "rgba(255,255,255,0.08)",
-        border: `1.5px solid ${checked || indeterminate ? colors.accent : "rgba(255,255,255,0.2)"}`,
+          checked || indeterminate ? "var(--primary)" : "var(--bg-input)",
+        border: `1.5px solid ${checked || indeterminate ? "var(--primary)" : "var(--border-hover)"}`,
       }}
     >
       {indeterminate ? (
-        <MinusIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <MinusIcon style={{ width: 9, height: 9, color: "var(--text)" }} />
       ) : checked ? (
-        <CheckIcon style={{ width: 9, height: 9, color: "#fff" }} />
+        <CheckIcon style={{ width: 9, height: 9, color: "var(--text)" }} />
       ) : null}
     </button>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Rename Dialog  — modal, not inline
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
+// Rename Dialog — modal, not inline
+// ────────────────────────────────────────────────────────────────────────────────
 
 function RenameDialog({
   id,
@@ -195,7 +192,6 @@ function RenameDialog({
   useEffect(() => {
     if (open) {
       setVal(currentName);
-      // slight delay so Dialog animation completes before focus
       const t = setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -227,13 +223,13 @@ function RenameDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         style={{
-          background: "#1a1a26",
-          border: "1px solid rgba(99,102,241,0.2)",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          background: "var(--popover)",
+          border: "1px solid var(--accent-border)",
+          boxShadow: "var(--shadow-elevated)",
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: colors.text, fontSize: 14 }}>
+          <DialogTitle style={{ color: "var(--text)", fontSize: 14 }}>
             Rename template
           </DialogTitle>
         </DialogHeader>
@@ -250,15 +246,15 @@ function RenameDialog({
             placeholder="Template name"
             className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              border: `1px solid ${colors.accentBorder}`,
-              color: colors.text,
+              background: "var(--bg-input)",
+              border: `1px solid var(--accent-border)`,
+              color: "var(--text)",
             }}
             onFocus={(e) =>
               (e.currentTarget.style.border = `1px solid rgba(129,140,248,0.6)`)
             }
             onBlur={(e) =>
-              (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+              (e.currentTarget.style.border = `1px solid var(--accent-border)`)
             }
           />
         </div>
@@ -268,15 +264,15 @@ function RenameDialog({
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-[12px] font-medium transition-colors"
             style={{
-              background: "rgba(255,255,255,0.05)",
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+              (e.currentTarget.style.background = "var(--bg-input)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+              (e.currentTarget.style.background = "var(--bg-muted)")
             }
           >
             Cancel
@@ -288,33 +284,32 @@ function RenameDialog({
             style={{
               background:
                 val.trim() && !saving
-                  ? colors.accentBg
+                  ? "var(--accent-bg)"
                   : "rgba(99,102,241,0.05)",
-              color: val.trim() && !saving ? colors.accentPale : colors.textDim,
-              border: `1px solid ${val.trim() && !saving ? colors.accentBorder : "transparent"}`,
+              color:
+                val.trim() && !saving
+                  ? "var(--accent-pale)"
+                  : "var(--text-dim)",
+              border: `1px solid ${val.trim() && !saving ? "var(--accent-border)" : "transparent"}`,
               opacity: saving ? 0.7 : 1,
               cursor: !val.trim() || saving ? "not-allowed" : "pointer",
             }}
             onMouseEnter={(e) => {
               if (val.trim() && !saving)
-                e.currentTarget.style.background = colors.accentBgHover;
+                e.currentTarget.style.background = "var(--accent-bg-hover)";
             }}
             onMouseLeave={(e) => {
               if (val.trim() && !saving)
-                e.currentTarget.style.background = colors.accentBg;
+                e.currentTarget.style.background = "var(--accent-bg)";
             }}
           >
-            {saving ? "Saving…" : "Rename"}
+            {saving ? "Saving" : "Rename"}
           </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Inline Description Editor  — click-to-edit textarea
-// ─────────────────────────────────────────────────────────────────────────────
 
 function InlineDescriptionEdit({
   id,
@@ -362,23 +357,16 @@ function InlineDescriptionEdit({
       }}
       onBlur={save}
       rows={3}
-      placeholder="Add a description…"
+      placeholder="Add a description"
       className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none resize-none leading-relaxed"
       style={{
-        background: "rgba(255,255,255,0.06)",
-        border: `1px solid ${colors.accentBorder}`,
-        color: colors.text,
+        background: "var(--bg-input)",
+        border: `1px solid var(--accent-border)`,
+        color: "var(--text)",
       }}
     />
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Folder + Label Editor
-// UX: Folder = first tag (one home), Labels = remaining tags (for filtering).
-// This makes the distinction explicit in the UI instead of relying on
-// the "first tag = folder" convention being invisible to users.
-// ─────────────────────────────────────────────────────────────────────────────
 
 function FolderAndLabelEditor({
   id,
@@ -420,7 +408,6 @@ function FolderAndLabelEditor({
   const save = async () => {
     if (labelInput.trim()) addLabel(labelInput);
     const cleanFolder = folderInput.trim().toLowerCase();
-    // Re-read labels after possible addLabel call
     const allTags = [cleanFolder, ...labels].filter(Boolean);
     setSaving(true);
     try {
@@ -439,22 +426,22 @@ function FolderAndLabelEditor({
       onClick={(e) => e.stopPropagation()}
       className="rounded-xl p-3 space-y-3"
       style={{
-        background: "rgba(15,15,25,0.8)",
-        border: `1px solid ${colors.accentBorder}`,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+        background: "var(--popover-surface)",
+        border: `1px solid var(--accent-border)`,
+        boxShadow: "var(--shadow-flyout)",
       }}
     >
       {/* Folder */}
       <div className="space-y-1.5">
         <label
           className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           <FolderIcon className="w-2.5 h-2.5" />
           Folder
           <span
             style={{
-              color: "rgba(255,255,255,0.2)",
+              color: "var(--text-dim)",
               fontWeight: 400,
               textTransform: "none",
               letterSpacing: 0,
@@ -472,13 +459,11 @@ function FolderAndLabelEditor({
             }}
             onFocus={(e) => {
               setShowFolderSuggestions(true);
-              // Border highlight
-              e.currentTarget.style.border = `1px solid ${colors.accentBorder}`;
+              e.currentTarget.style.border = `1px solid var(--accent-border)`;
             }}
             onBlur={(e) => {
               setTimeout(() => setShowFolderSuggestions(false), 160);
-              // Reset border
-              e.currentTarget.style.border = `1px solid ${colors.border}`;
+              e.currentTarget.style.border = `1px solid var(--border-subtle)`;
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -487,21 +472,21 @@ function FolderAndLabelEditor({
               }
               if (e.key === "Escape") onDone();
             }}
-            placeholder="Type or select a folder…"
+            placeholder="Type or select a folder"
             className="w-full rounded-lg px-2.5 py-1.5 text-[11px] outline-none"
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: `1px solid ${colors.border}`,
-              color: colors.text,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
+              color: "var(--text)",
             }}
           />
           {showFolderSuggestions && folderSuggestions.length > 0 && (
             <div
               className="absolute top-full left-0 right-0 mt-1 rounded-lg overflow-hidden z-20"
               style={{
-                background: "#18182a",
-                border: `1px solid ${colors.border}`,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                background: "var(--popover-surface)",
+                border: `1px solid var(--border-subtle)`,
+                boxShadow: "var(--shadow-flyout)",
               }}
             >
               {folderSuggestions.map((f) => (
@@ -512,7 +497,7 @@ function FolderAndLabelEditor({
                     setShowFolderSuggestions(false);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left transition-colors"
-                  style={{ color: colors.textSecondary }}
+                  style={{ color: "var(--text-secondary)" }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background = "rgba(99,102,241,0.1)")
                   }
@@ -522,7 +507,7 @@ function FolderAndLabelEditor({
                 >
                   <FolderIcon
                     className="w-3 h-3"
-                    style={{ color: "#818cf8" }}
+                    style={{ color: "var(--accent-light)" }}
                   />
                   {f}
                 </button>
@@ -536,13 +521,13 @@ function FolderAndLabelEditor({
       <div className="space-y-1.5">
         <label
           className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           <TagIcon className="w-2.5 h-2.5" />
           Labels
           <span
             style={{
-              color: "rgba(255,255,255,0.2)",
+              color: "var(--text-dim)",
               fontWeight: 400,
               textTransform: "none",
               letterSpacing: 0,
@@ -554,8 +539,8 @@ function FolderAndLabelEditor({
         <div
           className="flex flex-wrap gap-1 min-h-[32px] rounded-lg px-2 py-1.5 cursor-text"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
           onClick={() => document.getElementById(`label-input-${id}`)?.focus()}
         >
@@ -565,7 +550,7 @@ function FolderAndLabelEditor({
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium"
               style={{
                 background: "rgba(129,140,248,0.15)",
-                color: "#818cf8",
+                color: "var(--accent-light)",
                 border: "1px solid rgba(129,140,248,0.25)",
               }}
             >
@@ -597,12 +582,12 @@ function FolderAndLabelEditor({
                 removeLabel(labels[labels.length - 1]);
               if (e.key === "Escape") onDone();
             }}
-            placeholder={labels.length === 0 ? "Add labels…" : ""}
+            placeholder={labels.length === 0 ? "Add labels" : ""}
             className="flex-1 min-w-[80px] text-[11px] bg-transparent outline-none"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           />
         </div>
-        <p className="text-[9px]" style={{ color: colors.textDim }}>
+        <p className="text-[9px]" style={{ color: "var(--text-dim)" }}>
           Press Enter or comma to add · Backspace to remove last
         </p>
       </div>
@@ -613,15 +598,15 @@ function FolderAndLabelEditor({
           onClick={onDone}
           className="flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+            (e.currentTarget.style.background = "var(--bg-muted)")
           }
         >
           Cancel
@@ -631,29 +616,29 @@ function FolderAndLabelEditor({
           disabled={saving}
           className="flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all"
           style={{
-            background: colors.accentBg,
-            color: colors.accentPale,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            color: "var(--accent-pale)",
+            border: `1px solid var(--accent-border)`,
             opacity: saving ? 0.7 : 1,
           }}
           onMouseEnter={(e) => {
             if (!saving)
-              e.currentTarget.style.background = colors.accentBgHover;
+              e.currentTarget.style.background = "var(--accent-bg-hover)";
           }}
           onMouseLeave={(e) => {
-            if (!saving) e.currentTarget.style.background = colors.accentBg;
+            if (!saving) e.currentTarget.style.background = "var(--accent-bg)";
           }}
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving" : "Save"}
         </button>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Template actions menu
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function TemplateMenu({
   template,
@@ -674,19 +659,19 @@ function TemplateMenu({
           onClick={(e) => e.stopPropagation()}
           className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            border: `1px solid var(--border-subtle)`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.12)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
         >
           <MoreHorizontalIcon
             className="w-3.5 h-3.5"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           />
         </button>
       </DropdownMenuTrigger>
@@ -763,10 +748,10 @@ function TemplateMenu({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Folder + Label badges  — visual display (not editing)
+// ────────────────────────────────────────────────────────────────────────────────
+// Folder + Label badges — visual display (not editing)
 // Shows folder (first tag) with a folder icon, then label chips separately.
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function FolderLabelBadges({
   tags,
@@ -792,7 +777,7 @@ function FolderLabelBadges({
           className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[10px] font-medium"
           style={{
             background: "rgba(99,102,241,0.12)",
-            color: "#818cf8",
+            color: "var(--accent-light)",
             border: "1px solid rgba(99,102,241,0.22)",
           }}
         >
@@ -806,7 +791,7 @@ function FolderLabelBadges({
           className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium"
           style={{
             background: "rgba(52,211,153,0.08)",
-            color: "#34d399",
+            color: "var(--success)",
             border: "1px solid rgba(52,211,153,0.18)",
           }}
         >
@@ -818,9 +803,9 @@ function FolderLabelBadges({
         <span
           className="text-[10px] px-1.5 py-px rounded-md"
           style={{
-            background: "rgba(255,255,255,0.05)",
-            color: colors.textDim,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           +{overflow}
@@ -831,15 +816,15 @@ function FolderLabelBadges({
           onClick={onEditClick}
           className="text-[10px] px-1.5 py-px rounded-md font-medium transition-colors"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: colors.textDim,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.08)")
+            (e.currentTarget.style.background = "var(--bg-input)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+            (e.currentTarget.style.background = "var(--bg-muted)")
           }
         >
           + folder / label
@@ -849,9 +834,9 @@ function FolderLabelBadges({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Grid card
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function TemplateGridCard({
   template,
@@ -890,32 +875,32 @@ function TemplateGridCard({
         className="rounded-2xl flex flex-col overflow-hidden transition-all duration-200 h-full cursor-pointer"
         style={{
           background: selected
-            ? "rgba(99,102,241,0.1)"
+            ? "var(--accent-bg)"
             : hovered
-              ? "rgba(99,102,241,0.07)"
-              : "rgba(99,102,241,0.03)",
+              ? "var(--bg-card)"
+              : "var(--bg-card)",
           border: `1px solid ${
             selected
-              ? "rgba(99,102,241,0.35)"
+              ? "var(--accent-border)"
               : hovered
-                ? "rgba(99,102,241,0.28)"
-                : "rgba(99,102,241,0.12)"
+                ? "var(--border-hover)"
+                : "var(--border-subtle)"
           }`,
           boxShadow: selected
-            ? "0 0 0 2px rgba(99,102,241,0.25)"
+            ? "0 0 0 1px var(--accent-border)"
             : hovered
-              ? "0 0 0 1px rgba(99,102,241,0.1), 0 8px 24px rgba(0,0,0,0.25)"
+              ? "0 2px 8px rgba(15, 23, 42, 0.05)"
               : "none",
-          transform: hovered && !selected ? "translateY(-1px)" : "none",
+          transform: "none",
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={handleClick}
       >
-        <div
+        {/* <div
           className="h-0.5 w-full shrink-0"
           style={{ background: "rgba(99,102,241,0.7)" }}
-        />
+        /> */}
 
         <div className="flex flex-col gap-3 p-3.5 flex-1">
           {/* Header */}
@@ -943,28 +928,28 @@ function TemplateGridCard({
             >
               <LayoutTemplateIcon
                 className="w-4 h-4"
-                style={{ color: "#818cf8" }}
+                style={{ color: "var(--accent-light)" }}
               />
             </div>
             <div className="flex-1 min-w-0">
               <p
                 className="text-[13px] font-semibold leading-snug line-clamp-2"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 {template.name}
               </p>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[11px]"
-                  style={{ color: colors.textMuted }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {template.fields.length} field
                   {template.fields.length !== 1 ? "s" : ""}
                 </span>
-                <span style={{ color: colors.textDim }}>·</span>
+                <span style={{ color: "var(--text-dim)" }}>·</span>
                 <span
                   className="text-[11px]"
-                  style={{ color: "rgba(255,255,255,0.38)" }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {smartDate(template._creationTime)}
                 </span>
@@ -1000,17 +985,17 @@ function TemplateGridCard({
                   className="text-[11px] leading-relaxed line-clamp-2 flex-1"
                   style={{
                     color: template.description
-                      ? colors.textMuted
-                      : "rgba(255,255,255,0.18)",
+                      ? "var(--text-secondary)"
+                      : "var(--text-muted)",
                     fontStyle: template.description ? "normal" : "italic",
                   }}
                 >
-                  {template.description || "Click to add description…"}
+                  {template.description || "Click to add description"}
                 </p>
                 {template.description && !selectMode && (
                   <AlignLeftIcon
                     className="w-3 h-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   />
                 )}
               </div>
@@ -1043,15 +1028,15 @@ function TemplateGridCard({
                 }}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] font-medium transition-all"
                 style={{
-                  background: "rgba(255,255,255,0.05)",
-                  color: colors.textSecondary,
-                  border: `1px solid ${colors.border}`,
+                  background: "var(--bg-muted)",
+                  color: "var(--text-secondary)",
+                  border: `1px solid var(--border-subtle)`,
                 }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.09)")
+                  (e.currentTarget.style.background = "var(--bg-input)")
                 }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+                  (e.currentTarget.style.background = "var(--bg-muted)")
                 }
               >
                 <PencilIcon className="w-3 h-3" /> Edit
@@ -1063,19 +1048,16 @@ function TemplateGridCard({
                 }}
                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] font-medium transition-all"
                 style={{
-                  background: "rgba(99,102,241,0.18)",
-                  color: "#a5b4fc",
-                  border: "1px solid rgba(99,102,241,0.28)",
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-pale)",
+                  border: "1px solid var(--accent-border)",
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(99,102,241,0.28)";
-                  e.currentTarget.style.boxShadow =
-                    "0 0 12px rgba(99,102,241,0.2)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(99,102,241,0.18)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "var(--accent-bg-hover)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "var(--accent-bg)")
+                }
               >
                 <PlayIcon className="w-3 h-3" /> Use
               </button>
@@ -1087,7 +1069,7 @@ function TemplateGridCard({
                 className="flex items-center justify-center py-1.5 px-2.5 rounded-xl text-[11px] font-medium transition-all"
                 style={{
                   background: "rgba(52,211,153,0.07)",
-                  color: "#34d399",
+                  color: "var(--success)",
                   border: "1px solid rgba(52,211,153,0.15)",
                 }}
                 onMouseEnter={(e) =>
@@ -1115,9 +1097,9 @@ function TemplateGridCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // List row
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function TemplateListRow({
   template,
@@ -1154,11 +1136,11 @@ function TemplateListRow({
       <div
         className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150"
         style={{
-          borderBottom: `1px solid ${colors.border}`,
+          borderBottom: `1px solid var(--border-subtle)`,
           background: selected
-            ? "rgba(99,102,241,0.07)"
+            ? "var(--accent-bg)"
             : hovered
-              ? "rgba(99,102,241,0.04)"
+              ? "var(--bg-muted)"
               : "transparent",
         }}
         onClick={handleClick}
@@ -1189,27 +1171,30 @@ function TemplateListRow({
         >
           <LayoutTemplateIcon
             className="w-3.5 h-3.5"
-            style={{ color: "#818cf8" }}
+            style={{ color: "var(--accent-light)" }}
           />
         </div>
 
         <div className="flex-1 min-w-0 space-y-1">
           <p
             className="text-[13px] font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             {template.name}
           </p>
           {template.description && (
             <p
               className="text-[11px] line-clamp-1"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               {template.description}
             </p>
           )}
           <div className="flex items-center gap-2">
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
+            <span
+              className="text-[11px]"
+              style={{ color: "var(--text-muted)" }}
+            >
               {template.fields.length} field
               {template.fields.length !== 1 ? "s" : ""}
             </span>
@@ -1240,20 +1225,18 @@ function TemplateListRow({
                   }}
                   className="text-[10px] px-1.5 py-px rounded-md transition-colors"
                   style={{
-                    background: "rgba(255,255,255,0.04)",
-                    color: colors.textDim,
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--bg-muted)",
+                    color: "var(--text-dim)",
+                    border: `1px solid var(--border-subtle)`,
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background =
-                      "rgba(255,255,255,0.08)")
+                    (e.currentTarget.style.background = "var(--bg-input)")
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.background =
-                      "rgba(255,255,255,0.04)")
+                    (e.currentTarget.style.background = "var(--bg-muted)")
                   }
                 >
-                  ✎
+                  ✏
                 </button>
               )}
             </div>
@@ -1262,7 +1245,7 @@ function TemplateListRow({
 
         <span
           className="hidden sm:block text-[11px] tabular-nums shrink-0 mt-0.5"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           {smartDate(template._creationTime)}
         </span>
@@ -1276,15 +1259,15 @@ function TemplateListRow({
               onClick={() => router.push(`/templates/${template._id}/fill`)}
               className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
               style={{
-                background: "rgba(99,102,241,0.15)",
-                color: "#818cf8",
-                border: "1px solid rgba(99,102,241,0.2)",
+                background: "var(--accent-bg)",
+                color: "var(--accent-light)",
+                border: "1px solid var(--accent-border)",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.25)")
+                (e.currentTarget.style.background = "var(--accent-bg-hover)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(99,102,241,0.15)")
+                (e.currentTarget.style.background = "var(--accent-bg)")
               }
             >
               <PlayIcon className="w-3 h-3" /> Use
@@ -1309,9 +1292,9 @@ function TemplateListRow({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Bulk action floating bar
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function BulkBar({
   count,
@@ -1335,7 +1318,7 @@ function BulkBar({
       className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
       style={{
         transform: "translateX(-50%)",
-        background: "#1c1c28",
+        background: "var(--bg-card)",
         border: "1px solid rgba(99,102,241,0.3)",
         boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
         backdropFilter: "blur(16px)",
@@ -1344,7 +1327,7 @@ function BulkBar({
     >
       <span
         className="text-[12px] font-semibold tabular-nums"
-        style={{ color: colors.accentPale }}
+        style={{ color: "var(--accent-pale)" }}
       >
         {count} selected
       </span>
@@ -1352,14 +1335,14 @@ function BulkBar({
         <button
           onClick={onSelectAll}
           className="text-[11px] font-medium"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
         >
           Select all {total}
         </button>
       )}
       <div
         className="w-px h-4 mx-0.5"
-        style={{ background: "rgba(255,255,255,0.1)" }}
+        style={{ background: "var(--bg-input)" }}
       />
 
       {allFolders.length > 0 && (
@@ -1368,14 +1351,14 @@ function BulkBar({
             <button
               className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textSecondary,
+                background: "var(--bg-input)",
+                color: "var(--text-secondary)",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+                (e.currentTarget.style.background = "var(--bg-input)")
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
+                (e.currentTarget.style.background = "var(--bg-input)")
               }
             >
               <FolderInputIcon className="w-3.5 h-3.5" />
@@ -1397,7 +1380,7 @@ function BulkBar({
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
         style={{
           background: "rgba(248,113,113,0.08)",
-          color: colors.danger,
+          color: "var(--danger)",
           border: "1px solid rgba(248,113,113,0.2)",
         }}
         onMouseEnter={(e) =>
@@ -1415,8 +1398,8 @@ function BulkBar({
         onClick={onClear}
         className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
         style={{
-          background: "rgba(255,255,255,0.06)",
-          color: colors.textMuted,
+          background: "var(--bg-input)",
+          color: "var(--text-muted)",
         }}
       >
         <XIcon className="w-3.5 h-3.5" />
@@ -1425,9 +1408,9 @@ function BulkBar({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Folder panel
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function FolderPanel({
   open,
@@ -1448,21 +1431,24 @@ function FolderPanel({
     <>
       <div
         className="flex items-center justify-between px-4 py-3 shrink-0"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div className="flex items-center gap-2">
-          <FolderIcon className="w-3.5 h-3.5" style={{ color: "#818cf8" }} />
+          <FolderIcon
+            className="w-3.5 h-3.5"
+            style={{ color: "var(--accent-light)" }}
+          />
           <span
             className="text-[13px] font-semibold"
-            style={{ color: colors.textSecondary }}
+            style={{ color: "var(--text-secondary)" }}
           >
             Folders
           </span>
           <span
             className="text-[10px] px-1.5 py-0.5 rounded-md"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textDim,
+              background: "var(--bg-input)",
+              color: "var(--text-dim)",
             }}
           >
             {folders.length}
@@ -1472,8 +1458,8 @@ function FolderPanel({
           onClick={onClose}
           className="w-7 h-7 rounded-lg flex items-center justify-center"
           style={{
-            color: colors.textDim,
-            background: "rgba(255,255,255,0.04)",
+            color: "var(--text-dim)",
+            background: "var(--bg-muted)",
           }}
         >
           <XIcon className="w-3.5 h-3.5" />
@@ -1487,21 +1473,27 @@ function FolderPanel({
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
             style={{
               background:
-                activeFolder === null ? colors.accentBg : "transparent",
-              border: `1px solid ${activeFolder === null ? colors.accentBorder : "transparent"}`,
+                activeFolder === null ? "var(--accent-bg)" : "transparent",
+              border: `1px solid ${activeFolder === null ? "var(--accent-border)" : "transparent"}`,
               minHeight: 44,
             }}
           >
             <LayoutTemplateIcon
               className="w-3.5 h-3.5 shrink-0"
               style={{
-                color: activeFolder === null ? "#818cf8" : colors.textDim,
+                color:
+                  activeFolder === null
+                    ? "var(--accent-light)"
+                    : "var(--text-dim)",
               }}
             />
             <span
               className="flex-1 text-[12px] font-medium"
               style={{
-                color: activeFolder === null ? "#818cf8" : colors.textSecondary,
+                color:
+                  activeFolder === null
+                    ? "var(--accent-light)"
+                    : "var(--text-secondary)",
               }}
             >
               All templates
@@ -1513,16 +1505,16 @@ function FolderPanel({
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <FolderIcon
               className="w-7 h-7 mb-2"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
-            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+            <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
               No folders yet
             </p>
             <p
               className="text-[11px] mt-1 leading-relaxed"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
-              Assign a folder to any template via ✎ or the ⋯ menu.
+              Assign a folder to any template via ✏ or the ⋯ menu.
             </p>
           </div>
         ) : (
@@ -1543,8 +1535,7 @@ function FolderPanel({
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive)
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.03)";
+                      e.currentTarget.style.background = "var(--bg-muted)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive)
@@ -1554,18 +1545,20 @@ function FolderPanel({
                   {isActive ? (
                     <FolderOpenIcon
                       className="w-3.5 h-3.5 shrink-0"
-                      style={{ color: "#818cf8" }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   ) : (
                     <FolderIcon
                       className="w-3.5 h-3.5 shrink-0"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     />
                   )}
                   <span
                     className="flex-1 text-[12px] font-medium truncate"
                     style={{
-                      color: isActive ? "#818cf8" : colors.textSecondary,
+                      color: isActive
+                        ? "var(--accent-light)"
+                        : "var(--text-secondary)",
                     }}
                   >
                     {folder}
@@ -1573,8 +1566,8 @@ function FolderPanel({
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded-md shrink-0"
                     style={{
-                      background: "rgba(255,255,255,0.06)",
-                      color: colors.textDim,
+                      background: "var(--bg-input)",
+                      color: "var(--text-dim)",
                     }}
                   >
                     {folderCounts[folder] ?? 0}
@@ -1588,11 +1581,11 @@ function FolderPanel({
 
       <div
         className="px-4 py-3 shrink-0"
-        style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderTop: `1px solid var(--border-subtle)` }}
       >
         <p
           className="text-[10px] leading-relaxed"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           A template belongs to one folder (shown with 📁). Labels (shown in
           green) are for filtering only.
@@ -1607,8 +1600,8 @@ function FolderPanel({
         className="hidden md:flex shrink-0 flex-col transition-all duration-200 overflow-hidden"
         style={{
           width: open ? 252 : 0,
-          borderLeft: open ? `1px solid ${colors.borderSubtle}` : "none",
-          background: colors.bgSidebar,
+          borderLeft: open ? `1px solid var(--border-subtle)` : "none",
+          background: "var(--bg-sidebar)",
         }}
       >
         {open && inner}
@@ -1616,7 +1609,7 @@ function FolderPanel({
       <div
         className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
         style={{
-          background: "rgba(0,0,0,0.6)",
+          background: "var(--overlay-backdrop)",
           backdropFilter: "blur(4px)",
           opacity: open ? 1 : 0,
           pointerEvents: open ? "auto" : "none",
@@ -1626,8 +1619,8 @@ function FolderPanel({
       <div
         className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl flex flex-col"
         style={{
-          background: "#15151e",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-hover)",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
           maxHeight: "75vh",
@@ -1637,7 +1630,7 @@ function FolderPanel({
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div
             className="w-9 h-1 rounded-full"
-            style={{ background: "rgba(255,255,255,0.15)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
         {inner}
@@ -1646,9 +1639,9 @@ function FolderPanel({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Pagination
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function Pagination({
   page,
@@ -1666,34 +1659,34 @@ function Pagination({
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
   const pages = useMemo(() => {
-    const arr: (number | "…")[] = [];
+    const arr: (number | "")[] = [];
     if (totalPages <= 7) {
       for (let i = 1; i <= totalPages; i++) arr.push(i);
       return arr;
     }
-    if (page <= 4) arr.push(1, 2, 3, 4, 5, "…", totalPages);
+    if (page <= 4) arr.push(1, 2, 3, 4, 5, "", totalPages);
     else if (page >= totalPages - 3)
       arr.push(
         1,
-        "…",
+        "",
         totalPages - 4,
         totalPages - 3,
         totalPages - 2,
         totalPages - 1,
         totalPages
       );
-    else arr.push(1, "…", page - 1, page, page + 1, "…", totalPages);
+    else arr.push(1, "", page - 1, page, page + 1, "", totalPages);
     return arr;
   }, [page, totalPages]);
   if (totalPages <= 1) return null;
   return (
     <div
       className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-      style={{ borderTop: `1px solid ${colors.borderSubtle}` }}
+      style={{ borderTop: `1px solid var(--border-subtle)` }}
     >
       <span
         className="text-[11px] tabular-nums"
-        style={{ color: colors.textDim }}
+        style={{ color: "var(--text-dim)" }}
       >
         {from}–{to} of {total}
       </span>
@@ -1703,20 +1696,20 @@ function Pagination({
           disabled={page === 1}
           className="h-7 px-2.5 rounded-lg text-[11px] font-medium"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: page === 1 ? colors.textDim : colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color: page === 1 ? "var(--text-dim)" : "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
             opacity: page === 1 ? 0.4 : 1,
           }}
         >
           ←
         </button>
         {pages.map((p, i) =>
-          p === "…" ? (
+          p === "" ? (
             <span
               key={`e${i}`}
               className="text-[11px] px-1"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               …
             </span>
@@ -1727,11 +1720,9 @@ function Pagination({
               className="h-7 min-w-[28px] px-2 rounded-lg text-[11px] font-medium transition-all"
               style={{
                 background:
-                  p === page
-                    ? "rgba(99,102,241,0.2)"
-                    : "rgba(255,255,255,0.03)",
-                color: p === page ? "#818cf8" : colors.textMuted,
-                border: `1px solid ${p === page ? "rgba(99,102,241,0.3)" : colors.border}`,
+                  p === page ? "rgba(99,102,241,0.2)" : "var(--bg-muted)",
+                color: p === page ? "var(--accent-light)" : "var(--text-muted)",
+                border: `1px solid ${p === page ? "rgba(99,102,241,0.3)" : "var(--border-subtle)"}`,
               }}
             >
               {p}
@@ -1743,9 +1734,10 @@ function Pagination({
           disabled={page === totalPages}
           className="h-7 px-2.5 rounded-lg text-[11px] font-medium"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: page === totalPages ? colors.textDim : colors.textMuted,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            color:
+              page === totalPages ? "var(--text-dim)" : "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
             opacity: page === totalPages ? 0.4 : 1,
           }}
         >
@@ -1756,9 +1748,9 @@ function Pagination({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Skeletons
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 function GridSkeleton() {
   return (
@@ -1782,21 +1774,21 @@ function GridSkeleton() {
           <div className="flex-1 space-y-1.5">
             <div
               className="h-3.5 rounded w-3/4"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: "var(--bg-input)" }}
             />
             <div
               className="h-2.5 rounded w-1/3"
-              style={{ background: "rgba(255,255,255,0.05)" }}
+              style={{ background: "var(--bg-muted)" }}
             />
           </div>
           <div
             className="w-7 h-7 rounded-lg shrink-0"
-            style={{ background: "rgba(255,255,255,0.05)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
         </div>
         <div
           className="h-2.5 rounded w-full"
-          style={{ background: "rgba(255,255,255,0.04)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div className="flex gap-1">
           <div
@@ -1811,7 +1803,7 @@ function GridSkeleton() {
         <div className="flex gap-2">
           <div
             className="h-7 rounded-xl flex-1"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            style={{ background: "var(--bg-muted)" }}
           />
           <div
             className="h-7 rounded-xl flex-1"
@@ -1831,7 +1823,7 @@ function ListSkeleton() {
   return (
     <div
       className="flex items-start gap-3 px-4 sm:px-5 py-3 animate-pulse"
-      style={{ borderBottom: `1px solid ${colors.border}` }}
+      style={{ borderBottom: `1px solid var(--border-subtle)` }}
     >
       <div
         className="w-8 h-8 rounded-lg shrink-0 mt-0.5"
@@ -1840,11 +1832,11 @@ function ListSkeleton() {
       <div className="flex-1 space-y-1.5">
         <div
           className="h-3.5 rounded w-1/2"
-          style={{ background: "rgba(255,255,255,0.08)" }}
+          style={{ background: "var(--bg-input)" }}
         />
         <div
           className="h-2.5 rounded w-3/4"
-          style={{ background: "rgba(255,255,255,0.05)" }}
+          style={{ background: "var(--bg-muted)" }}
         />
         <div className="flex gap-1">
           <div
@@ -1859,15 +1851,15 @@ function ListSkeleton() {
       </div>
       <div
         className="w-7 h-7 rounded-lg shrink-0"
-        style={{ background: "rgba(255,255,255,0.05)" }}
+        style={{ background: "var(--bg-muted)" }}
       />
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 // Page
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────────
 
 type SortKey = "newest" | "oldest" | "name_asc" | "name_desc" | "most_fields";
 type ViewMode = "grid" | "list";
@@ -2080,23 +2072,23 @@ export default function TemplatesPage() {
     displayTemplates.some((t) => selected.has(t._id)) && !allPageSelected;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* Header */}
       <div
         className="flex items-center justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
-        style={{ borderBottom: `1px solid ${colors.borderSubtle}` }}
+        style={{ borderBottom: `1px solid var(--border-subtle)` }}
       >
         <div>
           <h1
             className="text-[15px] sm:text-base font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Templates
           </h1>
           {!isLoading && (
             <p
               className="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               <span>
                 {templates?.length ?? 0} template
@@ -2104,7 +2096,7 @@ export default function TemplatesPage() {
               </span>
               {allFolders.length > 0 && (
                 <>
-                  <span style={{ color: colors.textDim }}>·</span>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
                   <span>
                     {allFolders.length} folder
                     {allFolders.length !== 1 ? "s" : ""}
@@ -2118,17 +2110,17 @@ export default function TemplatesPage() {
           onClick={() => router.push("/templates/new")}
           className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl transition-all duration-150 shrink-0"
           style={{
-            background: colors.accentBg,
-            color: colors.accentPale,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            color: "var(--accent-pale)",
+            border: `1px solid var(--accent-border)`,
             whiteSpace: "nowrap",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.accentBgHover;
+            e.currentTarget.style.background = "var(--accent-bg-hover)";
             e.currentTarget.style.boxShadow = "0 0 20px rgba(99,102,241,0.25)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = colors.accentBg;
+            e.currentTarget.style.background = "var(--accent-bg)";
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -2142,8 +2134,8 @@ export default function TemplatesPage() {
       <div
         className="shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: "rgba(255,255,255,0.01)",
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-muted)",
         }}
       >
         {/* Row 1 */}
@@ -2151,30 +2143,30 @@ export default function TemplatesPage() {
           <div className="relative flex-1 max-w-sm">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <input
-              placeholder="Search templates…"
+              placeholder="Search templates"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
+                background: "var(--bg-muted)",
+                border: `1px solid var(--border-subtle)`,
+                color: "var(--text)",
               }}
               onFocus={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.accentBorder}`)
+                (e.currentTarget.style.border = `1px solid var(--accent-border)`)
               }
               onBlur={(e) =>
-                (e.currentTarget.style.border = `1px solid ${colors.border}`)
+                (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: colors.textDim }}
+                style={{ color: "var(--text-dim)" }}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -2184,8 +2176,8 @@ export default function TemplatesPage() {
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             {[
@@ -2199,7 +2191,7 @@ export default function TemplatesPage() {
                 style={{
                   background:
                     view === v ? "rgba(99,102,241,0.2)" : "transparent",
-                  color: view === v ? "#818cf8" : colors.textDim,
+                  color: view === v ? "var(--accent-light)" : "var(--text-dim)",
                 }}
               >
                 <I className="w-4 h-4" />
@@ -2216,11 +2208,9 @@ export default function TemplatesPage() {
             }}
             className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
             style={{
-              background: selectMode
-                ? colors.accentBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${selectMode ? colors.accentBorder : colors.border}`,
-              color: selectMode ? "#818cf8" : colors.textMuted,
+              background: selectMode ? "var(--accent-bg)" : "var(--bg-muted)",
+              border: `1px solid ${selectMode ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              color: selectMode ? "var(--accent-light)" : "var(--text-muted)",
             }}
           >
             <CheckSquareIcon className="w-3.5 h-3.5" />
@@ -2238,9 +2228,9 @@ export default function TemplatesPage() {
               <button
                 className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${colors.border}`,
-                  color: colors.textMuted,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
+                  color: "var(--text-muted)",
                 }}
               >
                 {SORT_LABELS[sort]} <ChevronDownIcon className="w-3 h-3" />
@@ -2252,7 +2242,7 @@ export default function TemplatesPage() {
                   {sort === key && (
                     <CheckIcon
                       className="w-3 h-3 mr-2"
-                      style={{ color: "#818cf8" }}
+                      style={{ color: "var(--accent-light)" }}
                     />
                   )}
                   {SORT_LABELS[key]}
@@ -2267,10 +2257,12 @@ export default function TemplatesPage() {
             className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-medium shrink-0 whitespace-nowrap transition-all"
             style={{
               background: folderPanelOpen
-                ? colors.accentBg
-                : "rgba(255,255,255,0.04)",
-              border: `1px solid ${folderPanelOpen ? colors.accentBorder : colors.border}`,
-              color: folderPanelOpen ? "#818cf8" : colors.textMuted,
+                ? "var(--accent-bg)"
+                : "var(--bg-muted)",
+              border: `1px solid ${folderPanelOpen ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              color: folderPanelOpen
+                ? "var(--accent-light)"
+                : "var(--text-muted)",
             }}
           >
             <FolderIcon className="w-3.5 h-3.5" />
@@ -2297,7 +2289,7 @@ export default function TemplatesPage() {
             <>
               <div
                 className="w-px h-4 shrink-0"
-                style={{ background: "rgba(255,255,255,0.1)" }}
+                style={{ background: "var(--bg-input)" }}
               />
               <button
                 onClick={() => setActiveTag(null)}
@@ -2306,12 +2298,12 @@ export default function TemplatesPage() {
                   background:
                     activeTag === null && !activeFolder
                       ? "rgba(99,102,241,0.2)"
-                      : "rgba(255,255,255,0.04)",
+                      : "var(--bg-muted)",
                   color:
                     activeTag === null && !activeFolder
-                      ? "#818cf8"
-                      : colors.textDim,
-                  border: `1px solid ${activeTag === null && !activeFolder ? colors.accentBorder : "transparent"}`,
+                      ? "var(--accent-light)"
+                      : "var(--text-dim)",
+                  border: `1px solid ${activeTag === null && !activeFolder ? "var(--accent-border)" : "transparent"}`,
                 }}
               >
                 All
@@ -2328,8 +2320,11 @@ export default function TemplatesPage() {
                     background:
                       activeTag === label
                         ? "rgba(52,211,153,0.15)"
-                        : "rgba(255,255,255,0.04)",
-                    color: activeTag === label ? "#34d399" : colors.textDim,
+                        : "var(--bg-muted)",
+                    color:
+                      activeTag === label
+                        ? "var(--success)"
+                        : "var(--text-dim)",
                     border: `1px solid ${activeTag === label ? "rgba(52,211,153,0.3)" : "transparent"}`,
                   }}
                 >
@@ -2347,8 +2342,8 @@ export default function TemplatesPage() {
         <div
           className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
           style={{
-            background: colors.bgSidebar,
-            borderBottom: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-sidebar)",
+            borderBottom: `1px solid var(--border-subtle)`,
           }}
         >
           <SelectCheckbox
@@ -2359,7 +2354,7 @@ export default function TemplatesPage() {
               else setSelected(new Set());
             }}
           />
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             Click templates to select
           </span>
           <button
@@ -2368,7 +2363,7 @@ export default function TemplatesPage() {
               setSelected(new Set());
             }}
             className="ml-auto text-[11px]"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             Cancel
           </button>
@@ -2380,11 +2375,11 @@ export default function TemplatesPage() {
         <div
           className="flex items-center gap-2 px-4 sm:px-6 py-2 shrink-0 flex-wrap"
           style={{
-            borderBottom: `1px solid ${colors.border}`,
-            background: "rgba(255,255,255,0.01)",
+            borderBottom: `1px solid var(--border-subtle)`,
+            background: "var(--bg-muted)",
           }}
         >
-          <span className="text-[11px]" style={{ color: colors.textDim }}>
+          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
             {filteredTemplates.length} result
             {filteredTemplates.length !== 1 ? "s" : ""}
           </span>
@@ -2392,8 +2387,8 @@ export default function TemplatesPage() {
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textMuted,
+                background: "var(--bg-input)",
+                color: "var(--text-muted)",
               }}
             >
               &ldquo;{search}&rdquo;
@@ -2405,7 +2400,10 @@ export default function TemplatesPage() {
           {activeFolder && (
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
-              style={{ background: colors.accentBg, color: "#818cf8" }}
+              style={{
+                background: "var(--accent-bg)",
+                color: "var(--accent-light)",
+              }}
             >
               <FolderIcon className="w-3 h-3" /> {activeFolder}
               <button onClick={() => setActiveFolder(null)}>
@@ -2416,7 +2414,10 @@ export default function TemplatesPage() {
           {activeTag && (
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
-              style={{ background: "rgba(52,211,153,0.1)", color: "#34d399" }}
+              style={{
+                background: "rgba(52,211,153,0.1)",
+                color: "var(--success)",
+              }}
             >
               <TagIcon className="w-3 h-3" /> {activeTag}
               <button onClick={() => setActiveTag(null)}>
@@ -2431,7 +2432,7 @@ export default function TemplatesPage() {
               setActiveFolder(null);
             }}
             className="text-[11px] ml-auto"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             Clear all
           </button>
@@ -2467,12 +2468,12 @@ export default function TemplatesPage() {
                 >
                   <LayoutTemplateIcon
                     className="w-6 h-6"
-                    style={{ color: "#818cf8" }}
+                    style={{ color: "var(--accent-light)" }}
                   />
                 </div>
                 <p
                   className="text-[14px] font-semibold mb-1.5"
-                  style={{ color: colors.textSecondary }}
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   {search || activeTag || activeFolder
                     ? "No templates found"
@@ -2480,7 +2481,7 @@ export default function TemplatesPage() {
                 </p>
                 <p
                   className="text-[12px] mb-6 max-w-[260px] leading-relaxed"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   {search
                     ? `No results for "${search}".`
@@ -2495,9 +2496,9 @@ export default function TemplatesPage() {
                     onClick={() => router.push("/templates/new")}
                     className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
                     style={{
-                      background: colors.accentBg,
-                      color: colors.accentPale,
-                      border: `1px solid ${colors.accentBorder}`,
+                      background: "var(--accent-bg)",
+                      color: "var(--accent-pale)",
+                      border: `1px solid var(--accent-border)`,
                     }}
                   >
                     <PlusIcon className="w-3.5 h-3.5" /> New template

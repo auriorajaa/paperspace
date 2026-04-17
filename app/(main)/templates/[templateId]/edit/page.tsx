@@ -42,7 +42,7 @@ import {
   detectPlaceholders,
   type DetectedField,
 } from "@/lib/placeholder-detector";
-import { colors, fieldTypeColors } from "@/lib/design-tokens";
+import { fieldTypeColors } from "@/lib/design-tokens";
 import { useAuth } from "@clerk/nextjs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,13 +119,13 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
   return (
     <div
       className="flex flex-col h-full overflow-y-auto"
-      style={{ background: colors.bg }}
+      style={{ background: "var(--bg)" }}
     >
       <div
         className="flex flex-col items-center justify-center px-6 py-10 gap-5 text-center"
         style={{
-          background: `linear-gradient(180deg, ${colors.bgSidebar} 0%, ${colors.bg} 100%)`,
-          borderBottom: `1px solid ${colors.borderSubtle}`,
+          background: `linear-gradient(180deg, var(--bg-sidebar) 0%, var(--bg) 100%)`,
+          borderBottom: `1px solid var(--border-subtle)`,
         }}
       >
         {/* Device trio */}
@@ -133,26 +133,26 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-4 py-3 rounded-2xl"
             style={{
-              background: colors.accentBg,
-              border: `1px solid ${colors.accentBorder}`,
+              background: "var(--accent-bg)",
+              border: `1px solid var(--accent-border)`,
             }}
           >
             <MonitorIcon
               className="w-7 h-7"
-              style={{ color: colors.accentLight }}
+              style={{ color: "var(--accent-light)" }}
             />
             <div className="flex flex-col items-center gap-0.5">
               <span
                 className="text-[11px] font-semibold"
-                style={{ color: colors.accentLight }}
+                style={{ color: "var(--accent-light)" }}
               >
                 Desktop
               </span>
               <span
                 className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
                 style={{
-                  background: colors.accentBorder,
-                  color: colors.accentLight,
+                  background: "var(--accent-border)",
+                  color: "var(--accent-light)",
                 }}
               >
                 Recommended
@@ -162,17 +162,17 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
             <TabletIcon
               className="w-6 h-6"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             />
             <span
               className="text-[11px] font-medium"
-              style={{ color: colors.textSecondary }}
+              style={{ color: "var(--text-secondary)" }}
             >
               Tablet
             </span>
@@ -180,18 +180,18 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
-              background: "rgba(255,255,255,0.02)",
-              border: `1px solid ${colors.borderSubtle}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
               opacity: 0.45,
             }}
           >
             <SmartphoneIcon
               className="w-5 h-5"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             />
             <span
               className="text-[11px] font-medium"
-              style={{ color: colors.textDim }}
+              style={{ color: "var(--text-dim)" }}
             >
               Phone
             </span>
@@ -200,20 +200,20 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         <div className="space-y-1.5 max-w-[280px]">
           <p
             className="text-[15px] font-semibold leading-snug"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Template editing works best on a larger screen
           </p>
           <p
             className="text-[12px] leading-relaxed"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             Writing placeholders like{" "}
             <code
               className="font-mono text-[11px] px-1 rounded"
               style={{
-                background: "rgba(255,255,255,0.07)",
-                color: colors.accentPale,
+                background: "var(--bg-input)",
+                color: "var(--accent-pale)",
               }}
             >
               {"{{field_name}}"}
@@ -226,7 +226,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
       <div className="px-5 py-5 space-y-2">
         <p
           className="text-[10px] font-semibold uppercase tracking-wider mb-3"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           What you may experience on mobile
         </p>
@@ -235,16 +235,19 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
             key={i}
             className="flex items-start gap-3 px-3.5 py-2.5 rounded-xl"
             style={{
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${colors.borderSubtle}`,
+              background: "var(--bg-muted)",
+              border: `1px solid var(--border-subtle)`,
             }}
           >
-            <span className="shrink-0 mt-0.5" style={{ color: colors.textDim }}>
+            <span
+              className="shrink-0 mt-0.5"
+              style={{ color: "var(--text-dim)" }}
+            >
               {item.icon}
             </span>
             <p
               className="text-[12px] leading-relaxed"
-              style={{ color: colors.textMuted }}
+              style={{ color: "var(--text-muted)" }}
             >
               {item.text}
             </p>
@@ -257,9 +260,9 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           onClick={handleCopyLink}
           className="w-full flex items-center justify-center gap-2 text-[13px] font-medium px-4 py-3 rounded-xl transition-all"
           style={{
-            background: copied ? "rgba(34,197,94,0.1)" : colors.accentBg,
-            color: copied ? colors.success : colors.accentLight,
-            border: `1px solid ${copied ? colors.success + "40" : colors.accentBorder}`,
+            background: copied ? "var(--success-bg)" : "var(--accent-bg)",
+            color: copied ? "var(--success)" : "var(--accent-light)",
+            border: `1px solid ${copied ? "color-mix(in srgb, var(--success) 40%, transparent)" : "var(--accent-border)"}`,
           }}
         >
           {copied ? (
@@ -278,9 +281,9 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           onClick={onContinue}
           className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium px-4 py-2.5 rounded-xl"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: colors.textMuted,
-            border: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           Continue on mobile anyway
@@ -289,7 +292,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         <Link
           href="/templates"
           className="flex items-center justify-center text-[11px] py-1"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           ← Back to templates
         </Link>
@@ -367,9 +370,9 @@ function InlineTitle({
           placeholder="Template name…"
           className="flex-1 min-w-0 text-[13px] font-medium rounded-lg px-2.5 py-1.5 outline-none"
           style={{
-            background: "rgba(255,255,255,0.07)",
-            border: `1px solid ${colors.accentBorder}`,
-            color: colors.text,
+            background: "var(--bg-input)",
+            border: `1px solid var(--accent-border)`,
+            color: "var(--text)",
             maxWidth: 280,
           }}
         />
@@ -378,19 +381,19 @@ function InlineTitle({
           disabled={saving}
           className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg"
           style={{
-            background: colors.accentBg,
-            border: `1px solid ${colors.accentBorder}`,
+            background: "var(--accent-bg)",
+            border: `1px solid var(--accent-border)`,
           }}
         >
           {saving ? (
             <div
               className="w-3 h-3 rounded-full border-[1.5px] border-t-transparent animate-spin"
-              style={{ borderColor: colors.accentLight }}
+              style={{ borderColor: "var(--accent-light)" }}
             />
           ) : (
             <CheckIcon
               className="w-3 h-3"
-              style={{ color: colors.accentLight }}
+              style={{ color: "var(--accent-light)" }}
             />
           )}
         </button>
@@ -401,11 +404,11 @@ function InlineTitle({
           }}
           className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.borderSubtle}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
-          <XIcon className="w-3 h-3" style={{ color: colors.textDim }} />
+          <XIcon className="w-3 h-3" style={{ color: "var(--text-dim)" }} />
         </button>
       </div>
     );
@@ -416,26 +419,26 @@ function InlineTitle({
       onClick={() => setEditing(true)}
       className="flex items-center gap-2 px-2 py-1.5 rounded-lg min-w-0 max-w-[160px] sm:max-w-[300px]"
       style={{
-        background: "rgba(255,255,255,0.03)",
-        border: `1px solid ${colors.borderSubtle}`,
+        background: "var(--bg-muted)",
+        border: `1px solid var(--border-subtle)`,
       }}
       title="Rename template"
     >
       <span
         className="text-[13px] font-medium truncate"
-        style={{ color: saved ? colors.success : colors.text }}
+        style={{ color: saved ? "var(--success)" : "var(--text)" }}
       >
         {value}
       </span>
       {saved ? (
         <CheckIcon
           className="w-3 h-3 shrink-0"
-          style={{ color: colors.success }}
+          style={{ color: "var(--success)" }}
         />
       ) : (
         <PencilIcon
           className="w-3 h-3 shrink-0"
-          style={{ color: colors.accentLight, opacity: 0.55 }}
+          style={{ color: "var(--accent-light)", opacity: 0.55 }}
         />
       )}
     </button>
@@ -447,7 +450,7 @@ function InlineTitle({
 function Snippet({
   code,
   label,
-  color = "#a5b4fc",
+  color = "var(--accent-pale)",
   description,
 }: {
   code: string;
@@ -465,21 +468,21 @@ function Snippet({
       }}
       className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left w-full"
       style={{
-        background: copied ? "rgba(52,211,153,0.07)" : "rgba(255,255,255,0.03)",
-        border: `1px solid ${copied ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.07)"}`,
+        background: copied ? "var(--success-bg)" : "var(--bg-muted)",
+        border: `1px solid ${copied ? "color-mix(in srgb, var(--success) 25%, transparent)" : "var(--border-subtle)"}`,
       }}
     >
       <div className="flex-1 min-w-0">
         <code
           className="text-[12px] font-mono block"
-          style={{ color: copied ? "#34d399" : color }}
+          style={{ color: copied ? "var(--success)" : color }}
         >
           {code}
         </code>
         {description && (
           <p
             className="text-[11px] mt-0.5 leading-relaxed"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           >
             {description}
           </p>
@@ -487,16 +490,16 @@ function Snippet({
       </div>
       <div className="shrink-0 flex items-center gap-1.5 mt-0.5">
         {label && (
-          <span className="text-[10px]" style={{ color: colors.textDim }}>
+          <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
             {label}
           </span>
         )}
         {copied ? (
-          <CheckIcon className="w-3 h-3" style={{ color: "#34d399" }} />
+          <CheckIcon className="w-3 h-3" style={{ color: "var(--success)" }} />
         ) : (
           <CopyIcon
             className="w-3 h-3"
-            style={{ color: colors.textDim, opacity: 0.5 }}
+            style={{ color: "var(--text-dim)", opacity: 0.5 }}
           />
         )}
       </div>
@@ -525,22 +528,26 @@ function FieldScanResultBar({
     (f) => f.type === "condition" || f.type === "condition_inverse"
   );
 
+  // Uses CSS variables for theme-correct colors
   const typeLabel: Record<string, { label: string; color: string }> = {
-    text: { label: "Text", color: "#60a5fa" },
-    date: { label: "Date", color: "#34d399" },
-    number: { label: "Number", color: "#fb923c" },
-    email: { label: "Email", color: "#c084fc" },
-    loop: { label: "Table", color: "#818cf8" },
-    condition: { label: "Show/Hide", color: "#f472b6" },
-    condition_inverse: { label: "Show/Hide", color: "#fb7185" },
+    text: { label: "Text", color: "var(--field-text)" },
+    date: { label: "Date", color: "var(--field-date)" },
+    number: { label: "Number", color: "var(--field-number)" },
+    email: { label: "Email", color: "var(--field-email)" },
+    loop: { label: "Table", color: "var(--field-loop)" },
+    condition: { label: "Show/Hide", color: "var(--field-condition)" },
+    condition_inverse: {
+      label: "Show/Hide",
+      color: "var(--field-condition-inverse)",
+    },
   };
 
   return (
     <div
       className="shrink-0 px-4 py-3 flex flex-col gap-2.5"
       style={{
-        background: "rgba(52,211,153,0.04)",
-        borderBottom: `1px solid rgba(52,211,153,0.12)`,
+        background: "var(--success-bg)",
+        borderBottom: `1px solid color-mix(in srgb, var(--success) 15%, transparent)`,
       }}
     >
       {/* Header row */}
@@ -548,20 +555,22 @@ function FieldScanResultBar({
         <div className="flex items-center gap-2">
           <div
             className="w-5 h-5 rounded-lg flex items-center justify-center"
-            style={{ background: "rgba(52,211,153,0.12)" }}
+            style={{
+              background: "color-mix(in srgb, var(--success) 15%, transparent)",
+            }}
           >
-            <ScanIcon className="w-3 h-3" style={{ color: "#34d399" }} />
+            <ScanIcon className="w-3 h-3" style={{ color: "var(--success)" }} />
           </div>
           <span
             className="text-[12px] font-semibold"
-            style={{ color: colors.textSecondary }}
+            style={{ color: "var(--text-secondary)" }}
           >
             {fields.length === 0
               ? "No placeholders detected"
               : `${fields.length} field${fields.length !== 1 ? "s" : ""} detected`}
           </span>
           {fields.length > 0 && (
-            <span className="text-[11px]" style={{ color: colors.textDim }}>
+            <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
               — ready to fill
             </span>
           )}
@@ -569,7 +578,7 @@ function FieldScanResultBar({
         <button
           onClick={onDismiss}
           className="flex items-center justify-center w-6 h-6 rounded-lg transition-colors shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           <XIcon className="w-3.5 h-3.5" />
         </button>
@@ -579,24 +588,26 @@ function FieldScanResultBar({
         <div
           className="flex items-start gap-2 px-3 py-2 rounded-xl"
           style={{
-            background: "rgba(251,191,36,0.06)",
-            border: "1px solid rgba(251,191,36,0.15)",
+            background: "var(--warning-bg)",
+            border:
+              "1px solid color-mix(in srgb, var(--warning) 20%, transparent)",
           }}
         >
           <InfoIcon
             className="w-3.5 h-3.5 mt-0.5 shrink-0"
-            style={{ color: "#fbbf24" }}
+            style={{ color: "var(--warning)" }}
           />
           <p
             className="text-[11px] leading-relaxed"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             No{" "}
-            <code className="font-mono" style={{ color: "#fbbf24" }}>
+            <code className="font-mono" style={{ color: "var(--warning)" }}>
               {"{{placeholders}}"}
             </code>{" "}
             were found in this document. Add them in the editor above, then
-            click <strong style={{ color: colors.textSecondary }}>Save</strong>{" "}
+            click{" "}
+            <strong style={{ color: "var(--text-secondary)" }}>Save</strong>{" "}
             again to scan.
           </p>
         </div>
@@ -605,15 +616,15 @@ function FieldScanResultBar({
           {fields.map((f) => {
             const meta = typeLabel[f.type] ?? {
               label: f.type,
-              color: colors.textMuted,
+              color: "var(--text-muted)",
             };
             return (
               <div
                 key={f.id}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
                 style={{
-                  background: `${meta.color}10`,
-                  border: `1px solid ${meta.color}25`,
+                  background: `color-mix(in srgb, ${meta.color} 10%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${meta.color} 20%, transparent)`,
                 }}
               >
                 <code
@@ -626,13 +637,16 @@ function FieldScanResultBar({
                       ? `{{#${f.name}}}`
                       : `{{${f.name}}}`}
                 </code>
-                <span className="text-[10px]" style={{ color: colors.textDim }}>
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--text-dim)" }}
+                >
                   {meta.label}
                 </span>
                 {f.subFields && f.subFields.length > 0 && (
                   <span
                     className="text-[10px]"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     · {f.subFields.length} sub-field
                     {f.subFields.length !== 1 ? "s" : ""}
@@ -648,24 +662,42 @@ function FieldScanResultBar({
       {fields.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap">
           {simpleFields.length > 0 && (
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              <span className="font-medium" style={{ color: "#60a5fa" }}>
+            <span
+              className="text-[11px]"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <span
+                className="font-medium"
+                style={{ color: "var(--field-text)" }}
+              >
                 {simpleFields.length}
               </span>{" "}
               text field{simpleFields.length !== 1 ? "s" : ""}
             </span>
           )}
           {loopFields.length > 0 && (
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              <span className="font-medium" style={{ color: "#818cf8" }}>
+            <span
+              className="text-[11px]"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <span
+                className="font-medium"
+                style={{ color: "var(--field-loop)" }}
+              >
                 {loopFields.length}
               </span>{" "}
               table loop{loopFields.length !== 1 ? "s" : ""}
             </span>
           )}
           {conditionFields.length > 0 && (
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              <span className="font-medium" style={{ color: "#f472b6" }}>
+            <span
+              className="text-[11px]"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <span
+                className="font-medium"
+                style={{ color: "var(--field-condition)" }}
+              >
                 {conditionFields.length}
               </span>{" "}
               condition{conditionFields.length !== 1 ? "s" : ""}
@@ -691,31 +723,31 @@ const GUIDE_TABS: {
     id: "quickstart",
     label: "Quick Start",
     icon: <WandSparklesIcon className="w-3.5 h-3.5" />,
-    color: "#34d399",
+    color: "var(--success)",
   },
   {
     id: "text",
     label: "Text fields",
     icon: <HashIcon className="w-3.5 h-3.5" />,
-    color: "#60a5fa",
+    color: "var(--field-text)",
   },
   {
     id: "table",
     label: "Tables",
     icon: <TableIcon className="w-3.5 h-3.5" />,
-    color: "#818cf8",
+    color: "var(--field-loop)",
   },
   {
     id: "condition",
     label: "Show / Hide",
     icon: <ToggleLeftIcon className="w-3.5 h-3.5" />,
-    color: "#f472b6",
+    color: "var(--field-condition)",
   },
   {
     id: "mistakes",
     label: "Common mistakes",
     icon: <CircleAlertIcon className="w-3.5 h-3.5" />,
-    color: "#fbbf24",
+    color: "var(--warning)",
   },
 ];
 
@@ -727,39 +759,39 @@ function SyntaxGuideBar() {
     <div
       className="shrink-0"
       style={{
-        borderBottom: `1px solid rgba(255,255,255,0.06)`,
-        background: "#0c0c10",
+        borderBottom: `1px solid var(--border-subtle)`,
+        background: "var(--bg-sidebar)",
       }}
     >
       {/* Toggle bar */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2.5 px-4 sm:px-5 py-2.5"
-        style={{ color: colors.textMuted }}
+        style={{ color: "var(--text-muted)" }}
       >
         <BookOpenIcon
           className="w-3.5 h-3.5 shrink-0"
-          style={{ color: "#818cf8" }}
+          style={{ color: "var(--field-loop)" }}
         />
         <span
           className="text-[12px] font-medium"
-          style={{ color: colors.textSecondary }}
+          style={{ color: "var(--text-secondary)" }}
         >
           Placeholder guide
         </span>
         {/* Inline previews — desktop only */}
         <div className="hidden sm:flex items-center gap-1.5 ml-1">
           {[
-            { code: "{{name}}", color: "#60a5fa" },
-            { code: "{{#items}}", color: "#818cf8" },
-            { code: "{{#if_paid}}", color: "#f472b6" },
+            { code: "{{name}}", color: "var(--field-text)" },
+            { code: "{{#items}}", color: "var(--field-loop)" },
+            { code: "{{#if_paid}}", color: "var(--field-condition)" },
           ].map(({ code, color }) => (
             <code
               key={code}
               className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: "var(--bg-muted)",
+                border: "1px solid var(--border-hover)",
                 color,
               }}
             >
@@ -769,7 +801,7 @@ function SyntaxGuideBar() {
         </div>
         <div
           className="ml-auto flex items-center gap-1.5 text-[11px] shrink-0"
-          style={{ color: colors.textDim }}
+          style={{ color: "var(--text-dim)" }}
         >
           {open ? "Hide" : "Show guide"}
           {open ? (
@@ -781,11 +813,11 @@ function SyntaxGuideBar() {
       </button>
 
       {open && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ borderTop: "1px solid var(--border-subtle)" }}>
           {/* Tabs — horizontally scrollable on mobile */}
           <div
             className="flex overflow-x-auto border-b px-4 sm:px-5 gap-0 hide-scrollbar"
-            style={{ borderColor: "rgba(255,255,255,0.06)" }}
+            style={{ borderColor: "var(--border-subtle)" }}
           >
             {GUIDE_TABS.map((tab) => (
               <button
@@ -794,12 +826,12 @@ function SyntaxGuideBar() {
                 className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] sm:text-xs font-medium border-b-2 transition-all whitespace-nowrap shrink-0"
                 style={{
                   borderColor: activeTab === tab.id ? tab.color : "transparent",
-                  color: activeTab === tab.id ? tab.color : colors.textDim,
+                  color: activeTab === tab.id ? tab.color : "var(--text-dim)",
                 }}
               >
                 <span
                   style={{
-                    color: activeTab === tab.id ? tab.color : colors.textDim,
+                    color: activeTab === tab.id ? tab.color : "var(--text-dim)",
                   }}
                 >
                   {tab.icon}
@@ -817,28 +849,29 @@ function SyntaxGuideBar() {
                 <div
                   className="flex items-start gap-2 p-3 rounded-xl"
                   style={{
-                    background: "rgba(52,211,153,0.05)",
-                    border: "1px solid rgba(52,211,153,0.12)",
+                    background: "var(--success-bg)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--success) 15%, transparent)",
                   }}
                 >
                   <SparklesIcon
                     className="w-3.5 h-3.5 mt-0.5 shrink-0"
-                    style={{ color: "#34d399" }}
+                    style={{ color: "var(--success)" }}
                   />
                   <p
                     className="text-[12px] leading-relaxed"
-                    style={{ color: colors.textMuted }}
+                    style={{ color: "var(--text-muted)" }}
                   >
                     A placeholder is a{" "}
-                    <strong style={{ color: colors.textSecondary }}>
+                    <strong style={{ color: "var(--text-secondary)" }}>
                       field name surrounded by double curly braces
                     </strong>{" "}
                     — for example{" "}
                     <code
                       className="font-mono text-[11px] px-1 rounded"
                       style={{
-                        background: "rgba(255,255,255,0.07)",
-                        color: "#60a5fa",
+                        background: "var(--bg-input)",
+                        color: "var(--field-text)",
                       }}
                     >
                       {"{{customer_name}}"}
@@ -853,34 +886,35 @@ function SyntaxGuideBar() {
                   {/* Template side */}
                   <div
                     className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                    style={{ border: "1px solid var(--border-hover)" }}
                   >
                     <div
                       className="px-3 py-1.5 flex items-center gap-1.5"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        background: "var(--bg-muted)",
+                        borderBottom: "1px solid var(--border-subtle)",
                       }}
                     >
                       <span className="w-2 h-2 rounded-full bg-amber-400 opacity-70" />
                       <span
                         className="text-[10px] font-semibold uppercase tracking-wider"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         Template (what you write)
                       </span>
                     </div>
                     <div
                       className="px-4 py-3 space-y-1 text-[12px] leading-relaxed"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       <p>
                         Dear{" "}
                         <code
                           className="font-mono text-[11px] px-0.5 rounded"
                           style={{
-                            background: "rgba(96,165,250,0.12)",
-                            color: "#60a5fa",
+                            background:
+                              "color-mix(in srgb, var(--field-text) 12%, transparent)",
+                            color: "var(--field-text)",
                           }}
                         >
                           {"{{customer_name}}"}
@@ -892,8 +926,9 @@ function SyntaxGuideBar() {
                         <code
                           className="font-mono text-[11px] px-0.5 rounded"
                           style={{
-                            background: "rgba(96,165,250,0.12)",
-                            color: "#60a5fa",
+                            background:
+                              "color-mix(in srgb, var(--field-text) 12%, transparent)",
+                            color: "var(--field-text)",
                           }}
                         >
                           {"{{invoice_number}}"}
@@ -904,8 +939,9 @@ function SyntaxGuideBar() {
                         <code
                           className="font-mono text-[11px] px-0.5 rounded"
                           style={{
-                            background: "rgba(96,165,250,0.12)",
-                            color: "#60a5fa",
+                            background:
+                              "color-mix(in srgb, var(--field-text) 12%, transparent)",
+                            color: "var(--field-text)",
                           }}
                         >
                           {"{{total_amount}}"}
@@ -916,8 +952,9 @@ function SyntaxGuideBar() {
                         <code
                           className="font-mono text-[11px] px-0.5 rounded"
                           style={{
-                            background: "rgba(96,165,250,0.12)",
-                            color: "#60a5fa",
+                            background:
+                              "color-mix(in srgb, var(--field-text) 12%, transparent)",
+                            color: "var(--field-text)",
                           }}
                         >
                           {"{{due_date}}"}
@@ -929,26 +966,26 @@ function SyntaxGuideBar() {
                   {/* Output side */}
                   <div
                     className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                    style={{ border: "1px solid var(--border-hover)" }}
                   >
                     <div
                       className="px-3 py-1.5 flex items-center gap-1.5"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        background: "var(--bg-muted)",
+                        borderBottom: "1px solid var(--border-subtle)",
                       }}
                     >
                       <span className="w-2 h-2 rounded-full bg-emerald-400 opacity-70" />
                       <span
                         className="text-[10px] font-semibold uppercase tracking-wider"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         Output (after filling)
                       </span>
                     </div>
                     <div
                       className="px-4 py-3 space-y-1 text-[12px] leading-relaxed"
-                      style={{ color: colors.textSecondary }}
+                      style={{ color: "var(--text-secondary)" }}
                     >
                       <p>
                         Dear <strong>Budi Santoso</strong>,
@@ -973,50 +1010,50 @@ function SyntaxGuideBar() {
                       step: "1",
                       title: "Write placeholders",
                       desc: "Add {{field_name}} wherever you want a value to appear in your document.",
-                      color: "#60a5fa",
+                      color: "var(--field-text)",
                     },
                     {
                       step: "2",
                       title: "Click Save",
                       desc: "We scan the document and detect all your fields automatically.",
-                      color: "#818cf8",
+                      color: "var(--field-loop)",
                     },
                     {
                       step: "3",
                       title: "Fill & generate",
                       desc: 'Click "Save & Use →" to fill the fields and download the finished document.',
-                      color: "#34d399",
+                      color: "var(--success)",
                     },
                   ].map(({ step, title, desc, color }) => (
                     <div
                       key={step}
                       className="flex flex-col gap-1.5 px-3.5 py-3 rounded-xl"
                       style={{
-                        background: "rgba(255,255,255,0.025)",
-                        border: `1px solid rgba(255,255,255,0.06)`,
+                        background: "var(--bg-card)",
+                        border: `1px solid var(--border-subtle)`,
                       }}
                     >
                       <div className="flex items-center gap-2">
                         <span
                           className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0"
                           style={{
-                            background: `${color}15`,
+                            background: `color-mix(in srgb, ${color} 15%, transparent)`,
                             color,
-                            border: `1px solid ${color}30`,
+                            border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
                           }}
                         >
                           {step}
                         </span>
                         <span
                           className="text-[12px] font-semibold"
-                          style={{ color: colors.textSecondary }}
+                          style={{ color: "var(--text-secondary)" }}
                         >
                           {title}
                         </span>
                       </div>
                       <p
                         className="text-[11px] leading-relaxed"
-                        style={{ color: colors.textDim }}
+                        style={{ color: "var(--text-dim)" }}
                       >
                         {desc}
                       </p>
@@ -1033,18 +1070,18 @@ function SyntaxGuideBar() {
                   <div>
                     <p
                       className="text-[12px] font-semibold mb-1.5"
-                      style={{ color: "#60a5fa" }}
+                      style={{ color: "var(--field-text)" }}
                     >
                       What it is
                     </p>
                     <p
                       className="text-[12px] leading-relaxed"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       The most common type. Write{" "}
                       <code
                         className="font-mono text-[11px]"
-                        style={{ color: "#60a5fa" }}
+                        style={{ color: "var(--field-text)" }}
                       >
                         {"{{field_name}}"}
                       </code>{" "}
@@ -1055,7 +1092,7 @@ function SyntaxGuideBar() {
                   <div>
                     <p
                       className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       Rules
                     </p>
@@ -1075,12 +1112,14 @@ function SyntaxGuideBar() {
                         <li
                           key={rule as string}
                           className="flex items-start gap-1.5 text-[11px]"
-                          style={{ color: colors.textMuted }}
+                          style={{ color: "var(--text-muted)" }}
                         >
                           <span
                             className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 opacity-60"
                             style={{
-                              background: isError ? "#f87171" : "#60a5fa",
+                              background: isError
+                                ? "var(--danger)"
+                                : "var(--field-text)",
                             }}
                           />
                           {rule}
@@ -1092,7 +1131,7 @@ function SyntaxGuideBar() {
                 <div className="md:col-span-3 space-y-2">
                   <p
                     className="text-[10px] font-semibold uppercase tracking-wider"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     Click to copy
                   </p>
@@ -1100,32 +1139,32 @@ function SyntaxGuideBar() {
                     <Snippet
                       code="{{customer_name}}"
                       description="Replaced with a person or company name"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                     <Snippet
                       code="{{invoice_date}}"
                       description="Any date value"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                     <Snippet
                       code="{{total_amount}}"
                       description="A number or currency"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                     <Snippet
                       code="{{email}}"
                       description="An email address"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                     <Snippet
                       code="{{address}}"
                       description="Multi-line text is fine too"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                     <Snippet
                       code="{{notes}}"
                       description="Optional long-form text"
-                      color="#60a5fa"
+                      color="var(--field-text)"
                     />
                   </div>
                 </div>
@@ -1139,13 +1178,13 @@ function SyntaxGuideBar() {
                   <div>
                     <p
                       className="text-[12px] font-semibold mb-1.5"
-                      style={{ color: "#818cf8" }}
+                      style={{ color: "var(--field-loop)" }}
                     >
                       What it is
                     </p>
                     <p
                       className="text-[12px] leading-relaxed"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       Use a loop to repeat a row for every item in a list —
                       perfect for invoice line items, product tables, or
@@ -1155,7 +1194,7 @@ function SyntaxGuideBar() {
                   <div>
                     <p
                       className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       How to set it up
                     </p>
@@ -1170,13 +1209,14 @@ function SyntaxGuideBar() {
                         <li
                           key={i}
                           className="flex items-start gap-2 text-[11px]"
-                          style={{ color: colors.textMuted }}
+                          style={{ color: "var(--text-muted)" }}
                         >
                           <span
                             className="mt-0.5 text-[10px] w-4 h-4 rounded-full flex items-center justify-center shrink-0 font-bold"
                             style={{
-                              background: "rgba(129,140,248,0.15)",
-                              color: "#818cf8",
+                              background:
+                                "color-mix(in srgb, var(--field-loop) 15%, transparent)",
+                              color: "var(--field-loop)",
                             }}
                           >
                             {i + 1}
@@ -1189,30 +1229,37 @@ function SyntaxGuideBar() {
                   <div
                     className="rounded-xl p-3 space-y-1.5"
                     style={{
-                      background: "rgba(251,191,36,0.05)",
-                      border: "1px solid rgba(251,191,36,0.15)",
+                      background: "var(--warning-bg)",
+                      border:
+                        "1px solid color-mix(in srgb, var(--warning) 20%, transparent)",
                     }}
                   >
                     <p
                       className="text-[11px] font-semibold"
-                      style={{ color: "#fbbf24" }}
+                      style={{ color: "var(--warning)" }}
                     >
                       ⚠ Critical rule
                     </p>
                     <p
                       className="text-[11px] leading-relaxed"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       The opening{" "}
-                      <code className="font-mono" style={{ color: "#818cf8" }}>
+                      <code
+                        className="font-mono"
+                        style={{ color: "var(--field-loop)" }}
+                      >
                         {"{{#items}}"}
                       </code>{" "}
                       and closing{" "}
-                      <code className="font-mono" style={{ color: "#818cf8" }}>
+                      <code
+                        className="font-mono"
+                        style={{ color: "var(--field-loop)" }}
+                      >
                         {"{{/items}}"}
                       </code>{" "}
                       must each be in their{" "}
-                      <strong style={{ color: colors.textSecondary }}>
+                      <strong style={{ color: "var(--text-secondary)" }}>
                         own separate table row
                       </strong>
                       . Putting both in one row will break the template.
@@ -1222,7 +1269,7 @@ function SyntaxGuideBar() {
                 <div className="md:col-span-3 space-y-3">
                   <p
                     className="text-[10px] font-semibold uppercase tracking-wider"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     Copy in order
                   </p>
@@ -1230,31 +1277,31 @@ function SyntaxGuideBar() {
                     <Snippet
                       code="{{#items}}"
                       label="① open row"
-                      color="#818cf8"
+                      color="var(--field-loop)"
                       description="Paste this in its own table row"
                     />
                     <Snippet
                       code="{{product_name}}"
                       label="② data"
-                      color="#a5b4fc"
+                      color="var(--accent-pale)"
                       description="Sub-field in the data row"
                     />
                     <Snippet
                       code="{{qty}}"
                       label="② data"
-                      color="#a5b4fc"
+                      color="var(--accent-pale)"
                       description="Sub-field in the data row"
                     />
                     <Snippet
                       code="{{unit_price}}"
                       label="② data"
-                      color="#a5b4fc"
+                      color="var(--accent-pale)"
                       description="Sub-field in the data row"
                     />
                     <Snippet
                       code="{{/items}}"
                       label="③ close row"
-                      color="#818cf8"
+                      color="var(--field-loop)"
                       description="Paste this in its own table row"
                     />
                   </div>
@@ -1262,22 +1309,27 @@ function SyntaxGuideBar() {
                   {/* Visual table diagram */}
                   <div
                     className="rounded-xl overflow-hidden mt-1"
-                    style={{ border: "1px solid rgba(129,140,248,0.2)" }}
+                    style={{
+                      border:
+                        "1px solid color-mix(in srgb, var(--field-loop) 25%, transparent)",
+                    }}
                   >
                     <div
                       className="px-3 py-1.5 flex items-center gap-2"
                       style={{
-                        background: "rgba(129,140,248,0.08)",
-                        borderBottom: "1px solid rgba(129,140,248,0.15)",
+                        background:
+                          "color-mix(in srgb, var(--field-loop) 8%, transparent)",
+                        borderBottom:
+                          "1px solid color-mix(in srgb, var(--field-loop) 18%, transparent)",
                       }}
                     >
                       <TableIcon
                         className="w-3 h-3"
-                        style={{ color: "#818cf8" }}
+                        style={{ color: "var(--field-loop)" }}
                       />
                       <span
                         className="text-[10px] font-semibold"
-                        style={{ color: "#818cf8" }}
+                        style={{ color: "var(--field-loop)" }}
                       >
                         How your table should look
                       </span>
@@ -1286,30 +1338,30 @@ function SyntaxGuideBar() {
                       {
                         label: "Header row",
                         content: "Product Name  ·  Qty  ·  Price",
-                        bg: "rgba(255,255,255,0.04)",
-                        textColor: colors.textMuted,
+                        bg: "var(--bg-muted)",
+                        textColor: "var(--text-muted)",
                         note: "Normal header text",
                       },
                       {
                         label: "Open row",
                         content: "{{#items}}",
-                        bg: "rgba(129,140,248,0.08)",
-                        textColor: "#818cf8",
+                        bg: "color-mix(in srgb, var(--field-loop) 8%, transparent)",
+                        textColor: "var(--field-loop)",
                         note: "Alone in this row",
                       },
                       {
                         label: "Data row",
                         content:
                           "{{product_name}}  ·  {{qty}}  ·  {{unit_price}}",
-                        bg: "rgba(255,255,255,0.02)",
-                        textColor: "#a5b4fc",
+                        bg: "var(--bg-muted)",
+                        textColor: "var(--accent-pale)",
                         note: "Your sub-fields",
                       },
                       {
                         label: "Close row",
                         content: "{{/items}}",
-                        bg: "rgba(129,140,248,0.08)",
-                        textColor: "#818cf8",
+                        bg: "color-mix(in srgb, var(--field-loop) 8%, transparent)",
+                        textColor: "var(--field-loop)",
                         note: "Alone in this row",
                       },
                     ].map(({ label, content, bg, textColor, note }) => (
@@ -1318,12 +1370,12 @@ function SyntaxGuideBar() {
                         className="flex items-start gap-2 sm:gap-3 px-3 py-2"
                         style={{
                           background: bg,
-                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                          borderBottom: "1px solid var(--border-subtle)",
                         }}
                       >
                         <span
                           className="text-[10px] w-16 sm:w-20 shrink-0 mt-0.5"
-                          style={{ color: colors.textDim }}
+                          style={{ color: "var(--text-dim)" }}
                         >
                           {label}
                         </span>
@@ -1335,7 +1387,7 @@ function SyntaxGuideBar() {
                         </code>
                         <span
                           className="text-[10px] shrink-0 hidden sm:block"
-                          style={{ color: colors.textDim }}
+                          style={{ color: "var(--text-dim)" }}
                         >
                           {note}
                         </span>
@@ -1353,13 +1405,13 @@ function SyntaxGuideBar() {
                   <div>
                     <p
                       className="text-[12px] font-semibold mb-1.5"
-                      style={{ color: "#f472b6" }}
+                      style={{ color: "var(--field-condition)" }}
                     >
                       What it is
                     </p>
                     <p
                       className="text-[12px] leading-relaxed"
-                      style={{ color: colors.textMuted }}
+                      style={{ color: "var(--text-muted)" }}
                     >
                       Wrap a block of content so it only appears when a
                       condition is true or false. Useful for showing a discount
@@ -1371,14 +1423,14 @@ function SyntaxGuideBar() {
                       {
                         operator: "#",
                         syntax: "{{#field_name}}",
-                        color: "#f472b6",
+                        color: "var(--field-condition)",
                         title: "Show when TRUE",
                         desc: 'Renders the block when the value is "true", "yes", or non-empty.',
                       },
                       {
                         operator: "^",
                         syntax: "{{^field_name}}",
-                        color: "#fb7185",
+                        color: "var(--field-condition-inverse)",
                         title: "Show when FALSE",
                         desc: 'Renders the block when the value is false, empty, or "no". Great for fallback messages.',
                       },
@@ -1387,8 +1439,8 @@ function SyntaxGuideBar() {
                         key={operator}
                         className="rounded-xl p-3 space-y-1.5"
                         style={{
-                          background: `${color}07`,
-                          border: `1px solid ${color}20`,
+                          background: `color-mix(in srgb, ${color} 7%, transparent)`,
+                          border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
                         }}
                       >
                         <code
@@ -1399,13 +1451,13 @@ function SyntaxGuideBar() {
                         </code>
                         <p
                           className="text-[11px] font-medium"
-                          style={{ color: colors.textSecondary }}
+                          style={{ color: "var(--text-secondary)" }}
                         >
                           {title}
                         </p>
                         <p
                           className="text-[11px] leading-relaxed"
-                          style={{ color: colors.textDim }}
+                          style={{ color: "var(--text-dim)" }}
                         >
                           {desc}
                         </p>
@@ -1415,26 +1467,32 @@ function SyntaxGuideBar() {
                   <div
                     className="rounded-xl p-3"
                     style={{
-                      background: "rgba(255,255,255,0.02)",
-                      border: `1px solid ${colors.borderSubtle}`,
+                      background: "var(--bg-muted)",
+                      border: `1px solid var(--border-subtle)`,
                     }}
                   >
                     <p
                       className="text-[11px] font-semibold mb-1"
-                      style={{ color: colors.textSecondary }}
+                      style={{ color: "var(--text-secondary)" }}
                     >
                       When filling the form
                     </p>
                     <p
                       className="text-[11px] leading-relaxed"
-                      style={{ color: colors.textDim }}
+                      style={{ color: "var(--text-dim)" }}
                     >
                       Set the field to{" "}
-                      <code className="font-mono" style={{ color: "#34d399" }}>
+                      <code
+                        className="font-mono"
+                        style={{ color: "var(--success)" }}
+                      >
                         true
                       </code>{" "}
                       to show the block, or{" "}
-                      <code className="font-mono" style={{ color: "#f87171" }}>
+                      <code
+                        className="font-mono"
+                        style={{ color: "var(--danger)" }}
+                      >
                         false
                       </code>{" "}
                       to hide it.
@@ -1444,7 +1502,7 @@ function SyntaxGuideBar() {
                 <div className="md:col-span-3 space-y-2">
                   <p
                     className="text-[10px] font-semibold uppercase tracking-wider"
-                    style={{ color: colors.textDim }}
+                    style={{ color: "var(--text-dim)" }}
                   >
                     Examples
                   </p>
@@ -1452,18 +1510,23 @@ function SyntaxGuideBar() {
                   {/* Truthy example */}
                   <div
                     className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid rgba(244,114,182,0.2)" }}
+                    style={{
+                      border:
+                        "1px solid color-mix(in srgb, var(--field-condition) 25%, transparent)",
+                    }}
                   >
                     <div
                       className="px-3 py-1.5"
                       style={{
-                        background: "rgba(244,114,182,0.07)",
-                        borderBottom: "1px solid rgba(244,114,182,0.15)",
+                        background:
+                          "color-mix(in srgb, var(--field-condition) 7%, transparent)",
+                        borderBottom:
+                          "1px solid color-mix(in srgb, var(--field-condition) 18%, transparent)",
                       }}
                     >
                       <span
                         className="text-[10px] font-semibold"
-                        style={{ color: "#f472b6" }}
+                        style={{ color: "var(--field-condition)" }}
                       >
                         Show a discount block (truthy)
                       </span>
@@ -1471,17 +1534,17 @@ function SyntaxGuideBar() {
                     <div className="p-3 space-y-1.5">
                       <Snippet
                         code="{{#show_discount}}"
-                        color="#f472b6"
+                        color="var(--field-condition)"
                         description="Opens the block — use at the start"
                       />
                       <Snippet
                         code="Discount: {{discount_amount}}"
-                        color="#d8b4fe"
+                        color="var(--accent-pale)"
                         description="Content shown when true"
                       />
                       <Snippet
                         code="{{/show_discount}}"
-                        color="#f472b6"
+                        color="var(--field-condition)"
                         description="Closes the block — must match opening name"
                       />
                     </div>
@@ -1490,18 +1553,23 @@ function SyntaxGuideBar() {
                   {/* Falsy example */}
                   <div
                     className="rounded-xl overflow-hidden"
-                    style={{ border: "1px solid rgba(251,113,133,0.2)" }}
+                    style={{
+                      border:
+                        "1px solid color-mix(in srgb, var(--field-condition-inverse) 25%, transparent)",
+                    }}
                   >
                     <div
                       className="px-3 py-1.5"
                       style={{
-                        background: "rgba(251,113,133,0.07)",
-                        borderBottom: "1px solid rgba(251,113,133,0.15)",
+                        background:
+                          "color-mix(in srgb, var(--field-condition-inverse) 7%, transparent)",
+                        borderBottom:
+                          "1px solid color-mix(in srgb, var(--field-condition-inverse) 18%, transparent)",
                       }}
                     >
                       <span
                         className="text-[10px] font-semibold"
-                        style={{ color: "#fb7185" }}
+                        style={{ color: "var(--field-condition-inverse)" }}
                       >
                         Show fallback when list is empty (falsy)
                       </span>
@@ -1509,17 +1577,17 @@ function SyntaxGuideBar() {
                     <div className="p-3 space-y-1.5">
                       <Snippet
                         code="{{^items}}"
-                        color="#fb7185"
+                        color="var(--field-condition-inverse)"
                         description="Shows block when items is empty / false"
                       />
                       <Snippet
                         code="No items in this order."
-                        color="#d8b4fe"
+                        color="var(--accent-pale)"
                         description="Fallback text"
                       />
                       <Snippet
                         code="{{/items}}"
-                        color="#fb7185"
+                        color="var(--field-condition-inverse)"
                         description="Closes the block"
                       />
                     </div>
@@ -1575,11 +1643,17 @@ function SyntaxGuideBar() {
                     style={{
                       background:
                         type === "error"
-                          ? "rgba(248,113,113,0.05)"
+                          ? "var(--danger-bg)"
                           : type === "warn"
-                            ? "rgba(251,191,36,0.05)"
-                            : "rgba(52,211,153,0.05)",
-                      border: `1px solid ${type === "error" ? "rgba(248,113,113,0.15)" : type === "warn" ? "rgba(251,191,36,0.15)" : "rgba(52,211,153,0.15)"}`,
+                            ? "var(--warning-bg)"
+                            : "var(--success-bg)",
+                      border: `1px solid ${
+                        type === "error"
+                          ? "color-mix(in srgb, var(--danger) 20%, transparent)"
+                          : type === "warn"
+                            ? "color-mix(in srgb, var(--warning) 20%, transparent)"
+                            : "color-mix(in srgb, var(--success) 20%, transparent)"
+                      }`,
                     }}
                   >
                     <p
@@ -1587,10 +1661,10 @@ function SyntaxGuideBar() {
                       style={{
                         color:
                           type === "error"
-                            ? "#f87171"
+                            ? "var(--danger)"
                             : type === "warn"
-                              ? "#fbbf24"
-                              : "#34d399",
+                              ? "var(--warning)"
+                              : "var(--success)",
                       }}
                     >
                       {title}
@@ -1598,13 +1672,13 @@ function SyntaxGuideBar() {
                     <div className="flex items-start gap-2">
                       <span
                         className="text-[11px] font-bold shrink-0"
-                        style={{ color: "#f87171" }}
+                        style={{ color: "var(--danger)" }}
                       >
                         ✗
                       </span>
                       <code
                         className="text-[10px] font-mono break-all"
-                        style={{ color: colors.textMuted }}
+                        style={{ color: "var(--text-muted)" }}
                       >
                         {bad}
                       </code>
@@ -1612,13 +1686,13 @@ function SyntaxGuideBar() {
                     <div className="flex items-start gap-2">
                       <span
                         className="text-[11px] font-bold shrink-0"
-                        style={{ color: "#34d399" }}
+                        style={{ color: "var(--success)" }}
                       >
                         ✓
                       </span>
                       <span
                         className="text-[11px] leading-relaxed"
-                        style={{ color: colors.textSecondary }}
+                        style={{ color: "var(--text-secondary)" }}
                       >
                         {good}
                       </span>
@@ -1732,32 +1806,35 @@ export default function TemplateEditPage() {
 
   if (template === undefined) {
     return (
-      <div className="flex flex-col h-dvh" style={{ background: colors.bg }}>
+      <div className="flex flex-col h-dvh" style={{ background: "var(--bg)" }}>
         <div className="h-12 sm:hidden shrink-0" />
         <div
           className="flex items-center gap-3 px-4 h-11 shrink-0 animate-pulse"
           style={{
-            borderBottom: `1px solid ${colors.borderSubtle}`,
-            background: colors.bgSidebar,
+            borderBottom: `1px solid var(--border-subtle)`,
+            background: "var(--bg-sidebar)",
           }}
         >
           <div
             className="w-20 h-3 rounded"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
-          <div className="w-px h-4" style={{ background: colors.border }} />
+          <div
+            className="w-px h-4"
+            style={{ background: "var(--border-subtle)" }}
+          />
           <div
             className="w-40 h-3 rounded"
-            style={{ background: "rgba(255,255,255,0.07)" }}
+            style={{ background: "var(--bg-input)" }}
           />
         </div>
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div
               className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-              style={{ borderColor: colors.accentLight }}
+              style={{ borderColor: "var(--accent-light)" }}
             />
-            <p className="text-[12px]" style={{ color: colors.textMuted }}>
+            <p className="text-[12px]" style={{ color: "var(--text-muted)" }}>
               Loading template…
             </p>
           </div>
@@ -1770,30 +1847,30 @@ export default function TemplateEditPage() {
     return (
       <div
         className="flex flex-col items-center justify-center h-dvh gap-5 p-8 text-center"
-        style={{ background: colors.bg }}
+        style={{ background: "var(--bg)" }}
       >
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-muted)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           <AlertCircleIcon
             className="w-6 h-6"
-            style={{ color: colors.textDim }}
+            style={{ color: "var(--text-dim)" }}
           />
         </div>
         <div className="space-y-1.5 max-w-sm">
           <p
             className="text-[14px] font-semibold"
-            style={{ color: colors.text }}
+            style={{ color: "var(--text)" }}
           >
             Template not found
           </p>
           <p
             className="text-[12px] leading-relaxed"
-            style={{ color: colors.textMuted }}
+            style={{ color: "var(--text-muted)" }}
           >
             This template may have been deleted or you don't have access to it.
           </p>
@@ -1802,9 +1879,9 @@ export default function TemplateEditPage() {
           onClick={() => router.push("/templates")}
           className="text-[12px] font-medium px-4 py-2 rounded-xl"
           style={{
-            background: "rgba(255,255,255,0.06)",
-            color: colors.textSecondary,
-            border: `1px solid ${colors.border}`,
+            background: "var(--bg-input)",
+            color: "var(--text-secondary)",
+            border: `1px solid var(--border-subtle)`,
           }}
         >
           ← Back to Templates
@@ -1820,7 +1897,7 @@ export default function TemplateEditPage() {
   return (
     <div
       className="flex flex-col overflow-hidden h-dvh"
-      style={{ background: colors.bg }}
+      style={{ background: "var(--bg)" }}
     >
       {/* Mobile-only spacer */}
       <div className="h-12 sm:hidden shrink-0" />
@@ -1829,25 +1906,27 @@ export default function TemplateEditPage() {
       <div
         className="flex items-center gap-2 px-3 sm:px-4 h-11 shrink-0"
         style={{
-          borderBottom: `1px solid ${colors.borderSubtle}`,
-          background: colors.bgSidebar,
+          borderBottom: `1px solid var(--border-subtle)`,
+          background: "var(--bg-sidebar)",
         }}
       >
         {/* Back */}
         <Link
           href="/templates"
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0"
-          style={{ color: colors.textMuted }}
+          style={{ color: "var(--text-muted)" }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.color = colors.accentLight)
+            (e.currentTarget.style.color = "var(--accent-light)")
           }
-          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.color = "var(--text-muted)")
+          }
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Templates</span>
         </Link>
 
-        <span style={{ color: colors.textDim, fontSize: 12 }}>/</span>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
 
         {/* Inline rename */}
         <InlineTitle
@@ -1862,9 +1941,9 @@ export default function TemplateEditPage() {
           <div
             className="hidden sm:flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
             style={{
-              background: "rgba(129,140,248,0.1)",
-              color: "#818cf8",
-              border: "1px solid rgba(129,140,248,0.2)",
+              background: "var(--accent-soft)",
+              color: "var(--accent-light)",
+              border: "1px solid var(--accent-border)",
             }}
           >
             <ScanIcon className="w-2.5 h-2.5" />
@@ -1878,11 +1957,11 @@ export default function TemplateEditPage() {
             <div
               className="w-1.5 h-1.5 rounded-full"
               style={{
-                background: colors.success,
-                boxShadow: `0 0 5px ${colors.success}`,
+                background: "var(--success)",
+                boxShadow: `0 0 5px var(--success)`,
               }}
             />
-            <span className="text-[11px]" style={{ color: colors.textDim }}>
+            <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
               Live
             </span>
           </div>
@@ -1896,16 +1975,16 @@ export default function TemplateEditPage() {
             disabled={saving}
             className="flex items-center gap-1.5 text-[12px] font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: colors.textSecondary,
-              border: `1px solid ${colors.border}`,
+              background: "var(--bg-input)",
+              color: "var(--text-secondary)",
+              border: `1px solid var(--border-subtle)`,
             }}
             title="Save (Ctrl+S)"
           >
             {saving ? (
               <div
                 className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.textMuted }}
+                style={{ borderColor: "var(--text-muted)" }}
               />
             ) : (
               <CheckIcon className="w-3.5 h-3.5" />
@@ -1921,26 +2000,25 @@ export default function TemplateEditPage() {
             disabled={saving}
             className="flex items-center gap-1.5 text-[12px] font-medium px-2.5 sm:px-3 py-1.5 rounded-lg transition-all"
             style={{
-              background: "rgba(99,102,241,0.18)",
-              color: "#a5b4fc",
-              border: "1px solid rgba(99,102,241,0.28)",
+              background: "var(--accent-strong-bg)",
+              color: "var(--accent-pale)",
+              border: "1px solid var(--accent-border)",
             }}
             onMouseEnter={(e) => {
               if (!saving) {
-                e.currentTarget.style.background = "rgba(99,102,241,0.28)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 12px rgba(99,102,241,0.2)";
+                e.currentTarget.style.background = "var(--accent-highlight-bg)";
+                e.currentTarget.style.boxShadow = "var(--shadow-logo-glow)";
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(99,102,241,0.18)";
+              e.currentTarget.style.background = "var(--accent-strong-bg)";
               e.currentTarget.style.boxShadow = "none";
             }}
           >
             {saving ? (
               <div
                 className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: colors.accentLight }}
+                style={{ borderColor: "var(--accent-light)" }}
               />
             ) : (
               <FileTextIcon className="w-3.5 h-3.5" />
@@ -1954,9 +2032,10 @@ export default function TemplateEditPage() {
             href={`/templates/${templateId}/connect`}
             className="hidden sm:flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors"
             style={{
-              background: "rgba(52,211,153,0.1)",
-              color: "#34d399",
-              border: "1px solid rgba(52,211,153,0.2)",
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              border:
+                "1px solid color-mix(in srgb, var(--success) 25%, transparent)",
             }}
           >
             <LinkIcon className="w-3.5 h-3.5" />
@@ -1964,9 +2043,6 @@ export default function TemplateEditPage() {
           </Link>
         </div>
       </div>
-
-      {/* ── Keyboard shortcut hint — shows once until dismissed ── */}
-      {/* (rendered only on sm+, non-intrusively) */}
 
       {/* ── Syntax guide ── */}
       <SyntaxGuideBar />
@@ -1990,25 +2066,25 @@ export default function TemplateEditPage() {
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center"
               style={{
-                background: colors.dangerBg,
-                border: `1px solid ${colors.danger}22`,
+                background: "var(--danger-bg)",
+                border: `1px solid color-mix(in srgb, var(--danger) 22%, transparent)`,
               }}
             >
               <AlertCircleIcon
                 className="w-6 h-6"
-                style={{ color: colors.danger }}
+                style={{ color: "var(--danger)" }}
               />
             </div>
             <div className="space-y-1.5 max-w-xs">
               <p
                 className="text-[14px] font-semibold"
-                style={{ color: colors.text }}
+                style={{ color: "var(--text)" }}
               >
                 Editor couldn&apos;t load
               </p>
               <p
                 className="text-[12px] leading-relaxed"
-                style={{ color: colors.textMuted }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {retryCount >= 2
                   ? "The editor is still having trouble. The OnlyOffice server may be temporarily unavailable."
@@ -2019,20 +2095,20 @@ export default function TemplateEditPage() {
               <div
                 className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl max-w-xs text-left"
                 style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: `1px solid ${colors.borderSubtle}`,
+                  background: "var(--bg-muted)",
+                  border: `1px solid var(--border-subtle)`,
                 }}
               >
                 <InfoIcon
                   className="w-3.5 h-3.5 mt-0.5 shrink-0"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 />
                 <p
                   className="text-[11px] leading-relaxed"
-                  style={{ color: colors.textDim }}
+                  style={{ color: "var(--text-dim)" }}
                 >
                   You can still use the template by clicking{" "}
-                  <strong style={{ color: colors.textSecondary }}>
+                  <strong style={{ color: "var(--text-secondary)" }}>
                     Save & Use
                   </strong>{" "}
                   in the header — the editor is only for editing the template
@@ -2048,9 +2124,9 @@ export default function TemplateEditPage() {
               }}
               className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2 rounded-xl transition-colors"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                color: colors.textSecondary,
-                border: `1px solid ${colors.border}`,
+                background: "var(--bg-input)",
+                color: "var(--text-secondary)",
+                border: `1px solid var(--border-subtle)`,
               }}
             >
               <RefreshCwIcon className="w-3.5 h-3.5" />
@@ -2066,13 +2142,16 @@ export default function TemplateEditPage() {
             {!editorReady && (
               <div
                 className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
-                style={{ background: colors.bg }}
+                style={{ background: "var(--bg)" }}
               >
                 <div
                   className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-                  style={{ borderColor: colors.accentLight }}
+                  style={{ borderColor: "var(--accent-light)" }}
                 />
-                <p className="text-[12px]" style={{ color: colors.textMuted }}>
+                <p
+                  className="text-[12px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Loading editor…
                 </p>
               </div>
