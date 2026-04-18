@@ -1779,23 +1779,6 @@ export default async function LandingPage() {
             <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
               © {new Date().getFullYear()} Paperspace. All rights reserved.
             </p>
-            <div className="flex items-center gap-4">
-              <span
-                className="text-[11px]"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Built with ONLYOFFICE · Clerk · Convex
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span
-                  className="text-[11px]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  All systems operational
-                </span>
-              </div>
-            </div>
           </div>
         </div>
       </footer>
