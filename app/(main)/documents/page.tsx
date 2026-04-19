@@ -2034,7 +2034,7 @@ export default function DocumentsPage() {
 
   const lastSelectedIdx = useRef<number>(-1);
   const contentRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  // const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const skip = !(isLoaded && isSignedIn);
@@ -2045,41 +2045,41 @@ export default function DocumentsPage() {
   const archivedDocs = useQuery(api.documents.getArchived, skip ? "skip" : {});
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInput =
-        ["INPUT", "TEXTAREA"].includes(target.tagName) ||
-        target.isContentEditable;
+  // useEffect(() => {
+  //   const handler = (e: KeyboardEvent) => {
+  //     const target = e.target as HTMLElement;
+  //     const isInput =
+  //       ["INPUT", "TEXTAREA"].includes(target.tagName) ||
+  //       target.isContentEditable;
 
-      // / → focus search
-      if (e.key === "/" && !isInput) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        return;
-      }
+  //     // / → focus search
+  //     if (e.key === "/" && !isInput) {
+  //       e.preventDefault();
+  //       searchInputRef.current?.focus();
+  //       return;
+  //     }
 
-      // Escape → clear select mode or clear search
-      if (e.key === "Escape") {
-        if (selectMode) {
-          setSelectMode(false);
-          setSelected(new Set());
-        } else if (search) {
-          setSearch("");
-        }
-        return;
-      }
+  //     // Escape → clear select mode or clear search
+  //     if (e.key === "Escape") {
+  //       if (selectMode) {
+  //         setSelectMode(false);
+  //         setSelected(new Set());
+  //       } else if (search) {
+  //         setSearch("");
+  //       }
+  //       return;
+  //     }
 
-      // Cmd/Ctrl+A → select all on current page (when in select mode)
-      if ((e.metaKey || e.ctrlKey) && e.key === "a" && selectMode) {
-        e.preventDefault();
-        setSelected(new Set(displayDocs.map((d) => d._id)));
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectMode, search]);
+  //     // Cmd/Ctrl+A → select all on current page (when in select mode)
+  //     if ((e.metaKey || e.ctrlKey) && e.key === "a" && selectMode) {
+  //       e.preventDefault();
+  //       setSelected(new Set(displayDocs.map((d) => d._id)));
+  //     }
+  //   };
+  //   window.addEventListener("keydown", handler);
+  //   return () => window.removeEventListener("keydown", handler);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [selectMode, search]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
   const filteredDocs = useMemo(() => {
@@ -2656,7 +2656,7 @@ export default function DocumentsPage() {
               style={{ color: "var(--text-dim)" }}
             />
             <input
-              ref={searchInputRef}
+              // ref={searchInputRef}
               placeholder="Search papers…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -2673,7 +2673,7 @@ export default function DocumentsPage() {
                 (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
-            {search ? (
+            {search && (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
@@ -2681,19 +2681,6 @@ export default function DocumentsPage() {
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
-            ) : (
-              /* Keyboard shortcut hint */
-              <kbd
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded pointer-events-none"
-                style={{
-                  background: "var(--bg-input)",
-                  color: "var(--text-dim)",
-                  border: `1px solid var(--border-subtle)`,
-                  fontFamily: "inherit",
-                }}
-              >
-                /
-              </kbd>
             )}
           </div>
 
@@ -2925,14 +2912,14 @@ export default function DocumentsPage() {
             }}
           />
           <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-            Click papers to select ·{" "}
-            <kbd
+            Click papers to select
+            {/* <kbd
               className="text-[10px] px-1 rounded"
               style={{ background: "var(--bg-input)" }}
             >
               Esc
             </kbd>{" "}
-            to cancel
+            to cancel */}
           </span>
           <button
             onClick={() => {
