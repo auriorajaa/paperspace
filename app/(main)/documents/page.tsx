@@ -63,12 +63,12 @@ import {
 import { useDebounce } from "@/lib/useDebounce";
 import { shadows } from "@/lib/design-tokens";
 import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** <24h → "2 hours ago", ≥24h → "Mar 26, 2:30 PM" */
 function smartDate(ts: number): string {
   if (differenceInHours(Date.now(), ts) < 24) {
     return formatDistanceToNow(new Date(ts), { addSuffix: true });
@@ -87,7 +87,6 @@ async function handleExportDoc(doc: Doc<"documents">, fmt: "docx" | "pdf") {
     toast.error("No file available for this document.");
     return;
   }
-
   if (fmt === "docx") {
     const toastId = toast.loading("Preparing download…");
     try {
@@ -136,7 +135,160 @@ async function handleExportDoc(doc: Doc<"documents">, fmt: "docx" | "pdf") {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Add-to-collection dialog
+// Bulk add-to-collection dialog — adds ALL selected docs at once
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BulkAddToCollectionDialog({
+  open,
+  onOpenChange,
+  documentIds,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  documentIds: Id<"documents">[];
+}) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const collections = useQuery(
+    api.collections.getAll,
+    isLoaded && isSignedIn ? {} : "skip"
+  );
+  const addDocument = useMutation(api.collections.addDocument);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [done, setDone] = useState<Set<string>>(new Set());
+
+  // Reset when dialog re-opens
+  useEffect(() => {
+    if (open) setDone(new Set());
+  }, [open]);
+
+  const handleAdd = async (collectionId: Id<"collections">) => {
+    setLoading(collectionId);
+    try {
+      const results = await Promise.allSettled(
+        documentIds.map((docId) =>
+          addDocument({ collectionId, documentId: docId })
+        )
+      );
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      // "already in collection" errors are not real failures
+      const realFailed = results.filter(
+        (r) =>
+          r.status === "rejected" &&
+          !String((r as PromiseRejectedResult).reason?.message).includes(
+            "already in"
+          )
+      ).length;
+      setDone((prev) => new Set([...prev, collectionId]));
+      if (realFailed > 0) {
+        toast.warning(`Added ${succeeded} — ${realFailed} failed.`);
+      } else {
+        toast.success(
+          `Added ${succeeded} paper${succeeded !== 1 ? "s" : ""} to collection`
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Couldn't add.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add to collection</DialogTitle>
+        </DialogHeader>
+        <p className="text-[12px] mb-3" style={{ color: "var(--text-muted)" }}>
+          {documentIds.length} paper{documentIds.length !== 1 ? "s" : ""}{" "}
+          selected
+        </p>
+        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+          {collections === undefined ? (
+            <div className="flex justify-center py-8">
+              <div
+                className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: "var(--accent-light)" }}
+              />
+            </div>
+          ) : collections.length === 0 ? (
+            <p
+              className="text-[12px] text-center py-8"
+              style={{ color: "var(--text-dim)" }}
+            >
+              No collections yet.
+            </p>
+          ) : (
+            (
+              collections as (Doc<"collections"> & { documentCount?: number })[]
+            ).map((col) => {
+              const isDone = done.has(col._id);
+              const isLoading = loading === col._id;
+              return (
+                <button
+                  key={col._id}
+                  onClick={() => !isDone && handleAdd(col._id)}
+                  disabled={isDone || !!loading}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+                  style={{
+                    background: isDone
+                      ? `${col.color ?? "var(--primary)"}12`
+                      : "var(--bg-muted)",
+                    border: `1px solid ${isDone ? `${col.color ?? "var(--primary)"}30` : "var(--border-subtle)"}`,
+                    minHeight: 48,
+                  }}
+                >
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
+                    style={{ background: `${col.color ?? "var(--primary)"}18` }}
+                  >
+                    {(() => {
+                      const Icon = getIconComponent(col.icon ?? "folder");
+                      return (
+                        <Icon
+                          className="w-3 h-3"
+                          style={{ color: col.color ?? "#6366f1" }}
+                        />
+                      );
+                    })()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-[13px] font-medium truncate"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {col.name}
+                    </p>
+                    <p
+                      className="text-[11px]"
+                      style={{ color: "var(--text-dim)" }}
+                    >
+                      {col.documentCount ?? 0} papers
+                    </p>
+                  </div>
+                  {isLoading ? (
+                    <div
+                      className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0"
+                      style={{ borderColor: "var(--accent-light)" }}
+                    />
+                  ) : isDone ? (
+                    <CheckIcon
+                      className="w-4 h-4 shrink-0"
+                      style={{ color: col.color ?? "var(--accent-light)" }}
+                    />
+                  ) : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Single add-to-collection dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AddToCollectionDialog({
@@ -235,7 +387,7 @@ function AddToCollectionDialog({
                           style={{ color: col.color ?? "#6366f1" }}
                         />
                       );
-                    })()}{" "}
+                    })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
@@ -417,7 +569,7 @@ function BulkDeleteDialog({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Collections panel — desktop side / mobile bottom sheet
+// Collections panel
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CollectionsPanel({
@@ -467,10 +619,7 @@ function CollectionsPanel({
         <button
           onClick={onClose}
           className="w-7 h-7 rounded-lg flex items-center justify-center"
-          style={{
-            color: "var(--text-dim)",
-            background: "var(--bg-muted)",
-          }}
+          style={{ color: "var(--text-dim)", background: "var(--bg-muted)" }}
         >
           <XIcon className="w-3.5 h-3.5" />
         </button>
@@ -536,7 +685,7 @@ function CollectionsPanel({
                               style={{ color: col.color ?? "#6366f1" }}
                             />
                           );
-                        })()}{" "}
+                        })()}
                       </span>
                       <span
                         className="flex-1 text-[12px] font-medium truncate"
@@ -603,7 +752,6 @@ function CollectionsPanel({
 
   return (
     <>
-      {/* Desktop */}
       <div
         className="hidden md:flex shrink-0 flex-col transition-all duration-200 overflow-hidden"
         style={{
@@ -614,7 +762,6 @@ function CollectionsPanel({
       >
         {open && inner}
       </div>
-      {/* Mobile bottom sheet */}
       <div
         className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
         style={{
@@ -777,7 +924,6 @@ function AIDot({ status }: { status?: string }) {
   return null;
 }
 
-/** Up to maxVisible badges, then a "+N" pill */
 function CollectionBadges({
   collections,
   maxVisible = 2,
@@ -870,7 +1016,6 @@ function PaperMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        {/* Open in new tab */}
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
@@ -908,7 +1053,6 @@ function PaperMenu({
           Add to collection
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {/* Export options */}
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
@@ -965,7 +1109,7 @@ function PaperMenu({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Grid card — compact, information-dense
+// Grid card — callbacks from parent (no internal mutations)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function GridCard({
@@ -975,6 +1119,10 @@ function GridCard({
   onSelect,
   onAddToCollection,
   onRename,
+  onArchive,
+  onRestore,
+  onDelete,
+  onDuplicate,
 }: {
   document: Doc<"documents">;
   selected: boolean;
@@ -982,13 +1130,13 @@ function GridCard({
   onSelect: (id: string, shift: boolean) => void;
   onAddToCollection: (id: Id<"documents">, title: string) => void;
   onRename: (id: Id<"documents">, title: string) => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const router = useRouter();
   const { organization } = useOrganization();
-  const duplicate = useMutation(api.documents.duplicate);
-  const archive = useMutation(api.documents.archive);
-  const restore = useMutation(api.documents.restore);
-  const remove = useMutation(api.documents.remove);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
@@ -1031,7 +1179,6 @@ function GridCard({
         onMouseLeave={() => setHovered(false)}
       >
         <div className="p-3.5 flex flex-col gap-2.5 flex-1">
-          {/* Header: icon + title + select/menu */}
           <div className="flex items-start gap-2.5">
             {selectMode && (
               <div
@@ -1047,7 +1194,6 @@ function GridCard({
                 />
               </div>
             )}
-
             <div
               className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
               style={{ background: "var(--bg-input)" }}
@@ -1057,7 +1203,6 @@ function GridCard({
                 style={{ color: "var(--text-muted)" }}
               />
             </div>
-
             <div className="flex-1 min-w-0">
               <p
                 className="text-[13px] font-semibold leading-snug line-clamp-2"
@@ -1098,7 +1243,6 @@ function GridCard({
                 )}
               </div>
             </div>
-
             <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
               <PaperMenu
                 document={document}
@@ -1106,38 +1250,15 @@ function GridCard({
                   onAddToCollection(document._id, document.title)
                 }
                 onRename={() => onRename(document._id, document.title)}
-                onDuplicate={async () => {
-                  try {
-                    const id = await duplicate({ id: document._id });
-                    toast.success("Duplicated");
-                    router.push(`/documents/${id}`);
-                  } catch {
-                    toast.error("Couldn't duplicate.");
-                  }
-                }}
-                onArchive={async () => {
-                  try {
-                    await archive({ id: document._id });
-                    toast.success("Archived");
-                  } catch {
-                    toast.error("Couldn't archive.");
-                  }
-                }}
-                onRestore={async () => {
-                  try {
-                    await restore({ id: document._id });
-                    toast.success("Restored");
-                  } catch {
-                    toast.error("Couldn't restore.");
-                  }
-                }}
+                onDuplicate={onDuplicate}
+                onArchive={onArchive}
+                onRestore={onRestore}
                 onDelete={() => setConfirmDelete(true)}
                 onExport={(fmt) => handleExportDoc(document, fmt)}
               />
             </div>
           </div>
 
-          {/* AI summary */}
           <div className="flex items-start gap-1.5 flex-1 min-h-[36px]">
             <SparklesIcon
               className="w-2.5 h-2.5 shrink-0 mt-0.5"
@@ -1183,6 +1304,7 @@ function GridCard({
         </div>
       </div>
 
+      {/* Delete confirm stays in card — calls parent's onDelete on confirm */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1195,13 +1317,9 @@ function GridCard({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
-                try {
-                  await remove({ id: document._id });
-                  toast.success("Deleted");
-                } catch (err: any) {
-                  toast.error(err?.data ?? "Couldn't delete.");
-                }
+              onClick={() => {
+                setConfirmDelete(false);
+                onDelete();
               }}
             >
               Delete
@@ -1214,7 +1332,7 @@ function GridCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// List row — two-line layout with AI summary visible
+// List row — callbacks from parent (no internal mutations)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ListRow({
@@ -1224,6 +1342,10 @@ function ListRow({
   onSelect,
   onAddToCollection,
   onRename,
+  onArchive,
+  onRestore,
+  onDelete,
+  onDuplicate,
 }: {
   document: Doc<"documents">;
   selected: boolean;
@@ -1231,13 +1353,13 @@ function ListRow({
   onSelect: (id: string, shift: boolean) => void;
   onAddToCollection: (id: Id<"documents">, title: string) => void;
   onRename: (id: Id<"documents">, title: string) => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const router = useRouter();
   const { organization } = useOrganization();
-  const duplicate = useMutation(api.documents.duplicate);
-  const archive = useMutation(api.documents.archive);
-  const restore = useMutation(api.documents.restore);
-  const remove = useMutation(api.documents.remove);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
@@ -1409,31 +1531,9 @@ function ListRow({
               onAddToCollection(document._id, document.title)
             }
             onRename={() => onRename(document._id, document.title)}
-            onDuplicate={async () => {
-              try {
-                const id = await duplicate({ id: document._id });
-                toast.success("Duplicated");
-                router.push(`/documents/${id}`);
-              } catch {
-                toast.error("Couldn't duplicate.");
-              }
-            }}
-            onArchive={async () => {
-              try {
-                await archive({ id: document._id });
-                toast.success("Archived");
-              } catch {
-                toast.error("Couldn't archive.");
-              }
-            }}
-            onRestore={async () => {
-              try {
-                await restore({ id: document._id });
-                toast.success("Restored");
-              } catch {
-                toast.error("Couldn't restore.");
-              }
-            }}
+            onDuplicate={onDuplicate}
+            onArchive={onArchive}
+            onRestore={onRestore}
             onDelete={() => setConfirmDelete(true)}
             onExport={(fmt) => handleExportDoc(document, fmt)}
           />
@@ -1452,13 +1552,9 @@ function ListRow({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
-                try {
-                  await remove({ id: document._id });
-                  toast.success("Deleted");
-                } catch (err: any) {
-                  toast.error(err?.data ?? "Couldn't delete.");
-                }
+              onClick={() => {
+                setConfirmDelete(false);
+                onDelete();
               }}
             >
               Delete
@@ -1471,13 +1567,15 @@ function ListRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bulk action floating bar
+// Bulk action floating bar — smart archive vs restore
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BulkBar({
   count,
   total,
+  allArchived,
   onArchive,
+  onRestore,
   onDelete,
   onClear,
   onAddToCollection,
@@ -1486,7 +1584,9 @@ function BulkBar({
 }: {
   count: number;
   total: number;
+  allArchived: boolean;
   onArchive: () => void;
+  onRestore: () => void;
   onDelete: () => void;
   onClear: () => void;
   onAddToCollection: () => void;
@@ -1502,7 +1602,8 @@ function BulkBar({
         scrollbarWidth: "none",
         background: "var(--bg-card)",
         border: "1px solid rgba(99,102,241,0.3)",
-        boxShadow: "0 8px 40px rgba(0,0,0,0.03), 0 0 0 1px rgba(99,102,241,0.1)",
+        boxShadow:
+          "0 8px 40px rgba(0,0,0,0.03), 0 0 0 1px rgba(99,102,241,0.1)",
         backdropFilter: "blur(16px)",
         whiteSpace: "nowrap",
       }}
@@ -1526,6 +1627,7 @@ function BulkBar({
         className="w-px h-4 mx-0.3"
         style={{ background: "var(--bg-input)" }}
       />
+
       <button
         onClick={onAddToCollection}
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
@@ -1538,7 +1640,7 @@ function BulkBar({
         <span className="hidden sm:inline">Collection</span>
       </button>
 
-      {/* Export ZIP dropdown */}
+      {/* Export ZIP */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1572,24 +1674,47 @@ function BulkBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <button
-        onClick={onArchive}
-        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
-        style={{
-          background: "rgba(251,191,36,0.08)",
-          color: "var(--warning)",
-          border: "1px solid rgba(251,191,36,0.2)",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "rgba(251,191,36,0.14)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background = "rgba(251,191,36,0.08)")
-        }
-      >
-        <ArchiveIcon className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Archive</span>
-      </button>
+      {/* Smart archive / restore button */}
+      {allArchived ? (
+        <button
+          onClick={onRestore}
+          className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+          style={{
+            background: "rgba(99,102,241,0.08)",
+            color: "var(--accent-light)",
+            border: "1px solid rgba(99,102,241,0.2)",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(99,102,241,0.14)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "rgba(99,102,241,0.08)")
+          }
+        >
+          <ArchiveRestoreIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Restore</span>
+        </button>
+      ) : (
+        <button
+          onClick={onArchive}
+          className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+          style={{
+            background: "rgba(251,191,36,0.08)",
+            color: "var(--warning)",
+            border: "1px solid rgba(251,191,36,0.2)",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(251,191,36,0.14)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "rgba(251,191,36,0.08)")
+          }
+        >
+          <ArchiveIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Archive</span>
+        </button>
+      )}
+
       <button
         onClick={onDelete}
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
@@ -1608,13 +1733,11 @@ function BulkBar({
         <Trash2Icon className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Delete</span>
       </button>
+
       <button
         onClick={onClear}
         className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
-        style={{
-          background: "var(--bg-input)",
-          color: "var(--text-muted)",
-        }}
+        style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}
       >
         <XIcon className="w-3.5 h-3.5" />
       </button>
@@ -1858,12 +1981,30 @@ export default function DocumentsPage() {
   const router = useRouter();
   const { organization } = useOrganization();
   const { isLoaded, isSignedIn } = useAuth();
+
+  const { resolvedTheme } = useTheme();
+
+  const toastActionStyle: React.CSSProperties = {
+    background: "var(--accent-bg)",
+    color: "var(--accent-light)",
+    border: "1px solid var(--accent-border)",
+    borderRadius: "8px",
+    padding: "4px 12px",
+    fontSize: "12px",
+    fontWeight: 500,
+    cursor: "pointer",
+  };
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
   const createDocument = useMutation(api.documents.create);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const updateDocument = useMutation(api.documents.update);
   const archiveMutation = useMutation(api.documents.archive);
+  const restoreMutation = useMutation(api.documents.restore);
   const removeMutation = useMutation(api.documents.remove);
+  const duplicateMutation = useMutation(api.documents.duplicate);
 
+  // ── UI state ───────────────────────────────────────────────────────────────
   const [renameDialog, setRenameDialog] = useState<{
     id: Id<"documents">;
     title: string;
@@ -1871,6 +2012,9 @@ export default function DocumentsPage() {
   const [addColDialog, setAddColDialog] = useState<{
     id: Id<"documents">;
     title: string;
+  } | null>(null);
+  const [bulkAddColDialog, setBulkAddColDialog] = useState<{
+    ids: Id<"documents">[];
   } | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [collectionsPanelOpen, setCollectionsPanelOpen] = useState(false);
@@ -1884,9 +2028,15 @@ export default function DocumentsPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+
+  // Optimistic removal — items hidden immediately before Convex reacts
+  const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
+
   const lastSelectedIdx = useRef<number>(-1);
   const contentRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Queries ────────────────────────────────────────────────────────────────
   const skip = !(isLoaded && isSignedIn);
   const allDocs = useQuery(
     api.documents.getAll,
@@ -1894,7 +2044,44 @@ export default function DocumentsPage() {
   );
   const archivedDocs = useQuery(api.documents.getArchived, skip ? "skip" : {});
 
-  // Full filtered+sorted list (no pagination yet)
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput =
+        ["INPUT", "TEXTAREA"].includes(target.tagName) ||
+        target.isContentEditable;
+
+      // / → focus search
+      if (e.key === "/" && !isInput) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Escape → clear select mode or clear search
+      if (e.key === "Escape") {
+        if (selectMode) {
+          setSelectMode(false);
+          setSelected(new Set());
+        } else if (search) {
+          setSearch("");
+        }
+        return;
+      }
+
+      // Cmd/Ctrl+A → select all on current page (when in select mode)
+      if ((e.metaKey || e.ctrlKey) && e.key === "a" && selectMode) {
+        e.preventDefault();
+        setSelected(new Set(displayDocs.map((d) => d._id)));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectMode, search]);
+
+  // ── Derived data ───────────────────────────────────────────────────────────
   const filteredDocs = useMemo(() => {
     const base = [
       ...(allDocs ?? []),
@@ -1937,12 +2124,43 @@ export default function DocumentsPage() {
     organization,
   ]);
 
-  // Paginated slice
-  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
-  const displayDocs = filteredDocs.slice(
+  // Exclude optimistically-removed items
+  const visibleDocs = useMemo(
+    () => filteredDocs.filter((d) => !pendingRemoval.has(d._id)),
+    [filteredDocs, pendingRemoval]
+  );
+
+  useEffect(() => {
+    if (!allDocs || !archivedDocs) return;
+    const allIds = new Set([
+      ...allDocs.map((d) => d._id),
+      ...archivedDocs.map((d) => d._id),
+    ]);
+    setPendingRemoval((prev) => {
+      const next = new Set(prev);
+      for (const id of prev) {
+        if (!allIds.has(id as Id<"documents">)) {
+          next.delete(id);
+        }
+      }
+      if (next.size === prev.size) return prev;
+      return next;
+    });
+  }, [allDocs, archivedDocs]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleDocs.length / PAGE_SIZE));
+  const displayDocs = visibleDocs.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE
   );
+
+  // For smart bulk archive/restore button
+  const selectedDocs = useMemo(
+    () => filteredDocs.filter((d) => selected.has(d._id)),
+    [filteredDocs, selected]
+  );
+  const allSelectedAreArchived =
+    selectedDocs.length > 0 && selectedDocs.every((d) => d.isArchived);
 
   useEffect(() => {
     setPage(1);
@@ -1959,6 +2177,107 @@ export default function DocumentsPage() {
   const totalDocs = allDocs?.length ?? 0;
   const archivedCount = archivedDocs?.length ?? 0;
   const sharedCount = allDocs?.filter((d) => d.organizationId).length ?? 0;
+
+  // ── Centralised single-doc handlers with optimistic UI + undo ──────────────
+
+  const handleArchiveDoc = useCallback(
+    async (id: Id<"documents">) => {
+      if (!showArchived) {
+        setPendingRemoval((prev) => new Set([...prev, id]));
+      }
+      try {
+        await archiveMutation({ id });
+        setPendingRemoval((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        toast("Archived", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await restoreMutation({ id });
+                toast.success("Restored");
+              } catch {
+                toast.error("Couldn't restore.");
+              }
+            },
+          },
+          actionButtonStyle: toastActionStyle,
+          duration: 5000,
+        });
+      } catch {
+        setPendingRemoval((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        toast.error("Couldn't archive.");
+      }
+    },
+    [archiveMutation, restoreMutation, showArchived, toastActionStyle]
+  );
+
+  const handleRestoreDoc = useCallback(
+    async (id: Id<"documents">) => {
+      try {
+        await restoreMutation({ id });
+        toast("Restored", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await archiveMutation({ id });
+                toast.success("Archived");
+              } catch {
+                toast.error("Couldn't archive.");
+              }
+            },
+          },
+          actionButtonStyle: toastActionStyle,
+          duration: 5000,
+        });
+      } catch {
+        toast.error("Couldn't restore.");
+      }
+    },
+    [restoreMutation, archiveMutation, toastActionStyle]
+  );
+
+  const handleDeleteDoc = useCallback(
+    async (id: Id<"documents">) => {
+      // Optimistic: immediately remove from view
+      setPendingRemoval((prev) => new Set([...prev, id]));
+      try {
+        await removeMutation({ id });
+        toast.success("Deleted");
+      } catch (err: any) {
+        setPendingRemoval((prev) => {
+          const s = new Set(prev);
+          s.delete(id);
+          return s;
+        });
+        toast.error(err?.data ?? "Couldn't delete.");
+      }
+    },
+    [removeMutation]
+  );
+
+  const handleDuplicateDoc = useCallback(
+    async (id: Id<"documents">) => {
+      try {
+        const newId = await duplicateMutation({ id });
+        toast.success("Duplicated");
+        router.push(`/documents/${newId}`);
+      } catch {
+        toast.error("Couldn't duplicate.");
+      }
+    },
+    [duplicateMutation, router]
+  );
+
+  // ── Select helpers ─────────────────────────────────────────────────────────
 
   const handleSelect = useCallback(
     (id: string, shift: boolean) => {
@@ -1991,51 +2310,112 @@ export default function DocumentsPage() {
   const somePageSelected =
     displayDocs.some((d) => selected.has(d._id)) && !allPageSelected;
 
+  // ── Bulk handlers with undo ────────────────────────────────────────────────
+
   const handleBulkArchive = async () => {
-    const ids = Array.from(selected);
+    const ids = Array.from(selected) as Id<"documents">[];
+    if (!showArchived) {
+      setPendingRemoval((prev) => new Set([...prev, ...ids]));
+    }
+
     const results = await Promise.allSettled(
-      ids.map((id) => archiveMutation({ id: id as Id<"documents"> }))
+      ids.map((id) => archiveMutation({ id }))
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    failed
-      ? toast.error(`${failed} papers couldn't be archived.`)
-      : toast.success(`${ids.length} papers archived`);
+    const succeeded = ids.length - failed;
+
+    setPendingRemoval((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+
     setSelected(new Set());
     setSelectMode(false);
+
+    if (failed > 0) {
+      toast.error(`${failed} papers couldn't be archived.`);
+    } else {
+      toast(`${succeeded} paper${succeeded !== 1 ? "s" : ""} archived`, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            setPendingRemoval((prev) => {
+              const s = new Set(prev);
+              ids.forEach((id) => s.delete(id));
+              return s;
+            });
+            await Promise.allSettled(ids.map((id) => restoreMutation({ id })));
+            toast.success(
+              `${succeeded} paper${succeeded !== 1 ? "s" : ""} restored`
+            );
+          },
+        },
+        actionButtonStyle: toastActionStyle,
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    const ids = Array.from(selected) as Id<"documents">[];
+    const results = await Promise.allSettled(
+      ids.map((id) => restoreMutation({ id }))
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const succeeded = ids.length - failed;
+
+    setSelected(new Set());
+    setSelectMode(false);
+
+    if (failed > 0) {
+      toast.error(`${failed} papers couldn't be restored.`);
+    } else {
+      toast(`${succeeded} paper${succeeded !== 1 ? "s" : ""} restored`, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            await Promise.allSettled(ids.map((id) => archiveMutation({ id })));
+            toast.success(
+              `${succeeded} paper${succeeded !== 1 ? "s" : ""} archived`
+            );
+          },
+        },
+        actionButtonStyle: toastActionStyle,
+        duration: 5000,
+      });
+    }
   };
 
   const handleBulkDelete = async () => {
-    const ids = Array.from(selected);
+    const ids = Array.from(selected) as Id<"documents">[];
+    setPendingRemoval((prev) => new Set([...prev, ...ids]));
     const results = await Promise.allSettled(
-      ids.map((id) => removeMutation({ id: id as Id<"documents"> }))
+      ids.map((id) => removeMutation({ id }))
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    failed
-      ? toast.error(`${failed} papers couldn't be deleted.`)
-      : toast.success(`${ids.length} papers deleted`);
+    if (failed > 0) {
+      toast.error(`${failed} papers couldn't be deleted.`);
+    } else {
+      toast.success(`${ids.length} papers deleted`);
+    }
     setSelected(new Set());
     setSelectMode(false);
     setBulkDeleteOpen(false);
   };
 
-  // ── Bulk ZIP export ──────────────────────────────────────────────────────
+  // ── Bulk ZIP export ────────────────────────────────────────────────────────
   const handleBulkExportZip = async (fmt: "docx" | "pdf") => {
     const ids = Array.from(selected);
     const docs = filteredDocs.filter((d) => ids.includes(d._id));
-
     const toastId = toast.loading(
       `Preparing ${fmt.toUpperCase()} ZIP for ${docs.length} paper${docs.length !== 1 ? "s" : ""}…`
     );
-
     try {
       const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
-
-      // sanitize filename for ZIP entry
       const safeName = (title: string) =>
         title.replace(/[/\\?%*:|"<>]/g, "-").trim() || "document";
-
-      // Track used names to avoid duplicates inside the zip
       const usedNames = new Map<string, number>();
       const getUniqueName = (base: string, ext: string) => {
         const key = `${base}.${ext}`;
@@ -2043,16 +2423,16 @@ export default function DocumentsPage() {
         usedNames.set(key, count + 1);
         return count === 0 ? `${base}.${ext}` : `${base} (${count}).${ext}`;
       };
-
       const results = await Promise.allSettled(
         docs.map(async (doc) => {
           if (!doc.fileUrl) throw new Error(`No file for "${doc.title}"`);
-
           if (fmt === "docx") {
             const res = await fetch(doc.fileUrl);
             if (!res.ok) throw new Error(`Failed to fetch "${doc.title}"`);
-            const blob = await res.blob();
-            zip.file(getUniqueName(safeName(doc.title), "docx"), blob);
+            zip.file(
+              getUniqueName(safeName(doc.title), "docx"),
+              await res.blob()
+            );
           } else {
             const res = await fetch("/api/onlyoffice-convert", {
               method: "POST",
@@ -2064,21 +2444,20 @@ export default function DocumentsPage() {
             });
             if (!res.ok)
               throw new Error(`PDF conversion failed for "${doc.title}"`);
-            const blob = await res.blob();
-            zip.file(getUniqueName(safeName(doc.title), "pdf"), blob);
+            zip.file(
+              getUniqueName(safeName(doc.title), "pdf"),
+              await res.blob()
+            );
           }
         })
       );
-
       const failed = results.filter((r) => r.status === "rejected").length;
       const succeeded = docs.length - failed;
-
       if (succeeded === 0) {
         toast.dismiss(toastId);
         toast.error("All exports failed. Nothing to download.");
         return;
       }
-
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(zipBlob);
       const a = globalThis.document.createElement("a");
@@ -2088,7 +2467,6 @@ export default function DocumentsPage() {
       a.click();
       globalThis.document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
       toast.dismiss(toastId);
       if (failed > 0) {
         toast.warning(
@@ -2106,6 +2484,7 @@ export default function DocumentsPage() {
     }
   };
 
+  // ── New paper ──────────────────────────────────────────────────────────────
   const handleNewPaper = async () => {
     setIsCreating(true);
     try {
@@ -2173,6 +2552,22 @@ export default function DocumentsPage() {
     filter !== "all" ||
     showArchived
   );
+
+  // ── Empty state copy per context ───────────────────────────────────────────
+  const emptyTitle = debouncedSearch
+    ? "No papers found"
+    : filter === "mine"
+      ? "No personal papers yet"
+      : filter === "org"
+        ? `No ${orgFilterLabel} papers yet`
+        : showArchived
+          ? "No archived papers"
+          : "No papers yet";
+  const emptyBody = debouncedSearch
+    ? `No results for "${debouncedSearch}".`
+    : showArchived
+      ? "Papers you archive will appear here."
+      : "Create your first paper to get started.";
 
   return (
     <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
@@ -2253,7 +2648,7 @@ export default function DocumentsPage() {
           background: "var(--bg-muted)",
         }}
       >
-        {/* Row 1: search + view + select mode */}
+        {/* Row 1: search + view + select */}
         <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5">
           <div className="relative flex-1 max-w-md">
             <SearchIcon
@@ -2261,10 +2656,11 @@ export default function DocumentsPage() {
               style={{ color: "var(--text-dim)" }}
             />
             <input
+              ref={searchInputRef}
               placeholder="Search papers…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-8 pr-8 text-[13px] rounded-xl outline-none"
+              className="w-full h-9 pl-8 pr-14 text-[13px] rounded-xl outline-none"
               style={{
                 background: "var(--bg-muted)",
                 border: `1px solid var(--border-subtle)`,
@@ -2277,7 +2673,7 @@ export default function DocumentsPage() {
                 (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
               }
             />
-            {search && (
+            {search ? (
               <button
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2"
@@ -2285,6 +2681,19 @@ export default function DocumentsPage() {
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
+            ) : (
+              /* Keyboard shortcut hint */
+              <kbd
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded pointer-events-none"
+                style={{
+                  background: "var(--bg-input)",
+                  color: "var(--text-dim)",
+                  border: `1px solid var(--border-subtle)`,
+                  fontFamily: "inherit",
+                }}
+              >
+                /
+              </kbd>
             )}
           </div>
 
@@ -2316,7 +2725,7 @@ export default function DocumentsPage() {
             ))}
           </div>
 
-          {/* Select mode toggle — visible on all screen sizes */}
+          {/* Select mode toggle */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -2337,7 +2746,7 @@ export default function DocumentsPage() {
           </button>
         </div>
 
-        {/* Row 2: filters — scrollable */}
+        {/* Row 2: filters */}
         <div
           className="flex items-center gap-2 px-4 sm:px-6 pb-2.5 overflow-x-auto"
           style={{ scrollbarWidth: "none" }}
@@ -2454,7 +2863,7 @@ export default function DocumentsPage() {
           }}
         >
           <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-            {filteredDocs.length} result{filteredDocs.length !== 1 ? "s" : ""}
+            {visibleDocs.length} result{visibleDocs.length !== 1 ? "s" : ""}
           </span>
           {debouncedSearch && (
             <span
@@ -2516,7 +2925,14 @@ export default function DocumentsPage() {
             }}
           />
           <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-            Click papers to select
+            Click papers to select ·{" "}
+            <kbd
+              className="text-[10px] px-1 rounded"
+              style={{ background: "var(--bg-input)" }}
+            >
+              Esc
+            </kbd>{" "}
+            to cancel
           </span>
           <button
             onClick={() => {
@@ -2555,26 +2971,31 @@ export default function DocumentsPage() {
                   className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
                   style={{ background: "var(--bg-muted)" }}
                 >
-                  <FileIcon
-                    className="w-6 h-6"
-                    style={{ color: "var(--text-dim)" }}
-                  />
+                  {showArchived ? (
+                    <ArchiveIcon
+                      className="w-6 h-6"
+                      style={{ color: "var(--text-dim)" }}
+                    />
+                  ) : (
+                    <FileIcon
+                      className="w-6 h-6"
+                      style={{ color: "var(--text-dim)" }}
+                    />
+                  )}
                 </div>
                 <p
                   className="text-[14px] font-semibold mb-1.5"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  {search ? "No papers found" : "No papers yet"}
+                  {emptyTitle}
                 </p>
                 <p
                   className="text-[12px] mb-6 max-w-[240px] leading-relaxed"
                   style={{ color: "var(--text-dim)" }}
                 >
-                  {search
-                    ? `No results for "${search}".`
-                    : "Create your first paper to get started."}
+                  {emptyBody}
                 </p>
-                {!search && (
+                {!debouncedSearch && !showArchived && (
                   <button
                     onClick={handleNewPaper}
                     disabled={isCreating}
@@ -2603,6 +3024,10 @@ export default function DocumentsPage() {
                       setAddColDialog({ id, title })
                     }
                     onRename={(id, title) => setRenameDialog({ id, title })}
+                    onArchive={() => handleArchiveDoc(doc._id)}
+                    onRestore={() => handleRestoreDoc(doc._id)}
+                    onDelete={() => handleDeleteDoc(doc._id)}
+                    onDuplicate={() => handleDuplicateDoc(doc._id)}
                   />
                 ))}
               </div>
@@ -2619,6 +3044,10 @@ export default function DocumentsPage() {
                       setAddColDialog({ id, title })
                     }
                     onRename={(id, title) => setRenameDialog({ id, title })}
+                    onArchive={() => handleArchiveDoc(doc._id)}
+                    onRestore={() => handleRestoreDoc(doc._id)}
+                    onDelete={() => handleDeleteDoc(doc._id)}
+                    onDuplicate={() => handleDuplicateDoc(doc._id)}
                   />
                 ))}
               </div>
@@ -2626,12 +3055,12 @@ export default function DocumentsPage() {
           </div>
 
           {/* Pagination */}
-          {!isLoading && filteredDocs.length > PAGE_SIZE && (
+          {!isLoading && visibleDocs.length > PAGE_SIZE && (
             <div className="pb-[calc(env(safe-area-inset-bottom)+52px)] md:pb-0">
               <Pagination
                 page={page}
                 totalPages={totalPages}
-                total={filteredDocs.length}
+                total={visibleDocs.length}
                 pageSize={PAGE_SIZE}
                 onChange={handlePageChange}
               />
@@ -2649,8 +3078,10 @@ export default function DocumentsPage() {
       {someSelected && (
         <BulkBar
           count={selected.size}
-          total={filteredDocs.length}
+          total={visibleDocs.length}
+          allArchived={allSelectedAreArchived}
           onArchive={handleBulkArchive}
+          onRestore={handleBulkRestore}
           onDelete={() => setBulkDeleteOpen(true)}
           onClear={() => {
             setSelected(new Set());
@@ -2658,8 +3089,10 @@ export default function DocumentsPage() {
           }}
           onSelectAll={handleSelectAll}
           onAddToCollection={() => {
-            const firstId = Array.from(selected)[0] as Id<"documents">;
-            setAddColDialog({ id: firstId, title: `${selected.size} papers` });
+            // Fix: add ALL selected docs to collection, not just the first
+            setBulkAddColDialog({
+              ids: Array.from(selected) as Id<"documents">[],
+            });
           }}
           onExportZip={handleBulkExportZip}
         />
@@ -2672,6 +3105,13 @@ export default function DocumentsPage() {
           onOpenChange={(v) => !v && setAddColDialog(null)}
           documentId={addColDialog.id}
           documentTitle={addColDialog.title}
+        />
+      )}
+      {bulkAddColDialog && (
+        <BulkAddToCollectionDialog
+          open={!!bulkAddColDialog}
+          onOpenChange={(v) => !v && setBulkAddColDialog(null)}
+          documentIds={bulkAddColDialog.ids}
         />
       )}
       {renameDialog && (
