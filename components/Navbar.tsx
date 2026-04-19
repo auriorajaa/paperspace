@@ -1,3 +1,4 @@
+// components\Navbar.tsx
 "use client";
 
 import Link from "next/link";
@@ -140,6 +141,7 @@ function OrgDropdown({
         // Align from top or from bottom depending on available space
         transform: pos.alignBottom ? "translateY(-100%)" : "none",
         background: "var(--bg-card)",
+        backdropFilter: "blur(16px)",
         border: "1px solid var(--border-hover)",
         boxShadow: "var(--shadow-elevated)",
       }}

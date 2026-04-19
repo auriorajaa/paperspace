@@ -1,3 +1,4 @@
+// app\(main)\collections\[collectionId]\page.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";

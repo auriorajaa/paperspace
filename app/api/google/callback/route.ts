@@ -1,4 +1,4 @@
-// D:\Skripsi\paperspace\app\api\google\callback\route.ts
+// app\api\google\callback\route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";

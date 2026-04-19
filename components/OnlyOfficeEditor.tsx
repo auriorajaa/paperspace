@@ -1,3 +1,4 @@
+// components\OnlyOfficeEditor.tsx
 "use client";
 
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
@@ -76,7 +77,7 @@ function OnlyOfficeInner({
   const mountedRef = useRef(true);
   const { theme } = useTheme();
 
-  const uiTheme = theme === "light" ? "default-light" : "default-dark";
+  const uiTheme = theme === "light" ? "default-light" : "theme-contrast-dark";
 
   useEffect(() => {
     mountedRef.current = true;
@@ -203,5 +204,3 @@ export const OnlyOfficeEditor = dynamic(
     ),
   }
 ) as ComponentType<OnlyOfficeEditorProps>;
-
-

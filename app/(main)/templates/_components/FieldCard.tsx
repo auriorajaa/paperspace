@@ -1,3 +1,4 @@
+// app\(main)\templates\_components\FieldCard.tsx
 "use client";
 
 import { useState } from "react";

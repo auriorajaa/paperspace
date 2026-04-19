@@ -1,3 +1,4 @@
+// app\(main)\templates\[templateId]\edit\page.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
