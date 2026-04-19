@@ -1,4 +1,4 @@
-// components/ThemeSwitcher.tsx (Tambahkan resolvedTheme untuk konsistensi)
+// components/ThemeSwitcher.tsx
 "use client";
 
 import { CheckIcon, ChevronDownIcon, MoonIcon, SunIcon } from "lucide-react";

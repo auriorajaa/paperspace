@@ -1,4 +1,4 @@
-// D:\Skripsi\paperspace\app\api\google\auth\route.ts
+// app\api\google\auth\route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

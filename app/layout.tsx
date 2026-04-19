@@ -1,4 +1,4 @@
-// app/layout.tsx (Tambahkan suppressHydrationWarning di body juga)
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";

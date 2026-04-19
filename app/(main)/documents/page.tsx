@@ -1,3 +1,4 @@
+// app\(main)\documents\page.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -30,6 +31,9 @@ import {
   FileIcon,
   MinusIcon,
   CheckSquareIcon,
+  ExternalLinkIcon,
+  DownloadIcon,
+  PackageIcon,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInHours } from "date-fns";
 import { Doc, Id } from "@/convex/_generated/dataModel";
@@ -73,6 +77,63 @@ function smartDate(ts: number): string {
 }
 
 const PAGE_SIZE = 15;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleExportDoc(doc: Doc<"documents">, fmt: "docx" | "pdf") {
+  if (!doc.fileUrl) {
+    toast.error("No file available for this document.");
+    return;
+  }
+
+  if (fmt === "docx") {
+    const toastId = toast.loading("Preparing download…");
+    try {
+      const res = await fetch(doc.fileUrl);
+      if (!res.ok) throw new Error("Fetch failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = globalThis.document.createElement("a");
+      a.href = url;
+      a.download = `${doc.title}.docx`;
+      globalThis.document.body.appendChild(a);
+      a.click();
+      globalThis.document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+      toast.success("Downloading .docx file");
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("Failed to download file.");
+    }
+  } else {
+    const toastId = toast.loading("Converting to PDF…");
+    try {
+      const res = await fetch("/api/onlyoffice-convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileUrl: doc.fileUrl, fileName: doc.title }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = globalThis.document.createElement("a");
+      a.href = url;
+      a.download = `${doc.title}.pdf`;
+      globalThis.document.body.appendChild(a);
+      a.click();
+      globalThis.document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+      toast.success("PDF downloaded");
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("PDF export failed. Check OnlyOffice setup.");
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Add-to-collection dialog
@@ -160,14 +221,6 @@ function AddToCollectionDialog({
                       : "var(--bg-muted)",
                     border: `1px solid ${isIn ? `${col.color ?? "var(--primary)"}30` : "var(--border-subtle)"}`,
                     minHeight: 48,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isIn && !loading)
-                      e.currentTarget.style.background = "var(--bg-muted)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isIn)
-                      e.currentTarget.style.background = "var(--bg-muted)";
                   }}
                 >
                   <div
@@ -788,6 +841,7 @@ function PaperMenu({
   onArchive,
   onRestore,
   onDelete,
+  onExport,
 }: {
   document: Doc<"documents">;
   onAddToCollection: () => void;
@@ -796,8 +850,8 @@ function PaperMenu({
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
+  onExport: (fmt: "docx" | "pdf") => void;
 }) {
-  const router = useRouter();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -808,12 +862,6 @@ function PaperMenu({
             background: "var(--bg-input)",
             border: `1px solid var(--border-subtle)`,
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "var(--bg-input)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "var(--bg-input)")
-          }
         >
           <MoreHorizontalIcon
             className="w-3.5 h-3.5"
@@ -821,15 +869,16 @@ function PaperMenu({
           />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-52">
+        {/* Open in new tab */}
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            router.push(`/documents/${document._id}`);
+            window.open(`/documents/${document._id}`, "_blank");
           }}
         >
-          <FileTextIcon className="w-3.5 h-3.5 mr-2" />
-          Open
+          <ExternalLinkIcon className="w-3.5 h-3.5 mr-2" />
+          Open in new tab
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={(e) => {
@@ -857,6 +906,26 @@ function PaperMenu({
         >
           <FolderPlusIcon className="w-3.5 h-3.5 mr-2" />
           Add to collection
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Export options */}
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onExport("docx");
+          }}
+        >
+          <DownloadIcon className="w-3.5 h-3.5 mr-2" />
+          Export as .docx
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onExport("pdf");
+          }}
+        >
+          <FileTextIcon className="w-3.5 h-3.5 mr-2" />
+          Export as PDF
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {document.isArchived ? (
@@ -961,22 +1030,9 @@ function GridCard({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Top accent line matching first collection color */}
-        {/* <div
-          className="h-0.5 w-full shrink-0"
-          style={{
-            background:
-              cols[0]?.color ??
-              (document.organizationId
-                ? "var(--primary)"
-                : "var(--bg-input)"),
-          }}
-        /> */}
-
         <div className="p-3.5 flex flex-col gap-2.5 flex-1">
           {/* Header: icon + title + select/menu */}
           <div className="flex items-start gap-2.5">
-            {/* Select checkbox — only in select mode */}
             {selectMode && (
               <div
                 className="mt-0.5 shrink-0"
@@ -996,12 +1052,10 @@ function GridCard({
               className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
               style={{ background: "var(--bg-input)" }}
             >
-             
-                <FileTextIcon
-                  className="w-4 h-4"
-                  style={{ color: "var(--text-muted)" }}
-                />
-              
+              <FileTextIcon
+                className="w-4 h-4"
+                style={{ color: "var(--text-muted)" }}
+              />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -1011,7 +1065,6 @@ function GridCard({
               >
                 {document.title}
               </p>
-              {/* Date + status inline */}
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[11px]"
@@ -1079,11 +1132,12 @@ function GridCard({
                   }
                 }}
                 onDelete={() => setConfirmDelete(true)}
+                onExport={(fmt) => handleExportDoc(document, fmt)}
               />
             </div>
           </div>
 
-          {/* AI summary — compact, no framed box */}
+          {/* AI summary */}
           <div className="flex items-start gap-1.5 flex-1 min-h-[36px]">
             <SparklesIcon
               className="w-2.5 h-2.5 shrink-0 mt-0.5"
@@ -1121,7 +1175,6 @@ function GridCard({
             )}
           </div>
 
-          {/* Collections — only if any */}
           {cols.length > 0 && (
             <div onClick={(e) => e.stopPropagation()}>
               <CollectionBadges collections={cols} maxVisible={2} />
@@ -1221,7 +1274,6 @@ function ListRow({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Select checkbox — only in select mode */}
         {selectMode && (
           <div
             className="mt-1 shrink-0"
@@ -1237,20 +1289,17 @@ function ListRow({
           </div>
         )}
 
-        {/* Paper icon */}
         <span
           className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0 mt-0.5"
           style={{ background: "var(--bg-input)" }}
         >
-            <FileTextIcon
-              className="w-4 h-4"
-              style={{ color: "var(--text-muted)" }}
-            />
+          <FileTextIcon
+            className="w-4 h-4"
+            style={{ color: "var(--text-muted)" }}
+          />
         </span>
 
-        {/* Content block */}
         <div className="flex-1 min-w-0 space-y-1">
-          {/* Row 1: title + meta */}
           <div className="flex items-center gap-2 flex-wrap">
             <p
               className="text-[13px] font-semibold"
@@ -1258,8 +1307,6 @@ function ListRow({
             >
               {document.title}
             </p>
-
-            {/* Status chips inline */}
             {document.isArchived && (
               <span
                 className="text-[9px] font-semibold px-1.5 py-px rounded shrink-0"
@@ -1285,7 +1332,6 @@ function ListRow({
             )}
           </div>
 
-          {/* Row 2: AI summary */}
           <div className="flex items-start gap-1.5">
             <SparklesIcon
               className="w-2.5 h-2.5 shrink-0 mt-px"
@@ -1323,7 +1369,6 @@ function ListRow({
             )}
           </div>
 
-          {/* Row 3: collections + date */}
           <div
             className="flex items-center gap-2 pt-0.5 flex-wrap"
             onClick={(e) => e.stopPropagation()}
@@ -1340,7 +1385,6 @@ function ListRow({
           </div>
         </div>
 
-        {/* Right actions — always visible */}
         <div
           className="flex items-center gap-1 shrink-0 mt-0.5"
           onClick={(e) => e.stopPropagation()}
@@ -1391,6 +1435,7 @@ function ListRow({
               }
             }}
             onDelete={() => setConfirmDelete(true)}
+            onExport={(fmt) => handleExportDoc(document, fmt)}
           />
         </div>
       </div>
@@ -1437,6 +1482,7 @@ function BulkBar({
   onClear,
   onAddToCollection,
   onSelectAll,
+  onExportZip,
 }: {
   count: number;
   total: number;
@@ -1445,15 +1491,18 @@ function BulkBar({
   onClear: () => void;
   onAddToCollection: () => void;
   onSelectAll: () => void;
+  onExportZip: (fmt: "docx" | "pdf") => void;
 }) {
   return (
     <div
-      className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
+      className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-2xl overflow-x-auto"
       style={{
         transform: "translateX(-50%)",
+        maxWidth: "calc(100vw - 2rem)",
+        scrollbarWidth: "none",
         background: "var(--bg-card)",
         border: "1px solid rgba(99,102,241,0.3)",
-        boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.03), 0 0 0 1px rgba(99,102,241,0.1)",
         backdropFilter: "blur(16px)",
         whiteSpace: "nowrap",
       }}
@@ -1474,7 +1523,7 @@ function BulkBar({
         </button>
       )}
       <div
-        className="w-px h-4 mx-0.5"
+        className="w-px h-4 mx-0.3"
         style={{ background: "var(--bg-input)" }}
       />
       <button
@@ -1484,16 +1533,45 @@ function BulkBar({
           background: "var(--bg-input)",
           color: "var(--text-secondary)",
         }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "var(--bg-input)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background = "var(--bg-input)")
-        }
       >
         <FolderPlusIcon className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Collection</span>
       </button>
+
+      {/* Export ZIP dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+            style={{
+              background: "rgba(52,211,153,0.08)",
+              color: "var(--success, #34d399)",
+              border: "1px solid rgba(52,211,153,0.2)",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(52,211,153,0.14)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "rgba(52,211,153,0.08)")
+            }
+          >
+            <PackageIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export ZIP</span>
+            <ChevronDownIcon className="w-3 h-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" side="top" className="w-44 mb-1">
+          <DropdownMenuItem onClick={() => onExportZip("docx")}>
+            <DownloadIcon className="w-3.5 h-3.5 mr-2" />
+            ZIP of .docx files
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onExportZip("pdf")}>
+            <FileTextIcon className="w-3.5 h-3.5 mr-2" />
+            ZIP of PDF files
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <button
         onClick={onArchive}
         className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
@@ -1866,17 +1944,12 @@ export default function DocumentsPage() {
     page * PAGE_SIZE
   );
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, filter, sort, showArchived]);
-
-  // Clear selection when page changes or filters change
   useEffect(() => {
     setSelected(new Set());
   }, [page, debouncedSearch, filter, sort]);
-
-  // Exit select mode when nothing is selected
   useEffect(() => {
     if (selected.size === 0 && selectMode) setSelectMode(false);
   }, [selected.size]);
@@ -1943,6 +2016,94 @@ export default function DocumentsPage() {
     setSelected(new Set());
     setSelectMode(false);
     setBulkDeleteOpen(false);
+  };
+
+  // ── Bulk ZIP export ──────────────────────────────────────────────────────
+  const handleBulkExportZip = async (fmt: "docx" | "pdf") => {
+    const ids = Array.from(selected);
+    const docs = filteredDocs.filter((d) => ids.includes(d._id));
+
+    const toastId = toast.loading(
+      `Preparing ${fmt.toUpperCase()} ZIP for ${docs.length} paper${docs.length !== 1 ? "s" : ""}…`
+    );
+
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+
+      // sanitize filename for ZIP entry
+      const safeName = (title: string) =>
+        title.replace(/[/\\?%*:|"<>]/g, "-").trim() || "document";
+
+      // Track used names to avoid duplicates inside the zip
+      const usedNames = new Map<string, number>();
+      const getUniqueName = (base: string, ext: string) => {
+        const key = `${base}.${ext}`;
+        const count = usedNames.get(key) ?? 0;
+        usedNames.set(key, count + 1);
+        return count === 0 ? `${base}.${ext}` : `${base} (${count}).${ext}`;
+      };
+
+      const results = await Promise.allSettled(
+        docs.map(async (doc) => {
+          if (!doc.fileUrl) throw new Error(`No file for "${doc.title}"`);
+
+          if (fmt === "docx") {
+            const res = await fetch(doc.fileUrl);
+            if (!res.ok) throw new Error(`Failed to fetch "${doc.title}"`);
+            const blob = await res.blob();
+            zip.file(getUniqueName(safeName(doc.title), "docx"), blob);
+          } else {
+            const res = await fetch("/api/onlyoffice-convert", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fileUrl: doc.fileUrl,
+                fileName: doc.title,
+              }),
+            });
+            if (!res.ok)
+              throw new Error(`PDF conversion failed for "${doc.title}"`);
+            const blob = await res.blob();
+            zip.file(getUniqueName(safeName(doc.title), "pdf"), blob);
+          }
+        })
+      );
+
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const succeeded = docs.length - failed;
+
+      if (succeeded === 0) {
+        toast.dismiss(toastId);
+        toast.error("All exports failed. Nothing to download.");
+        return;
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = globalThis.document.createElement("a");
+      a.href = url;
+      a.download = `papers-export-${fmt}-${new Date().toISOString().slice(0, 10)}.zip`;
+      globalThis.document.body.appendChild(a);
+      a.click();
+      globalThis.document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.dismiss(toastId);
+      if (failed > 0) {
+        toast.warning(
+          `ZIP downloaded with ${succeeded} file${succeeded !== 1 ? "s" : ""} — ${failed} failed.`
+        );
+      } else {
+        toast.success(
+          `ZIP with ${succeeded} ${fmt.toUpperCase()} file${succeeded !== 1 ? "s" : ""} downloaded`
+        );
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("ZIP export failed.");
+      console.error("[bulk-export-zip]", err);
+    }
   };
 
   const handleNewPaper = async () => {
@@ -2155,7 +2316,7 @@ export default function DocumentsPage() {
             ))}
           </div>
 
-          {/* Select mode toggle */}
+          {/* Select mode toggle — visible on all screen sizes */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -2163,15 +2324,16 @@ export default function DocumentsPage() {
                 return !v;
               });
             }}
-            className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
+            className="flex items-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-xl text-[11px] font-medium transition-all shrink-0"
             style={{
               background: selectMode ? "var(--accent-bg)" : "var(--bg-muted)",
               border: `1px solid ${selectMode ? "var(--accent-border)" : "var(--border-subtle)"}`,
               color: selectMode ? "var(--accent-light)" : "var(--text-muted)",
             }}
+            title="Select mode"
           >
-            <CheckSquareIcon className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Select</span>
+            <CheckSquareIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Select</span>
           </button>
         </div>
 
@@ -2499,6 +2661,7 @@ export default function DocumentsPage() {
             const firstId = Array.from(selected)[0] as Id<"documents">;
             setAddColDialog({ id: firstId, title: `${selected.size} papers` });
           }}
+          onExportZip={handleBulkExportZip}
         />
       )}
 

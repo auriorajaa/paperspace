@@ -1,4 +1,4 @@
-// contexts/ThemeContext.tsx (Pastikan export resolvedTheme)
+// contexts/ThemeContext.tsx
 "use client";
 
 import {

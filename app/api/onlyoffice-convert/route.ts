@@ -1,3 +1,4 @@
+// app\api\onlyoffice-convert\route.ts
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 
@@ -24,10 +25,16 @@ export async function POST(req: NextRequest) {
 
     const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
 
+    // Generate a unique key per conversion to prevent OnlyOffice from
+    // returning a cached result from a previous (or concurrent) conversion.
+    // Without this, parallel conversions may all resolve to the same cached PDF.
+    const uniqueKey = `convert-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     const payload = {
       async: false,
       filetype: "docx",
       outputtype: "pdf",
+      key: uniqueKey,
       url: proxiedUrl,
     };
 
@@ -38,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     console.log("[onlyoffice-convert] sending to:", convertUrl);
     console.log("[onlyoffice-convert] proxiedUrl:", proxiedUrl);
+    console.log("[onlyoffice-convert] key:", uniqueKey);
 
     const convertRes = await fetch(convertUrl, {
       method: "POST",
