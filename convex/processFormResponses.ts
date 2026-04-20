@@ -28,11 +28,11 @@ async function refreshGoogleToken(refreshToken: string): Promise<{
 
 async function getValidToken(
   ctx: any,
-  ownerId: string,
+  ownerId: string
 ): Promise<{ token: string | null; error?: string }> {
   const account = await ctx.runQuery(
     internal.googleAccounts.getByOwnerInternal,
-    { ownerId },
+    { ownerId }
   );
   if (!account) return { token: null, error: "No Google account connected" };
 
@@ -140,7 +140,7 @@ async function generateDocxFromTemplate(
     templateId: Id<"templates">;
     fieldValues: Record<string, string>;
     filename: string;
-  },
+  }
 ): Promise<void> {
   const { submissionId, templateId, fieldValues } = params;
   const convexSiteUrl = process.env.CONVEX_SITE_URL!;
@@ -154,7 +154,7 @@ async function generateDocxFromTemplate(
   const Docxtemplater = (await import("docxtemplater")).default;
 
   const fileUrl = await ctx.storage.getUrl(
-    template.storageId as Id<"_storage">,
+    template.storageId as Id<"_storage">
   );
   if (!fileUrl) throw new Error("Template file not found in storage");
 
@@ -208,9 +208,7 @@ async function generateDocxFromTemplate(
           if (id === "loop_tag_not_in_cell")
             return `Loop tag {{#${tag}}} and its closing tag must be in separate table rows${tagHint}`;
           // Fallback: use explanation or message
-          return (
-            e?.properties?.explanation ?? e?.message ?? String(e)
-          );
+          return e?.properties?.explanation ?? e?.message ?? String(e);
         })
         .join("; ");
       throw new Error(`Template render failed: ${details}`);
@@ -233,7 +231,7 @@ async function generateDocxFromTemplate(
   if (!uploadRes.ok) throw new Error("Upload failed");
 
   const { storageId: newStorageId } = await uploadRes.json();
-  const generatedFileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}`;
+  const generatedFileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}&filename=${encodeURIComponent(params.filename)}`;
 
   await ctx.runMutation(internal.formConnections.updateSubmissionInternal, {
     id: submissionId,
@@ -250,7 +248,7 @@ export const pollConnection = internalAction({
   handler: async (ctx, args) => {
     const connection = await ctx.runQuery(
       internal.formConnections.getByIdInternal,
-      { id: args.connectionId },
+      { id: args.connectionId }
     );
     if (!connection || !connection.isActive || !connection.googleFormId) return;
 
@@ -264,11 +262,11 @@ export const pollConnection = internalAction({
 
     const { token: accessToken, error: tokenError } = await getValidToken(
       ctx,
-      connection.ownerId,
+      connection.ownerId
     );
     if (!accessToken) {
       console.error(
-        `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`,
+        `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`
       );
       await stampPolledAt();
       return;
@@ -276,12 +274,12 @@ export const pollConnection = internalAction({
 
     // Fetch responses from Google Forms API
     const url = new URL(
-      `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`,
+      `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`
     );
     if (connection.lastPolledAt) {
       url.searchParams.set(
         "filter",
-        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`,
+        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`
       );
     }
 
@@ -292,7 +290,7 @@ export const pollConnection = internalAction({
     if (!responsesRes.ok) {
       console.error(
         "[pollConnection] Forms API error:",
-        await responsesRes.text(),
+        await responsesRes.text()
       );
       // FIX: stamp lastPolledAt even on API error so the cron doesn't re-try
       // the same time-window forever, which caused the "error count keeps
@@ -322,7 +320,7 @@ export const pollConnection = internalAction({
       if (responseId) {
         const existing = await ctx.runQuery(
           internal.formConnections.getSubmissionByResponseIdInternal,
-          { connectionId: connection._id, responseId },
+          { connectionId: connection._id, responseId }
         );
         if (existing) continue;
       }
@@ -335,7 +333,7 @@ export const pollConnection = internalAction({
       {
         const existing = await ctx.runQuery(
           internal.formConnections.getSubmissionByTimestampInternal,
-          { connectionId: connection._id, submittedAt },
+          { connectionId: connection._id, submittedAt }
         );
         if (existing) continue;
       }
@@ -348,7 +346,7 @@ export const pollConnection = internalAction({
         const questionTitle = questionMap[questionId];
         if (!questionTitle) continue;
         const mapping = connection.fieldMappings.find(
-          (m: any) => m.formQuestionTitle === questionTitle,
+          (m: any) => m.formQuestionTitle === questionTitle
         );
         if (!mapping) continue;
         const value =
@@ -362,7 +360,7 @@ export const pollConnection = internalAction({
         .replace(/{{row_number}}/g, rowNumber)
         .replace(
           /{{(\w+)}}/g,
-          (_: string, key: string) => fieldValues[key] ?? "",
+          (_: string, key: string) => fieldValues[key] ?? ""
         )
         .replace(/[<>:"/\\|?*]/g, "_");
 
@@ -378,7 +376,7 @@ export const pollConnection = internalAction({
           status: "pending",
           submittedAt,
           responseId: responseId || undefined,
-        },
+        }
       );
 
       try {
@@ -397,7 +395,7 @@ export const pollConnection = internalAction({
             id: submissionId as Id<"formSubmissions">,
             status: "error",
             errorMessage: message,
-          },
+          }
         );
       }
     }
@@ -412,7 +410,7 @@ export const pollAll = internalAction({
   args: {},
   handler: async (ctx) => {
     const connections = await ctx.runQuery(
-      internal.formConnections.getAllGoogleConnectionsInternal,
+      internal.formConnections.getAllGoogleConnectionsInternal
     );
     // Process sequentially to avoid race conditions
     for (const conn of connections) {
@@ -459,7 +457,7 @@ export const retrySubmission = action({
 
     const submission = await ctx.runQuery(
       internal.formConnections.getSubmissionByIdInternal,
-      { id: args.submissionId },
+      { id: args.submissionId }
     );
     if (!submission || submission.ownerId !== identity.subject) {
       throw new Error("Submission not found");

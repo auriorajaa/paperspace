@@ -11,6 +11,8 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const storageId = url.searchParams.get("storageId");
+    // Opsional: nama file untuk Content-Disposition
+    const filename = url.searchParams.get("filename");
 
     if (!storageId) {
       return new Response("Missing storageId", { status: 400 });
@@ -21,17 +23,23 @@ http.route({
       return new Response("File not found", { status: 404 });
     }
 
-    // Deteksi content type dari blob — jangan hardcode DOCX
-    // Convex storage menyimpan content type saat upload
     const contentType = blob.type || "application/octet-stream";
 
-    return new Response(blob, {
-      headers: {
-        "Content-Type": contentType,
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store",
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store",
+    };
+
+    // Kalau ada filename, set Content-Disposition supaya browser tau nama filenya
+    if (filename) {
+      // inline = buka di browser (bukan langsung download)
+      // encodeURIComponent untuk handle spasi & karakter spesial
+      headers["Content-Disposition"] =
+        `inline; filename="${filename}.docx"; filename*=UTF-8''${encodeURIComponent(filename)}.docx`;
+    }
+
+    return new Response(blob, { headers });
   }),
 });
 

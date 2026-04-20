@@ -56,6 +56,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createPortal } from "react-dom";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -336,22 +337,46 @@ function PreviewModal({
   filename: string;
   onClose: () => void;
 }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setIsLoading(true);
-    setHasError(false);
-    loadTimeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-      setHasError(true);
-    }, 10000);
+    setState("loading");
+    setPdfBlobUrl(null);
+
+    let revoked = false;
+
+    async function convertToPdf() {
+      try {
+        const res = await fetch("/api/onlyoffice-convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileUrl, fileName: filename }),
+        });
+        if (!res.ok) throw new Error(`Convert failed: ${res.status}`);
+        const blob = await res.blob();
+        if (revoked) return;
+        const url = URL.createObjectURL(blob);
+        setPdfBlobUrl(url);
+        setState("ready");
+      } catch (err) {
+        console.error("[PreviewModal] PDF conversion error:", err);
+        if (!revoked) setState("error");
+      }
+    }
+
+    convertToPdf();
+
     return () => {
-      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+      revoked = true;
+      // cleanup blob URL on unmount
+      setPdfBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
     };
-  }, [fileUrl]);
+  }, [fileUrl, filename]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -361,21 +386,23 @@ function PreviewModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const handleLoad = () => {
-    if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-    setIsLoading(false);
-    setHasError(false);
+  const handleDownload = async () => {
+    const res = await fetch(fileUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleError = () => {
-    if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-    setIsLoading(false);
-    setHasError(true);
+  const handleOpenInTab = () => {
+    if (!pdfBlobUrl) return;
+    window.open(pdfBlobUrl, "_blank");
   };
 
-  const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
-
-  return (
+  return createPortal(
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
@@ -397,6 +424,7 @@ function PreviewModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div
           className="flex items-center gap-3 px-4 py-3 shrink-0"
           style={{ borderBottom: `1px solid var(--border-subtle)` }}
@@ -412,9 +440,33 @@ function PreviewModal({
           >
             {filename}.docx
           </p>
-          <a
-            href={fileUrl}
-            download={`${filename}.docx`}
+
+          {/* Open PDF in new tab */}
+          {pdfBlobUrl && (
+            <button
+              onClick={handleOpenInTab}
+              aria-label="Open PDF in new tab"
+              className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all"
+              style={{
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "var(--bg-input)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "var(--bg-muted)")
+              }
+            >
+              <ExternalLinkIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Open PDF</span>
+            </button>
+          )}
+
+          {/* Download .docx */}
+          <button
+            onClick={handleDownload}
             aria-label="Download document"
             className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all"
             style={{
@@ -429,21 +481,11 @@ function PreviewModal({
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "var(--success-bg)")
             }
-            onClick={async (e) => {
-              e.preventDefault();
-              const res = await fetch(fileUrl);
-              const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `${filename}.docx`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
           >
             <DownloadIcon className="w-3 h-3" />
             <span className="hidden sm:inline">Download</span>
-          </a>
+          </button>
+
           <button
             onClick={onClose}
             aria-label="Close preview"
@@ -458,8 +500,9 @@ function PreviewModal({
           </button>
         </div>
 
+        {/* Body */}
         <div className="flex-1 relative" style={{ minHeight: "60vh" }}>
-          {isLoading && (
+          {state === "loading" && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10"
               style={{ background: "var(--bg-card)" }}
@@ -469,12 +512,12 @@ function PreviewModal({
                 style={{ borderColor: "var(--accent-light)" }}
               />
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Loading document preview…
+                Converting document…
               </p>
             </div>
           )}
 
-          {hasError && !isLoading && (
+          {state === "error" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center z-10">
               <div
                 className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
@@ -496,29 +539,25 @@ function PreviewModal({
                   className="text-xs max-w-xs leading-relaxed"
                   style={{ color: "var(--text-dim)" }}
                 >
-                  The document viewer couldn&apos;t load this file. Download it
-                  to view it locally.
+                  Conversion failed. Download the file to view it locally.
                 </p>
               </div>
             </div>
           )}
 
-          <iframe
-            key={`${filename}-${fileUrl}`}
-            src={viewerUrl}
-            title={`Preview: ${filename}.docx`}
-            className="w-full h-full border-0"
-            style={{
-              minHeight: "60vh",
-              opacity: isLoading || hasError ? 0 : 1,
-              transition: "opacity 0.2s ease",
-            }}
-            onLoad={handleLoad}
-            onError={handleError}
-          />
+          {pdfBlobUrl && (
+            <iframe
+              key={pdfBlobUrl}
+              src={pdfBlobUrl}
+              title={`Preview: ${filename}`}
+              className="w-full h-full border-0"
+              style={{ minHeight: "60vh" }}
+            />
+          )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
