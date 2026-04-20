@@ -24,6 +24,7 @@ import {
   InfoIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FileKind = "docx" | "pdf";
@@ -1635,17 +1636,18 @@ export default function TemplateNewPage() {
       </div>
 
       {/* ── Full-screen processing overlay ──────────────────────────────── */}
-      {isProcessing && (
-        <div
-          className="fixed inset-0 z-[999] flex items-center justify-center p-4"
-          style={{
-            background: "var(--overlay-backdrop)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            animation: "fadeIn 0.2s ease-out",
-          }}
-        >
-          <style>{`
+      {isProcessing &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4"
+            style={{
+              background: "var(--overlay-backdrop)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            <style>{`
       @keyframes fadeIn {
         from { opacity: 0; }
         to   { opacity: 1; }
@@ -1659,107 +1661,108 @@ export default function TemplateNewPage() {
         50%  { transform: rotate(180deg); opacity: 0.75; }
         100% { transform: rotate(360deg); opacity: 1;    }
       }
-    `}</style>
-
-          <div
-            className="w-full max-w-sm rounded-3xl p-8 flex flex-col items-center gap-6 text-center"
-            style={{
-              background: "var(--popover)",
-              border: "1px solid var(--accent-border)",
-              boxShadow: "var(--shadow-elevated)",
-              animation: "slideUp 0.25s ease-out",
-            }}
-          >
-            {/* Spinner */}
-            <div className="relative flex items-center justify-center">
-              {/* Outer glow ring */}
-              <div
-                className="absolute w-20 h-20 rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
-                }}
-              />
-              {/* Track ring */}
-              <svg
-                className="w-16 h-16"
-                viewBox="0 0 64 64"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ animation: "spinPulse 1.4s linear infinite" }}
-              >
-                <circle
-                  cx="32"
-                  cy="32"
-                  r="26"
-                  stroke="var(--accent-soft)"
-                  strokeWidth="3"
+          `}</style>
+            <div
+              className="w-full max-w-sm rounded-3xl p-8 flex flex-col items-center gap-6 text-center"
+              style={{
+                background: "var(--popover)",
+                border: "1px solid var(--accent-border)",
+                boxShadow: "var(--shadow-elevated)",
+                animation: "slideUp 0.25s ease-out",
+              }}
+            >
+              {/* Spinner */}
+              <div className="relative flex items-center justify-center">
+                {/* Outer glow ring */}
+                <div
+                  className="absolute w-20 h-20 rounded-full"
+                  style={{
+                    background:
+                      "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
+                  }}
                 />
-                <path
-                  d="M32 6 A26 26 0 0 1 58 32"
-                  stroke="url(#spinGrad)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <defs>
-                  <linearGradient id="spinGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop
-                      offset="0%"
-                      stopColor="var(--primary)"
-                      stopOpacity="0"
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="var(--accent-light)"
-                      stopOpacity="1"
-                    />
-                  </linearGradient>
-                </defs>
-              </svg>
-              {/* Center icon */}
-              <div
-                className="absolute w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{
-                  background: "var(--accent-soft)",
-                  border: "1px solid var(--accent-border)",
-                }}
-              >
-                <Loader2Icon
-                  className="w-4 h-4"
-                  style={{ color: "var(--accent-light)" }}
-                />
+                {/* Track ring */}
+                <svg
+                  className="w-16 h-16"
+                  viewBox="0 0 64 64"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ animation: "spinPulse 1.4s linear infinite" }}
+                >
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="26"
+                    stroke="var(--accent-soft)"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M32 6 A26 26 0 0 1 58 32"
+                    stroke="url(#spinGrad)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <defs>
+                    <linearGradient id="spinGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop
+                        offset="0%"
+                        stopColor="var(--primary)"
+                        stopOpacity="0"
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--accent-light)"
+                        stopOpacity="1"
+                      />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                {/* Center icon */}
+                <div
+                  className="absolute w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: "var(--accent-soft)",
+                    border: "1px solid var(--accent-border)",
+                  }}
+                >
+                  <Loader2Icon
+                    className="w-4 h-4"
+                    style={{ color: "var(--accent-light)" }}
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Label */}
-            <div className="space-y-1.5">
-              <p
-                className="text-base font-semibold"
-                style={{ color: "var(--text)" }}
-              >
-                {STAGE_LABEL[stage] || "Processing…"}
-              </p>
-              <p
-                className="text-xs leading-relaxed"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Please wait, this may take a moment.
-                <br />
-                Do not close or refresh this page.
-              </p>
-            </div>
+              {/* Label */}
+              <div className="space-y-1.5">
+                <p
+                  className="text-base font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  {STAGE_LABEL[stage] || "Processing…"}
+                </p>
+                <p
+                  className="text-xs leading-relaxed"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Please wait, this may take a moment.
+                  <br />
+                  Do not close or refresh this page.
+                </p>
+              </div>
 
-            {/* Progress steps */}
-            {fileKind && (
-              <div
-                className="w-full rounded-2xl p-4 space-y-2"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                }}
-              >
-                {(fileKind === "pdf" ? STAGE_ORDER_PDF : STAGE_ORDER_DOCX).map(
-                  (s, i, arr) => {
+              {/* Progress steps */}
+              {fileKind && (
+                <div
+                  className="w-full rounded-2xl p-4 space-y-2"
+                  style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  {(fileKind === "pdf"
+                    ? STAGE_ORDER_PDF
+                    : STAGE_ORDER_DOCX
+                  ).map((s, i, arr) => {
                     const currentIdx = arr.indexOf(stage as Stage);
                     const isDone = currentIdx > i;
                     const isActive = stage === s;
@@ -1850,13 +1853,13 @@ export default function TemplateNewPage() {
                         )}
                       </div>
                     );
-                  }
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                  })}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
