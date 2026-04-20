@@ -35,6 +35,8 @@ import {
   MoreVerticalIcon,
   PauseIcon,
   PlayIcon,
+  FileTextIcon,
+  PackageIcon,
 } from "lucide-react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import Link from "next/link";
@@ -54,6 +56,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createPortal } from "react-dom";
@@ -98,6 +101,63 @@ interface OverflowMenuItem {
   hidden?: boolean;
 }
 
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+async function exportSubmission(submission: Submission, fmt: "docx" | "pdf") {
+  if (!submission.fileUrl) {
+    toast.error("No file available for this submission.");
+    return;
+  }
+  if (fmt === "docx") {
+    const toastId = toast.loading("Preparing download…");
+    try {
+      const res = await fetch(submission.fileUrl);
+      if (!res.ok) throw new Error("Fetch failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${submission.filename}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+      toast.success("Downloading .docx file");
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("Failed to download file.");
+    }
+  } else {
+    const toastId = toast.loading("Converting to PDF…");
+    try {
+      const res = await fetch("/api/onlyoffice-convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileUrl: submission.fileUrl,
+          fileName: submission.filename,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${submission.filename}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.dismiss(toastId);
+      toast.success("PDF downloaded");
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("PDF export failed. Check OnlyOffice setup.");
+    }
+  }
+}
+
 // ── Bottom Sheet / Overflow Menu ─────────────────────────────────────────────
 
 function BottomSheet({
@@ -136,7 +196,6 @@ function BottomSheet({
         if (e.target === overlayRef.current) onClose();
       }}
     >
-      {/* Mobile: slide-up sheet; Desktop: compact dropdown */}
       <div
         className="w-full sm:w-56 rounded-t-2xl sm:rounded-2xl overflow-hidden"
         style={{
@@ -159,7 +218,6 @@ function BottomSheet({
             </p>
           </div>
         )}
-        {/* Drag handle — mobile only */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div
             className="w-8 h-1 rounded-full"
@@ -204,7 +262,6 @@ function BottomSheet({
               </button>
             ))}
         </div>
-        {/* iOS-style cancel row on mobile */}
         <div
           className="sm:hidden px-4 py-3"
           style={{ borderTop: `1px solid var(--border-subtle)` }}
@@ -370,7 +427,6 @@ function PreviewModal({
 
     return () => {
       revoked = true;
-      // cleanup blob URL on unmount
       setPdfBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -441,7 +497,6 @@ function PreviewModal({
             {filename}.docx
           </p>
 
-          {/* Open PDF in new tab */}
           {pdfBlobUrl && (
             <button
               onClick={handleOpenInTab}
@@ -464,7 +519,6 @@ function PreviewModal({
             </button>
           )}
 
-          {/* Download .docx */}
           <button
             onClick={handleDownload}
             aria-label="Download document"
@@ -674,18 +728,6 @@ function SubmissionRow({
     }
   };
 
-  const handleDownload = async () => {
-    if (!submission.fileUrl) return;
-    const res = await fetch(submission.fileUrl);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${submission.filename}.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleRowClick = (e: React.MouseEvent) => {
     if (selectMode) {
       e.stopPropagation();
@@ -693,45 +735,7 @@ function SubmissionRow({
     }
   };
 
-  const menuItems: OverflowMenuItem[] = [
-    {
-      icon: <EyeIcon className="w-4 h-4" />,
-      label: "Preview",
-      onClick: () => onPreview(submission),
-      hidden: submission.status !== "generated" || !submission.fileUrl,
-    },
-    {
-      icon: <DownloadIcon className="w-4 h-4" />,
-      label: "Download",
-      onClick: handleDownload,
-      hidden: submission.status !== "generated" || !submission.fileUrl,
-    },
-    {
-      icon: retrying ? (
-        <RefreshCwIcon className="w-4 h-4 animate-spin" />
-      ) : (
-        <RefreshCwIcon className="w-4 h-4" />
-      ),
-      label: retrying ? "Retrying…" : "Retry",
-      onClick: handleRetry,
-      disabled: retrying,
-      hidden: submission.status !== "error",
-    },
-    {
-      icon: deleting ? (
-        <div
-          className="w-4 h-4 rounded-full border border-t-transparent animate-spin"
-          style={{ borderColor: "var(--danger)" }}
-        />
-      ) : (
-        <Trash2Icon className="w-4 h-4" />
-      ),
-      label: "Delete",
-      onClick: () => setConfirmDelete(true),
-      danger: true,
-      disabled: deleting,
-    },
-  ];
+  const isGenerated = submission.status === "generated" && !!submission.fileUrl;
 
   return (
     <>
@@ -749,7 +753,6 @@ function SubmissionRow({
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {/* Checkbox — always visible in select mode */}
           {selectMode && (
             <div
               className="mt-0.5 shrink-0"
@@ -821,7 +824,7 @@ function SubmissionRow({
             <StatusBadge status={submission.status} />
           </div>
 
-          {/* Three-dots overflow menu - menggunakan DropdownMenu */}
+          {/* Three-dots overflow menu */}
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
@@ -840,20 +843,66 @@ function SubmissionRow({
               >
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {menuItems.map((item, idx) =>
-                  item.hidden ? null : (
-                    <DropdownMenuItem
-                      key={idx}
-                      onClick={item.onClick}
-                      disabled={item.disabled}
-                      className={`flex items-center gap-2 cursor-pointer ${item.danger ? "text-destructive focus:text-destructive" : ""}`}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </DropdownMenuItem>
-                  )
+              <DropdownMenuContent align="end" className="w-52">
+                {/* Preview */}
+                {isGenerated && (
+                  <DropdownMenuItem
+                    onClick={() => onPreview(submission)}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <EyeIcon className="w-3.5 h-3.5" />
+                    Preview
+                  </DropdownMenuItem>
                 )}
+
+                {/* Download .docx */}
+                {isGenerated && (
+                  <DropdownMenuItem
+                    onClick={() => exportSubmission(submission, "docx")}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <DownloadIcon className="w-3.5 h-3.5" />
+                    Export as .docx
+                  </DropdownMenuItem>
+                )}
+
+                {/* Export as PDF */}
+                {isGenerated && (
+                  <DropdownMenuItem
+                    onClick={() => exportSubmission(submission, "pdf")}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <FileTextIcon className="w-3.5 h-3.5" />
+                    Export as PDF
+                  </DropdownMenuItem>
+                )}
+
+                {/* Separator before retry/delete */}
+                {isGenerated && <DropdownMenuSeparator />}
+
+                {/* Retry — only for errors */}
+                {submission.status === "error" && (
+                  <DropdownMenuItem
+                    onClick={handleRetry}
+                    disabled={retrying}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCwIcon
+                      className={`w-3.5 h-3.5 ${retrying ? "animate-spin" : ""}`}
+                    />
+                    {retrying ? "Retrying…" : "Retry"}
+                  </DropdownMenuItem>
+                )}
+
+                {/* Delete */}
+                <DropdownMenuItem
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={deleting}
+                  className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <Trash2Icon className="w-3.5 h-3.5" />
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1369,35 +1418,92 @@ function BulkActions({
     (s) => s.status === "generated" && s.fileUrl
   );
 
-  const handleBulkDownload = async () => {
+  // ── Bulk ZIP export ──────────────────────────────────────────────────────────
+  const handleBulkExportZip = async (fmt: "docx" | "pdf") => {
     if (downloadable.length === 0) {
       toast.error("No generated documents selected.");
       return;
     }
+    const toastId = toast.loading(
+      `Preparing ${fmt.toUpperCase()} ZIP for ${downloadable.length} submission${downloadable.length !== 1 ? "s" : ""}…`
+    );
     setDownloading(true);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
-      await Promise.all(
+
+      const safeName = (name: string) =>
+        name.replace(/[/\\?%*:|"<>]/g, "-").trim() || "submission";
+
+      const usedNames = new Map<string, number>();
+      const getUniqueName = (base: string, ext: string) => {
+        const key = `${base}.${ext}`;
+        const count = usedNames.get(key) ?? 0;
+        usedNames.set(key, count + 1);
+        return count === 0 ? `${base}.${ext}` : `${base} (${count}).${ext}`;
+      };
+
+      const results = await Promise.allSettled(
         downloadable.map(async (s) => {
-          const res = await fetch(s.fileUrl!);
-          if (!res.ok) return;
-          const blob = await res.blob();
-          zip.file(`${s.filename}.docx`, blob);
+          if (fmt === "docx") {
+            const res = await fetch(s.fileUrl!);
+            if (!res.ok) throw new Error(`Failed to fetch "${s.filename}"`);
+            zip.file(
+              getUniqueName(safeName(s.filename), "docx"),
+              await res.blob()
+            );
+          } else {
+            const res = await fetch("/api/onlyoffice-convert", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fileUrl: s.fileUrl,
+                fileName: s.filename,
+              }),
+            });
+            if (!res.ok)
+              throw new Error(`PDF conversion failed for "${s.filename}"`);
+            zip.file(
+              getUniqueName(safeName(s.filename), "pdf"),
+              await res.blob()
+            );
+          }
         })
       );
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
+
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const succeeded = downloadable.length - failed;
+
+      if (succeeded === 0) {
+        toast.dismiss(toastId);
+        toast.error("All exports failed. Nothing to download.");
+        return;
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `form_results_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `form-results-${fmt}-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success(
-        `Downloaded ${downloadable.length} document${downloadable.length !== 1 ? "s" : ""} as ZIP`
-      );
-    } catch {
-      toast.error("Failed to create ZIP. Please try again.");
+
+      toast.dismiss(toastId);
+      if (failed > 0) {
+        toast.warning(
+          `ZIP downloaded with ${succeeded} file${succeeded !== 1 ? "s" : ""} — ${failed} failed.`
+        );
+      } else {
+        toast.success(
+          `ZIP with ${succeeded} ${fmt.toUpperCase()} file${succeeded !== 1 ? "s" : ""} downloaded`
+        );
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("ZIP export failed.");
+      console.error("[bulk-export-zip-form-results]", err);
     } finally {
       setDownloading(false);
     }
@@ -1422,9 +1528,11 @@ function BulkActions({
   return (
     <>
       <div
-        className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-2xl"
+        className="fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-8 left-1/2 z-50 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-2xl overflow-x-auto"
         style={{
           transform: "translateX(-50%)",
+          maxWidth: "calc(100vw - 2rem)",
+          scrollbarWidth: "none",
           background: "var(--bg-card)",
           border: "1px solid var(--accent-border)",
           boxShadow: "var(--shadow-elevated)",
@@ -1454,70 +1562,98 @@ function BulkActions({
           style={{ background: "var(--border-subtle)" }}
         />
 
+        {/* Export ZIP dropdown — only shown when there are downloadable items */}
         {downloadable.length > 0 && (
-          <button
-            onClick={handleBulkDownload}
-            disabled={downloading}
-            aria-label="Download selected as ZIP"
-            className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all min-h-[44px]"
-            style={{
-              background: "var(--success-bg)",
-              color: "var(--success)",
-              border: `1px solid color-mix(in srgb, var(--success) 20%, transparent)`,
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background =
-                "color-mix(in srgb, var(--success) 12%, transparent)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "var(--success-bg)")
-            }
-          >
-            {downloading ? (
-              <div
-                className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: "var(--success)" }}
-              />
-            ) : (
-              <ArchiveIcon className="w-3.5 h-3.5" />
-            )}
-            <span className="hidden sm:inline">
-              {downloading ? "Zipping…" : "ZIP"}
-            </span>
-            {!downloading && (
-              <span className="text-[10px] opacity-75">
-                ({downloadable.length})
-              </span>
-            )}
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                disabled={downloading}
+                className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+                style={{
+                  background: "rgba(52,211,153,0.08)",
+                  color: "var(--success, #34d399)",
+                  border: "1px solid rgba(52,211,153,0.2)",
+                  opacity: downloading ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!downloading)
+                    e.currentTarget.style.background = "rgba(52,211,153,0.14)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(52,211,153,0.08)";
+                }}
+              >
+                {downloading ? (
+                  <div
+                    className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: "var(--success)" }}
+                  />
+                ) : (
+                  <PackageIcon className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">
+                  {downloading ? "Exporting…" : "Export ZIP"}
+                </span>
+                {!downloading && (
+                  <>
+                    <span className="text-[10px] opacity-75">
+                      ({downloadable.length})
+                    </span>
+                    <ChevronDownIcon className="w-3 h-3" />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="center"
+              side="top"
+              className="w-44 mb-1"
+            >
+              <DropdownMenuItem
+                onClick={() => handleBulkExportZip("docx")}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <DownloadIcon className="w-3.5 h-3.5" />
+                ZIP of .docx files
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleBulkExportZip("pdf")}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <FileTextIcon className="w-3.5 h-3.5" />
+                ZIP of PDF files
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
+        {/* Delete */}
         <button
           onClick={() => setConfirmBulkDelete(true)}
           disabled={deleting}
           aria-label="Delete selected submissions"
           className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
           style={{
-            background: "var(--danger-bg)",
+            background: "rgba(248,113,113,0.08)",
             color: "var(--danger)",
-            border: `1px solid color-mix(in srgb, var(--danger) 15%, transparent)`,
+            border: "1px solid rgba(248,113,113,0.2)",
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.background =
-              "color-mix(in srgb, var(--danger) 10%, transparent)")
+            (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
           }
           onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "var(--danger-bg)")
+            (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
           }
         >
           <Trash2Icon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Delete</span>
         </button>
 
+        {/* Clear */}
         <button
           onClick={onClear}
           aria-label="Clear selection"
-          className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center ml-0.5"
+          className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
           style={{
             background: "var(--bg-input)",
             color: "var(--text-muted)",
@@ -1811,7 +1947,6 @@ export default function FormResultsPage() {
 
         {/* Header right: Select (mobile) + Filter toggle (mobile) */}
         <div className="flex items-center gap-2 sm:hidden">
-          {/* Explicit Select button — mobile-only, always discoverable */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -1831,7 +1966,6 @@ export default function FormResultsPage() {
             Select
           </button>
 
-          {/* Filter toggle */}
           <button
             onClick={() => setShowFilters((v) => !v)}
             aria-label="Toggle filters"
@@ -2015,7 +2149,7 @@ export default function FormResultsPage() {
             )}
           </div>
 
-          {/* Select mode toggle — desktop only (mobile has it in header) */}
+          {/* Select mode toggle — desktop only */}
           <button
             onClick={() => {
               setSelectMode((v) => {
