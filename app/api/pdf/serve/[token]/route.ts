@@ -1,3 +1,4 @@
+// app/api/pdf/serve/[token]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getPdf } from "@/lib/pdf-temp-store";
 
@@ -8,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const buffer = getPdf(token);
+  const buffer = await getPdf(token);
 
   if (!buffer) {
     return new NextResponse("File not found or link has expired.", {
