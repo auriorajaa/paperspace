@@ -1,7 +1,11 @@
+// app/api/pdf/split/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
 
 export const runtime = "nodejs";
+
+const MAX_FILE_MB = 10;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +16,24 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return new NextResponse("Please upload a PDF file.", { status: 400 });
     }
+
+    // FIX: server-side size validation — client validates too but server must
+    // be independent (direct API calls, curl, etc. bypass the UI)
+    if (file.size > MAX_FILE_BYTES) {
+      return new NextResponse(
+        `File too large. Maximum size is ${MAX_FILE_MB} MB.`,
+        { status: 413 }
+      );
+    }
+
+    // FIX: content-type / extension check
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      return new NextResponse("Only PDF files are accepted.", { status: 415 });
+    }
+
     if (!pagesStr) {
       return new NextResponse("Please select at least one page.", {
         status: 400,
@@ -49,9 +71,7 @@ export async function POST(req: NextRequest) {
     if (totalPages === 0) {
       return new NextResponse(
         "This PDF appears to be empty. Please try another file.",
-        {
-          status: 422,
-        }
+        { status: 422 }
       );
     }
 

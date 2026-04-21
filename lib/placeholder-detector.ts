@@ -1,3 +1,4 @@
+// lib/placeholder-detector.ts
 export type FieldType =
   | "text"
   | "date"
@@ -38,14 +39,16 @@ function normalizeName(raw: string): string {
     .replace(/[^a-z0-9_]/g, "");
 }
 
-// Ganti fungsi inferType saja — satu baris
-function inferType(name: string): FieldType {
-  return "text"; // User tentukan format manual di fill page
+function inferType(_name: string): FieldType {
+  return "text"; // User determines format manually on the fill page
 }
 
-let _counter = 0;
-function makeId() {
-  return `field_${Date.now()}_${++_counter}`;
+// FIX: use crypto.randomUUID() instead of a module-level counter.
+// A shared mutable counter across requests is not safe under concurrent
+// serverless invocations — two requests landing in the same warm instance
+// at the same millisecond could produce identical IDs.
+function makeId(): string {
+  return `field_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
 // ── Main detector — docxtemplater {{ }} format ────────────────────────────────
@@ -104,9 +107,8 @@ export function detectPlaceholders(text: string): DetectedField[] {
     } else {
       // '#' — could be loop (array) or condition (boolean)
       // Heuristic: if block contains sub-placeholders, treat as loop
-      const subText = blockContent;
       const subPlaceholders = [
-        ...subText.matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_.]*)\}\}/g),
+        ...blockContent.matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_.]*)\}\}/g),
       ];
       const isLoop =
         subPlaceholders.length > 0 ||

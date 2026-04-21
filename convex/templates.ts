@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// convex/templates.ts
 import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
 import { ConvexError } from "convex/values";
@@ -61,7 +62,20 @@ export const getById = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    return ctx.db.get(args.id);
+    const template = await ctx.db.get(args.id);
+    if (!template) return null;
+
+    // FIX: ownership check was missing — any authenticated user could read
+    // any template if they knew (or guessed) the ID.
+    // Also allow access if the template belongs to the user's organization.
+    const orgId = (identity as any).organization_id as string | undefined;
+    const isOwner = template.ownerId === identity.subject;
+    const isOrgMember =
+      !!orgId && !!template.organizationId && template.organizationId === orgId;
+
+    if (!isOwner && !isOrgMember) return null;
+
+    return template;
   },
 });
 
@@ -167,21 +181,6 @@ export const generateUploadUrl = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     return await ctx.storage.generateUploadUrl();
-  },
-});
-
-// Hapus file sementara dari storage (dipakai setelah konversi PDF selesai)
-export const deleteTempStorage = mutation({
-  args: { storageId: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
-    try {
-      await ctx.storage.delete(args.storageId as any);
-    } catch (e) {
-      // Non-critical — jangan throw, cukup log
-      console.warn("[deleteTempStorage] failed:", e);
-    }
   },
 });
 

@@ -7,6 +7,8 @@ import { cleanupTempBlobs } from "@/lib/cleanup-temp-blobs";
 export const runtime = "nodejs";
 
 const CONVERT_TIMEOUT_MS = 60_000;
+const MAX_FILE_MB = 10;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 function decodeXmlEntities(str: string): string {
   return str
@@ -39,22 +41,30 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Missing PDF file.", { status: 400 });
     }
 
-    // console.log(
-    //   "[pdf-to-docx] File received:",
-    //   file.name,
-    //   file.size,
-    //   "bytes",
-    //   file.type
-    // );
+    // FIX: server-side size check before uploading to Vercel Blob
+    // (saves bandwidth + blob storage cost for files that should be rejected)
+    if (file.size > MAX_FILE_BYTES) {
+      return new NextResponse(
+        `File too large. Maximum size is ${MAX_FILE_MB} MB.`,
+        { status: 413 }
+      );
+    }
 
-    // ── Upload ke Vercel Blob ─────────────────────────────────────────────────
+    // FIX: content-type / extension check
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      return new NextResponse("Only PDF files are accepted.", { status: 415 });
+    }
+
+    // ── Upload to Vercel Blob ─────────────────────────────────────────────────
     const blob = await put(`temp-conversion-${Date.now()}.pdf`, file, {
       access: "public",
       addRandomSuffix: true,
       contentType: "application/pdf",
     });
     blobUrl = blob.url;
-    // console.log("[pdf-to-docx] Vercel Blob URL:", blobUrl);
 
     // ── OnlyOffice conversion ─────────────────────────────────────────────────
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
@@ -64,7 +74,6 @@ export async function POST(req: NextRequest) {
     }
 
     const convertUrl = `${ooServerUrl.replace(/\/$/, "")}/ConvertService.ashx`;
-    // console.log("[pdf-to-docx] OnlyOffice URL:", convertUrl);
 
     const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
 
@@ -80,11 +89,6 @@ export async function POST(req: NextRequest) {
     if (jwtSecret) {
       requestBody.token = jwt.sign(payload, jwtSecret, { algorithm: "HS256" });
     }
-
-    // console.log(
-    //   "[pdf-to-docx] Request to OnlyOffice:",
-    //   JSON.stringify({ ...payload, token: jwtSecret ? "[signed]" : "[none]" })
-    // );
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), CONVERT_TIMEOUT_MS);
@@ -111,19 +115,11 @@ export async function POST(req: NextRequest) {
     const contentType = convertRes.headers.get("content-type") ?? "";
     const responseText = await convertRes.text();
 
-    // ── LOG FULL RESPONSE — kunci debugging ───────────────────────────────────
-    // console.log("[pdf-to-docx] OnlyOffice response status:", convertRes.status);
-    // console.log("[pdf-to-docx] OnlyOffice content-type:", contentType);
-    // console.log(
-    //   "[pdf-to-docx] OnlyOffice response body:",
-    //   responseText.slice(0, 1000)
-    // );
-
     if (!convertRes.ok) {
       return new NextResponse("We couldn't convert your PDF.", { status: 500 });
     }
 
-    // ── Parse URL hasil konversi ──────────────────────────────────────────────
+    // ── Parse conversion result URL ───────────────────────────────────────────
     let docxUrl: string | null = null;
 
     if (
@@ -133,21 +129,18 @@ export async function POST(req: NextRequest) {
       const urlMatch = responseText.match(/<FileUrl>(.*?)<\/FileUrl>/i);
       if (urlMatch?.[1]) {
         docxUrl = decodeXmlEntities(urlMatch[1]);
-        // console.log("[pdf-to-docx] DOCX URL from OnlyOffice:", docxUrl);
       } else {
         const errMatch =
           responseText.match(/<Message>(.*?)<\/Message>/i) ||
           responseText.match(/<Error>(.*?)<\/Error>/i);
         const msg = errMatch ? decodeXmlEntities(errMatch[1]) : "Unknown";
         console.error("[pdf-to-docx] XML error from OnlyOffice:", msg);
-        console.error("[pdf-to-docx] Full XML:", responseText);
         return new NextResponse(`Conversion error: ${msg}`, { status: 500 });
       }
     } else {
       try {
         const data = JSON.parse(responseText);
         docxUrl = data.fileUrl ?? data.url ?? null;
-        // console.log("[pdf-to-docx] DOCX URL from JSON:", docxUrl);
       } catch {
         console.error(
           "[pdf-to-docx] Unparseable response:",
@@ -169,14 +162,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Download DOCX ─────────────────────────────────────────────────────────
-    // console.log("[pdf-to-docx] Downloading DOCX from:", docxUrl);
     const docxRes = await fetch(docxUrl);
-    // console.log("[pdf-to-docx] DOCX download status:", docxRes.status);
-    // console.log(
-    //   "[pdf-to-docx] DOCX content-type:",
-    //   docxRes.headers.get("content-type")
-    // );
-
     if (!docxRes.ok) {
       return new NextResponse("Couldn't download converted document.", {
         status: 500,
@@ -184,11 +170,6 @@ export async function POST(req: NextRequest) {
     }
 
     const docxBuffer = Buffer.from(await docxRes.arrayBuffer());
-    // console.log("[pdf-to-docx] DOCX buffer size:", docxBuffer.length, "bytes");
-    // console.log(
-    //   "[pdf-to-docx] DOCX magic bytes:",
-    //   docxBuffer.slice(0, 4).toString("hex")
-    // );
 
     if (!isValidDocx(docxBuffer)) {
       const sample = docxBuffer.slice(0, 300).toString();
@@ -197,8 +178,6 @@ export async function POST(req: NextRequest) {
         status: 500,
       });
     }
-
-    // console.log("[pdf-to-docx] ✅ Conversion successful, returning DOCX");
 
     return new NextResponse(docxBuffer, {
       status: 200,
@@ -216,7 +195,6 @@ export async function POST(req: NextRequest) {
     if (blobUrl) {
       try {
         await del(blobUrl);
-        // console.log("[pdf-to-docx] Temp blob deleted");
       } catch (e) {
         console.warn("[pdf-to-docx] Failed to delete temp blob:", e);
       }
