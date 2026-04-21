@@ -1,4 +1,4 @@
-// app\(main)\templates\new\page.tsx
+// app/(main)/templates/new/page.tsx
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
@@ -56,6 +56,7 @@ const STAGE_ORDER_DOCX: Stage[] = ["uploading", "scanning"];
 const MAX_PDF_PAGES = 50;
 const MAX_FILE_MB = 10;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+const SPLIT_TIMEOUT_MS = 30_000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fileSizeMB(bytes: number) {
@@ -648,7 +649,6 @@ export default function TemplateNewPage() {
   const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
   const createTemplate = useMutation(api.templates.create);
   const allTemplates = useQuery(api.templates.getAll);
-  const deleteTempStorage = useMutation(api.templates.deleteTempStorage);
 
   // File state
   const [file, setFile] = useState<File | null>(null);
@@ -661,10 +661,16 @@ export default function TemplateNewPage() {
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState<string[]>([]);
 
+  // FIX: nameRef so handleFile doesn't re-create on every keystroke
+  const nameRef = useRef(name);
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
+
   // Field-level errors
   const [nameError, setNameError] = useState("");
 
-  // Critical error banner (for upload/convert failures)
+  // Critical error banner (upload/convert failures)
   const [criticalError, setCriticalError] = useState("");
 
   // PDF state
@@ -674,12 +680,15 @@ export default function TemplateNewPage() {
   const [loadingThumbnails, setLoadingThumbnails] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
+  // FIX: cancel flag to stop stale PDF loading when file is replaced
+  const pdfLoadCancelRef = useRef(false);
+
   // Processing state
   const [stage, setStage] = useState<Stage>("");
   const [saving, setSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Existing labels for suggestions
+  // Existing labels for tag suggestions
   const existingLabels = useMemo(() => {
     if (!allTemplates) return [];
     const lbls = new Set<string>();
@@ -687,14 +696,6 @@ export default function TemplateNewPage() {
     return Array.from(lbls).sort();
   }, [allTemplates]);
 
-  // Derive current "step" for indicator
-  const currentStep = !file
-    ? 0
-    : fileKind === "pdf" &&
-        !pdfError &&
-        (pdfThumbnails.length > 0 || loadingThumbnails)
-      ? 1
-      : 1;
   const wizardSteps = [
     { label: "Upload file" },
     { label: "Details" },
@@ -708,8 +709,18 @@ export default function TemplateNewPage() {
       setCriticalError("");
       setPdfError("");
 
-      const isPdf = f.name.toLowerCase().endsWith(".pdf");
-      const isDocx = f.name.toLowerCase().endsWith(".docx");
+      const fileName = f.name.toLowerCase();
+      const isPdf = fileName.endsWith(".pdf");
+      const isDocx = fileName.endsWith(".docx");
+      const isLegacyDoc = fileName.endsWith(".doc");
+
+      // FIX: .doc — reject with a short, actionable English message
+      if (isLegacyDoc) {
+        toast.error(".doc files are not supported.", {
+          description: "Please save the file as .docx and try again.",
+        });
+        return;
+      }
 
       if (!isPdf && !isDocx) {
         toast.error("Unsupported file type.", {
@@ -734,14 +745,20 @@ export default function TemplateNewPage() {
 
       setFile(f);
       setFileKind(isPdf ? "pdf" : "docx");
-      if (!name) setName(f.name.replace(/\.(pdf|docx)$/i, ""));
+      if (!nameRef.current) setName(f.name.replace(/\.(pdf|docx)$/i, ""));
 
       if (isPdf) await loadPdfThumbnails(f);
     },
-    [name, isProcessing]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isProcessing]
   );
 
   const loadPdfThumbnails = async (f: File) => {
+    // FIX: signal existing load (if any) to stop
+    pdfLoadCancelRef.current = true;
+    await new Promise((r) => setTimeout(r, 0));
+    pdfLoadCancelRef.current = false;
+
     setLoadingThumbnails(true);
     setPdfThumbnails([]);
     setPdfTotalPages(0);
@@ -753,9 +770,14 @@ export default function TemplateNewPage() {
       const pdfjsLib = await import("pdfjs-dist");
       pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
       const arrayBuffer = await f.arrayBuffer();
+
+      if (pdfLoadCancelRef.current) return;
+
       const pdf = await pdfjsLib.getDocument({
         data: new Uint8Array(arrayBuffer),
       }).promise;
+
+      if (pdfLoadCancelRef.current) return;
 
       const pageCount = pdf.numPages;
       if (pageCount === 0) {
@@ -773,41 +795,62 @@ export default function TemplateNewPage() {
       );
 
       for (let i = 1; i <= displayCount; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 0.38 });
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) continue;
-        await page.render({ canvas, viewport }).promise;
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
-        setPdfThumbnails((prev) => {
-          const next = [...prev];
-          next[i - 1] = dataUrl;
-          return next;
-        });
+        if (pdfLoadCancelRef.current) return;
+
+        // FIX: per-page try/catch — skip corrupt pages, don't crash all
+        try {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 0.38 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) continue;
+          await page.render({ canvas, viewport }).promise;
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+
+          // FIX: free canvas memory after converting to data URL
+          canvas.width = 0;
+          canvas.height = 0;
+
+          if (pdfLoadCancelRef.current) return;
+
+          setPdfThumbnails((prev) => {
+            const next = [...prev];
+            next[i - 1] = dataUrl;
+            return next;
+          });
+        } catch (pageErr) {
+          console.warn(`[PDF Preview] Page ${i} failed to render:`, pageErr);
+          // slot stays null — shown as loading placeholder
+        }
       }
     } catch (err: unknown) {
+      if (pdfLoadCancelRef.current) return;
+
       console.error("[PDF Preview]", err);
       const isPasswordError =
         err instanceof Error &&
         (err.message.includes("password") || err.message.includes("encrypted"));
       setPdfError(
         isPasswordError
-          ? "This PDF is password-protected and cannot be previewed. Please remove the password and try again."
-          : "Couldn't load PDF preview. The file may be corrupted. Please try another file."
+          ? "This PDF is password-protected. Please remove the password and try again."
+          : "Could not load PDF preview. The file may be corrupted. Please try another file."
       );
       setFile(null);
       setFileKind(null);
     } finally {
-      setLoadingThumbnails(false);
-      setStage("");
+      if (!pdfLoadCancelRef.current) {
+        setLoadingThumbnails(false);
+        setStage("");
+      }
     }
   };
 
   const resetFile = () => {
     if (isProcessing) return;
+    // FIX: cancel any in-flight PDF loading
+    pdfLoadCancelRef.current = true;
     setFile(null);
     setFileKind(null);
     setPdfThumbnails([]);
@@ -860,7 +903,7 @@ export default function TemplateNewPage() {
       uploadUrl = await generateUploadUrl();
     } catch {
       throw new Error(
-        "Couldn't connect to storage. Please check your connection and try again."
+        "Could not connect to storage. Please check your connection and try again."
       );
     }
 
@@ -886,7 +929,6 @@ export default function TemplateNewPage() {
     const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
     const { detectPlaceholders } = await import("@/lib/placeholder-detector");
     const fields = detectPlaceholders(textResult.value);
-    const templateTags = tags;
 
     const templateId = await createTemplate({
       name: name.trim(),
@@ -894,7 +936,7 @@ export default function TemplateNewPage() {
       storageId,
       fileUrl,
       previewText: textResult.value,
-      tags: templateTags.length > 0 ? templateTags : undefined,
+      tags: tags.length > 0 ? tags : undefined,
       organizationId: organization?.id,
       fields: fields.map((f) => ({
         id: f.id,
@@ -927,7 +969,6 @@ export default function TemplateNewPage() {
     if (isProcessing) return;
     setCriticalError("");
 
-    // Validate
     if (!file) {
       toast.error("Please upload a file first.");
       return;
@@ -978,16 +1019,29 @@ export default function TemplateNewPage() {
       JSON.stringify(Array.from(selectedPages).sort((a, b) => a - b))
     );
 
+    // FIX: AbortController + timeout (was missing unlike pdf-to-docx route)
+    const splitController = new AbortController();
+    const splitTimeoutId = setTimeout(
+      () => splitController.abort(),
+      SPLIT_TIMEOUT_MS
+    );
+
     let splitRes: Response;
     try {
       splitRes = await fetch("/api/pdf/split", {
         method: "POST",
         body: splitForm,
+        signal: splitController.signal,
       });
-    } catch {
+    } catch (err: unknown) {
+      if ((err as Error)?.name === "AbortError") {
+        throw new Error("PDF processing timed out. Try selecting fewer pages.");
+      }
       throw new Error(
         "Network error while processing your PDF. Please check your connection."
       );
+    } finally {
+      clearTimeout(splitTimeoutId);
     }
 
     if (!splitRes.ok) {
@@ -1094,7 +1148,6 @@ export default function TemplateNewPage() {
             </span>
           </div>
 
-          {/* Step indicator */}
           <StepIndicator
             steps={wizardSteps}
             current={!file ? 0 : saving ? 2 : 1}
@@ -1105,7 +1158,6 @@ export default function TemplateNewPage() {
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-4 mx-auto lg:mx-0">
-          {/* Critical error banner */}
           {criticalError && (
             <div className="mb-5">
               <ErrorBanner
@@ -1119,7 +1171,6 @@ export default function TemplateNewPage() {
             </div>
           )}
 
-          {/* PDF load error */}
           {pdfError && (
             <div className="mb-5">
               <ErrorBanner
@@ -1172,7 +1223,6 @@ export default function TemplateNewPage() {
               </div>
 
               {!file ? (
-                /* Drop zone */
                 <div
                   className={`flex flex-col items-center justify-center p-8 sm:p-12 rounded-2xl border-2 border-dashed transition-all cursor-pointer select-none ${
                     isProcessing
@@ -1278,7 +1328,6 @@ export default function TemplateNewPage() {
                   />
                 </div>
               ) : (
-                /* File card */
                 <div
                   className="flex items-center gap-3 p-4 rounded-2xl"
                   style={{
@@ -1429,7 +1478,6 @@ export default function TemplateNewPage() {
                   <FieldError message="Select at least one page to continue." />
                 )}
 
-                {/* PDF conversion note */}
                 <div
                   className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl mt-3"
                   style={{
@@ -1454,7 +1502,7 @@ export default function TemplateNewPage() {
               </section>
             )}
 
-            {/* ── SECTION 3: Template details (shown after file is loaded) ── */}
+            {/* ── SECTION 3: Template details ───────────────────────────── */}
             {file && (
               <section>
                 <div className="mb-3">
@@ -1612,14 +1660,12 @@ export default function TemplateNewPage() {
                   )}
                 </button>
 
-                {/* Progress steps during save */}
                 {saving && stage && (
                   <div className="mt-3">
                     <ProgressSteps stages={activeStages} current={stage} />
                   </div>
                 )}
 
-                {/* DOCX hint */}
                 {fileKind === "docx" && !saving && (
                   <p
                     className="text-[11px] text-center mt-2"
@@ -1671,9 +1717,7 @@ export default function TemplateNewPage() {
                 animation: "slideUp 0.25s ease-out",
               }}
             >
-              {/* Spinner */}
               <div className="relative flex items-center justify-center">
-                {/* Outer glow ring */}
                 <div
                   className="absolute w-20 h-20 rounded-full"
                   style={{
@@ -1681,7 +1725,6 @@ export default function TemplateNewPage() {
                       "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
                   }}
                 />
-                {/* Track ring */}
                 <svg
                   className="w-16 h-16"
                   viewBox="0 0 64 64"
@@ -1717,7 +1760,6 @@ export default function TemplateNewPage() {
                     </linearGradient>
                   </defs>
                 </svg>
-                {/* Center icon */}
                 <div
                   className="absolute w-9 h-9 rounded-xl flex items-center justify-center"
                   style={{
@@ -1732,7 +1774,6 @@ export default function TemplateNewPage() {
                 </div>
               </div>
 
-              {/* Label */}
               <div className="space-y-1.5">
                 <p
                   className="text-base font-semibold"
@@ -1750,7 +1791,6 @@ export default function TemplateNewPage() {
                 </p>
               </div>
 
-              {/* Progress steps */}
               {fileKind && (
                 <div
                   className="w-full rounded-2xl p-4 space-y-2"
@@ -1772,7 +1812,6 @@ export default function TemplateNewPage() {
                         className="flex items-center gap-3 transition-all duration-300"
                         style={{ opacity: isDone ? 0.45 : isActive ? 1 : 0.3 }}
                       >
-                        {/* Step dot */}
                         <div
                           className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-300"
                           style={{
@@ -1811,7 +1850,6 @@ export default function TemplateNewPage() {
                           )}
                         </div>
 
-                        {/* Label */}
                         <span
                           className="text-[12px] font-medium flex-1 text-left"
                           style={{
@@ -1825,7 +1863,6 @@ export default function TemplateNewPage() {
                           {STAGE_LABEL[s].replace("…", "")}
                         </span>
 
-                        {/* Active badge */}
                         {isActive && (
                           <span
                             className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
