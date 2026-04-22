@@ -976,8 +976,3 @@ export default function DocumentEditorPage() {
     </div>
   );
 }
-
-
-
-
-
