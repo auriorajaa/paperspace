@@ -580,7 +580,10 @@ function PreviewModal({
                   border: `1px solid var(--border-subtle)`,
                 }}
               >
-                📄
+                <FileTextIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--text-muted)" }}
+                />{" "}
               </div>
               <div>
                 <p
@@ -828,7 +831,7 @@ function SubmissionRow({
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
-                className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
+                className="min-w-[32px] min-h-[32px] rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
                   background: "var(--bg-input)",
                   border: `1px solid var(--border-subtle)`,
@@ -1232,7 +1235,7 @@ function ConnectionGroup({
           >
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
-                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors outline-none"
                 style={{
                   background: "var(--bg-input)",
                   border: `1px solid var(--border-subtle)`,

@@ -180,7 +180,11 @@ function PaperCard({ document }: { document: Doc<"documents"> }) {
             className="text-lg shrink-0 w-9 h-9 flex items-center justify-center rounded-xl"
             style={{ background: "var(--bg-input)" }}
           >
-            {document.icon ?? "📄"}
+            
+              <FileTextIcon
+                className="w-4 h-4"
+                style={{ color: "var(--text-muted)" }}
+              />
           </div>
           <div className="flex-1 min-w-0">
             <p
@@ -535,7 +539,7 @@ function TemplateRow({ template }: { template: Doc<"templates"> }) {
               {template.fields.length} field
               {template.fields.length !== 1 ? "s" : ""}
             </p>
-            {fieldTypes.length > 0 && (
+            {/* {fieldTypes.length > 0 && (
               <div className="flex items-center gap-1">
                 {fieldTypes.slice(0, 5).map((type) => (
                   <span
@@ -546,7 +550,7 @@ function TemplateRow({ template }: { template: Doc<"templates"> }) {
                   />
                 ))}
               </div>
-            )}
+            )} */}
           </div>
         </div>
         <span

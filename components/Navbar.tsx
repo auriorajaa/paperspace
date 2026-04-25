@@ -1179,12 +1179,12 @@ export function Navbar() {
                   }
                 }}
               >
-                {active && (
+                {/* {active && (
                   <span
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
                     style={{ background: "var(--primary)" }}
                   />
-                )}
+                )} */}
                 <Icon
                   className="w-4 h-4 shrink-0"
                   style={{ color: active ? "var(--accent-light)" : "inherit" }}
