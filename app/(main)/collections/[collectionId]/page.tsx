@@ -281,8 +281,7 @@ function AddDocumentDialog({
                     }}
                     onMouseEnter={(e) => {
                       if (!alreadyIn && !isSel)
-                        e.currentTarget.style.background =
-                          "var(--bg-muted)";
+                        e.currentTarget.style.background = "var(--bg-muted)";
                     }}
                     onMouseLeave={(e) => {
                       if (!isSel)
@@ -290,7 +289,10 @@ function AddDocumentDialog({
                     }}
                   >
                     <span className="text-base shrink-0">
-                      {doc.icon ?? "📄"}
+                      <FileTextIcon
+                        className="w-4 h-4"
+                        style={{ color: "var(--text-muted)" }}
+                      />{" "}
                     </span>
                     <span
                       className="flex-1 text-[13px] truncate"
@@ -396,13 +398,9 @@ function DocCard({
       <div
         className="rounded-2xl flex flex-col overflow-hidden cursor-pointer transition-all duration-200 h-full"
         style={{
-          background: hovered
-            ? "var(--bg-card-hover)"
-            : "var(--bg-card)",
+          background: hovered ? "var(--bg-card-hover)" : "var(--bg-card)",
           border: `1px solid ${hovered ? "var(--border-hover)" : "var(--border-subtle)"}`,
-          boxShadow: hovered
-            ? "var(--shadow-elevated)"
-            : "none",
+          boxShadow: hovered ? "var(--shadow-elevated)" : "none",
           transform: "none",
         }}
         onClick={() => router.push(`/documents/${document._id}`)}
@@ -422,7 +420,10 @@ function DocCard({
               className="text-base shrink-0 w-8 h-8 flex items-center justify-center rounded-lg"
               style={{ background: "var(--bg-input)" }}
             >
-              {document.icon ?? "📄"}
+              <FileTextIcon
+                className="w-4 h-4"
+                style={{ color: "var(--text-muted)" }}
+              />{" "}
             </div>
             <div className="flex-1 min-w-0">
               <p
@@ -502,10 +503,7 @@ function DocCard({
                   className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
                   style={{ color: accentColor }}
                 />
-                <p
-                  className="text-[11px]"
-                  style={{ color: "var(--text-dim)" }}
-                >
+                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Generating summary…
                 </p>
               </div>
@@ -588,7 +586,10 @@ function DocListRow({
           className="text-base w-8 h-8 flex items-center justify-center rounded-lg shrink-0 mt-0.5"
           style={{ background: "var(--bg-input)" }}
         >
-          {document.icon ?? "📄"}
+          <FileTextIcon
+            className="w-4 h-4"
+            style={{ color: "var(--text-muted)" }}
+          />{" "}
         </span>
         <div className="flex-1 min-w-0 space-y-1">
           <p
@@ -621,10 +622,7 @@ function DocListRow({
                   className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
                   style={{ color: accentColor }}
                 />
-                <p
-                  className="text-[11px]"
-                  style={{ color: "var(--text-dim)" }}
-                >
+                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
                   Generating…
                 </p>
               </div>

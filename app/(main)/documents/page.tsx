@@ -1608,7 +1608,13 @@ function CollectionExpandedDocs({
             (e.currentTarget.style.background = "transparent")
           }
         >
-          <span className="text-sm shrink-0">{doc.icon ?? "📄"}</span>
+          <span className="text-sm shrink-0">
+            {" "}
+            <FileTextIcon
+              className="w-4 h-4"
+              style={{ color: "var(--text-muted)" }}
+            />
+          </span>
           <span
             className="flex-1 text-[11px] font-medium truncate"
             style={{ color: "var(--text-muted)" }}
