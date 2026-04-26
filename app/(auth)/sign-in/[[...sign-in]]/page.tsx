@@ -12,6 +12,8 @@ import {
   ShieldCheckIcon,
 } from "lucide-react";
 
+import { buildPageMetadata } from "@/lib/metadata";
+
 const features = [
   {
     icon: FilesIcon,
@@ -54,6 +56,13 @@ const features = [
     desc: "Organise all your papers into colour-coded collections with tags.",
   },
 ];
+
+export const metadata = buildPageMetadata({
+  title: "Sign in",
+  description:
+    "Sign in to your Paperspace workspace and access your documents, templates, and collections.",
+  path: "/sign-in",
+});
 
 export default async function SignInPage() {
   const { userId } = await auth();
