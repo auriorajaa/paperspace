@@ -1,4 +1,4 @@
-// app\api\google\auth\route.ts
+// app/api/google/auth/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -22,7 +22,10 @@ export async function GET(req: NextRequest) {
     redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
     response_type: "code",
     scope: [
-      "https://www.googleapis.com/auth/drive.readonly",
+      // drive.file: access only files created/opened by this app.
+      // We no longer need drive.readonly (which required sensitive review).
+      "https://www.googleapis.com/auth/drive.file",
+      // Forms API scopes (approved as sensitive):
       "https://www.googleapis.com/auth/forms.responses.readonly",
       "https://www.googleapis.com/auth/forms.body.readonly",
       "email",
