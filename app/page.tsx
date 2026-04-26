@@ -1639,17 +1639,12 @@ export default async function LandingPage() {
           background: "var(--bg-sidebar)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-5 py-12">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
+        <div className="max-w-6xl mx-auto px-5 py-10">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
             {/* Brand */}
-            <div className="col-span-2 sm:col-span-1">
+            <div className="max-w-[220px]">
               <div className="flex items-center gap-2 mb-3">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  // style={{
-                  //   background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                  // }}
-                >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center">
                   <img src="/favicon.svg" alt="Logo" width={32} height={32} />
                 </div>
                 <span
@@ -1668,97 +1663,84 @@ export default async function LandingPage() {
               </p>
             </div>
 
-            {/* Product */}
-            <div>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Product
-              </p>
-              <ul className="space-y-2">
-                {[
-                  { label: "Editor", href: "#" },
-                  { label: "Templates", href: "#" },
-                  { label: "Mail merge", href: "#" },
-                  { label: "Collections", href: "#" },
-                  { label: "AI summaries", href: "#" },
-                ].map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Links */}
+            <div className="flex gap-12 sm:gap-16">
+              {/* Account */}
+              <div>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-widest mb-3"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  Account
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    { label: "Sign up free", href: "/sign-up" },
+                    { label: "Sign in", href: "/sign-in" },
+                  ].map((l) => (
+                    <li key={l.label}>
+                      <a
+                        href={l.href}
+                        className="text-[12px] transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                        // onMouseEnter={(e) =>
+                        //   (e.currentTarget.style.color = "var(--text)")
+                        // }
+                        // onMouseLeave={(e) =>
+                        //   (e.currentTarget.style.color = "var(--text-muted)")
+                        // }
+                      >
+                        {l.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-            {/* Integrations */}
-            <div>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Integrations
-              </p>
-              <ul className="space-y-2">
-                {[
-                  { label: "Google Forms", href: "#" },
-                  { label: "Google Drive", href: "#" },
-                  { label: "ONLYOFFICE", href: "#" },
-                  { label: "Clerk Auth", href: "#" },
-                  { label: "Convex DB", href: "#" },
-                ].map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Company */}
-            <div>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Company
-              </p>
-              <ul className="space-y-2">
-                {[
-                  { label: "Sign up free", href: "/sign-up" },
-                  { label: "Sign in", href: "/sign-in" },
-                  { label: "Privacy policy", href: "#" },
-                  { label: "Terms of service", href: "#" },
-                ].map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              {/* Legal */}
+              <div>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-widest mb-3"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  Legal
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    { label: "Privacy policy", href: "/privacy-policy" },
+                    { label: "Terms of service", href: "/terms-of-service" },
+                  ].map((l) => (
+                    <li key={l.label}>
+                      <a
+                        href={l.href}
+                        className="text-[12px] transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                        // onMouseEnter={(e) =>
+                        //   (e.currentTarget.style.color = "var(--text)")
+                        // }
+                        // onMouseLeave={(e) =>
+                        //   (e.currentTarget.style.color = "var(--text-muted)")
+                        // }
+                      >
+                        {l.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
 
           {/* Bottom bar */}
           <div
-            className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6"
+            className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-10 pt-6"
             style={{ borderTop: "1px solid var(--border-subtle)" }}
           >
             <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
               © {new Date().getFullYear()} Paperspace. All rights reserved.
+            </p>
+            <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
+              Built with ♥ for modern document workflows.
             </p>
           </div>
         </div>
