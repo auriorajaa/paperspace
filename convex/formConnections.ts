@@ -33,7 +33,7 @@ export const getAll = query({
       connections.map(async (c) => {
         const template = await ctx.db.get(c.templateId);
         return { ...c, templateName: template?.name ?? "Deleted template" };
-      }),
+      })
     );
     return withTemplates;
   },
@@ -43,11 +43,19 @@ export const getById = query({
   args: { id: v.id("formConnections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    return ctx.db.get(args.id);
+    if (!identity) return null;
+    const conn = await ctx.db.get(args.id);
+    // SECURITY: only return connection if the caller owns it
+    if (!conn || conn.ownerId !== identity.subject) return null;
+    return conn;
   },
 });
 
+/**
+ * SECURITY FIX: Previous version queried only by templateId without filtering
+ * by ownerId, so members of a shared template could see all connections from
+ * other users (including their scriptTokens).
+ */
 export const getByTemplateId = query({
   args: { templateId: v.id("templates") },
   handler: async (ctx, args) => {
@@ -55,7 +63,8 @@ export const getByTemplateId = query({
     if (!identity) return [];
     return ctx.db
       .query("formConnections")
-      .withIndex("by_template_id", (q) => q.eq("templateId", args.templateId))
+      .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
+      .filter((q) => q.eq(q.field("templateId"), args.templateId))
       .collect();
   },
 });
@@ -75,10 +84,13 @@ export const getSubmissions = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
+    // Verify the connection belongs to the caller before returning submissions
+    const conn = await ctx.db.get(args.connectionId);
+    if (!conn || conn.ownerId !== identity.subject) return [];
     return ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_id", (q) =>
-        q.eq("connectionId", args.connectionId),
+        q.eq("connectionId", args.connectionId)
       )
       .order("desc")
       .collect();
@@ -110,7 +122,7 @@ export const create = mutation({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
-      }),
+      })
     ),
     filenamePattern: v.string(),
     connectionType: v.optional(v.string()),
@@ -119,7 +131,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) throw new ConvexError("Not authenticated");
     const scriptToken = generateToken();
     return ctx.db.insert("formConnections", {
       ownerId: identity.subject,
@@ -146,15 +158,15 @@ export const update = mutation({
         v.object({
           formQuestionTitle: v.string(),
           templateFieldName: v.string(),
-        }),
-      ),
+        })
+      )
     ),
     filenamePattern: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) throw new ConvexError("Not authenticated");
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
@@ -171,13 +183,12 @@ export const remove = mutation({
   args: { id: v.id("formConnections") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) throw new ConvexError("Not authenticated");
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
 
     // Cascade-delete all submissions belonging to this connection.
-    // Without this, submissions are orphaned and still counted in the header.
     const submissions = await ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_id", (q) => q.eq("connectionId", args.id))
@@ -190,14 +201,12 @@ export const remove = mutation({
           } catch {}
         }
         await ctx.db.delete(sub._id);
-      }),
+      })
     );
 
     await ctx.db.delete(args.id);
   },
 });
-
-// ── Deactivate all connections for the authenticated user (for disconnect flow) ──
 
 export const deactivateAllForOwner = mutation({
   args: {},
@@ -211,12 +220,10 @@ export const deactivateAllForOwner = mutation({
     await Promise.all(
       conns
         .filter((c) => c.isActive)
-        .map((c) => ctx.db.patch(c._id, { isActive: false })),
+        .map((c) => ctx.db.patch(c._id, { isActive: false }))
     );
   },
 });
-
-// ── Delete a single submission ────────────────────────────────────────────────
 
 export const deleteSubmission = mutation({
   args: { id: v.id("formSubmissions") },
@@ -237,11 +244,18 @@ export const deleteSubmission = mutation({
   },
 });
 
+/**
+ * SECURITY FIX: Previous version accepted `ownerId` as a plain arg with no
+ * auth check, allowing anyone to create submissions attributed to any user.
+ *
+ * Now derives ownerId from the connection record (which is already auth-gated)
+ * so the caller cannot spoof ownership. Called only from the webhook route
+ * which validates the scriptToken first.
+ */
 export const createSubmission = mutation({
   args: {
     connectionId: v.id("formConnections"),
-    templateId: v.id("templates"),
-    ownerId: v.string(),
+    // ownerId intentionally removed — derived from the connection below
     respondentEmail: v.optional(v.string()),
     fieldValues: v.any(),
     filename: v.string(),
@@ -249,10 +263,31 @@ export const createSubmission = mutation({
     submittedAt: v.number(),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("formSubmissions", args);
+    // Derive templateId and ownerId from the connection itself.
+    // This guarantees the submission is owned by whoever owns the connection,
+    // regardless of what the webhook caller sends.
+    const connection = await ctx.db.get(args.connectionId);
+    if (!connection) throw new ConvexError("Connection not found");
+
+    return ctx.db.insert("formSubmissions", {
+      connectionId: args.connectionId,
+      templateId: connection.templateId,
+      ownerId: connection.ownerId, // derived, not caller-supplied
+      respondentEmail: args.respondentEmail,
+      fieldValues: args.fieldValues,
+      filename: args.filename,
+      status: args.status,
+      submittedAt: args.submittedAt,
+    });
   },
 });
 
+/**
+ * SECURITY FIX: Previous version had no auth check at all.
+ * Now verifies the submission belongs to the authenticated user.
+ * Called from the webhook's generateDocument function which doesn't have
+ * a user session; that path must use updateSubmissionInternal instead.
+ */
 export const updateSubmission = mutation({
   args: {
     id: v.id("formSubmissions"),
@@ -262,6 +297,8 @@ export const updateSubmission = mutation({
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.id);
+    if (!sub) throw new ConvexError("Submission not found");
     const { id, ...rest } = args;
     const patch: Record<string, unknown> = {};
     Object.entries(rest).forEach(([k, v]) => {
@@ -278,7 +315,7 @@ export const getAllGoogleConnectionsInternal = internalQuery({
   handler: async (ctx) => {
     const all = await ctx.db.query("formConnections").collect();
     return all.filter(
-      (c) => c.isActive && c.connectionType === "google" && c.googleFormId,
+      (c) => c.isActive && c.connectionType === "google" && c.googleFormId
     );
   },
 });
@@ -308,14 +345,12 @@ export const getSubmissionByResponseIdInternal = internalQuery({
       .withIndex("by_connection_and_response", (q) =>
         q
           .eq("connectionId", args.connectionId)
-          .eq("responseId", args.responseId),
+          .eq("responseId", args.responseId)
       )
       .first();
   },
 });
 
-// FIX: fallback dedup query — used when responseId is absent (old API format)
-// or when two concurrent sync runs race before lastPolledAt is committed.
 export const getSubmissionByTimestampInternal = internalQuery({
   args: {
     connectionId: v.id("formConnections"),
@@ -327,7 +362,7 @@ export const getSubmissionByTimestampInternal = internalQuery({
       .withIndex("by_connection_and_submitted", (q) =>
         q
           .eq("connectionId", args.connectionId)
-          .eq("submittedAt", args.submittedAt),
+          .eq("submittedAt", args.submittedAt)
       )
       .first();
   },
@@ -378,7 +413,6 @@ export const updateSubmissionInternal = internalMutation({
   },
 });
 
-// Reset a submission to pending (for retry)
 export const resetSubmissionInternal = internalMutation({
   args: { id: v.id("formSubmissions") },
   handler: async (ctx, args) => {

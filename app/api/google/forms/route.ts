@@ -1,8 +1,7 @@
 // app/api/google/forms/route.ts
 //
-// Previously: listed all Google Forms via Drive API (required drive.readonly scope).
-// Now: validates and fetches metadata for a single form by ID using the Forms API
-// (forms.body.readonly scope), which is already approved.
+// Validates and fetches metadata for a single form by ID using the Forms API
+// (forms.body.readonly scope).
 //
 // Usage: GET /api/google/forms?formId=<google_form_id>
 
@@ -30,7 +29,7 @@ async function refreshAccessToken(refreshToken: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const { userId } = await auth();
+  const { userId, getToken } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -48,10 +47,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const account = await convex.query(
-    api.googleAccounts.getFullAccountForServer,
-    { ownerId: userId }
-  );
+  // SECURITY FIX: Thread Clerk JWT so getMyFullAccount can verify identity
+  const clerkToken = await getToken({ template: "convex" });
+  if (clerkToken) convex.setAuth(clerkToken);
+
+  const account = await convex.query(api.googleAccounts.getMyFullAccount, {});
 
   if (!account) {
     return NextResponse.json(
@@ -65,9 +65,26 @@ export async function GET(req: NextRequest) {
 
   let accessToken = account.accessToken;
 
-  // Refresh token if expired or about to expire
+  // ── Token refresh ─────────────────────────────────────────────────────────
   if (Date.now() > account.expiresAt - 60_000) {
-    const refreshed = await refreshAccessToken(account.refreshToken);
+    let refreshed: {
+      access_token?: string;
+      expires_in?: number;
+      error?: string;
+    };
+    try {
+      refreshed = await refreshAccessToken(account.refreshToken);
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Failed to reach Google's auth servers. Please try again in a moment.",
+          code: "network_error",
+        },
+        { status: 503 }
+      );
+    }
+
     if (!refreshed.access_token) {
       const isRevoked = refreshed.error === "invalid_grant";
       return NextResponse.json(
@@ -80,22 +97,33 @@ export async function GET(req: NextRequest) {
         { status: 401 }
       );
     }
+
     accessToken = refreshed.access_token;
     await convex.mutation(api.googleAccounts.updateToken, {
-      ownerId: userId,
       accessToken: refreshed.access_token,
       expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
     });
   }
 
-  // Fetch form metadata via Forms API (forms.body.readonly scope)
-  const formRes = await fetch(
-    `https://forms.googleapis.com/v1/forms/${formId}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
+  // ── Fetch form via Forms API ───────────────────────────────────────────────
+  let formRes: Response;
+  try {
+    formRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "Could not reach Google Forms. Check your internet connection and try again.",
+        code: "network_error",
+      },
+      { status: 503 }
+    );
+  }
 
   if (!formRes.ok) {
-    const body = await formRes.text();
+    const body = await formRes.text().catch(() => "");
     console.error("[google/forms] Forms API error:", formRes.status, body);
 
     if (formRes.status === 404) {
@@ -113,10 +141,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "You don't have permission to access this form. Make sure you are the form owner and that access hasn't been restricted.",
+            "You don't have permission to access this form. Make sure you are the form owner.",
           code: "form_forbidden",
         },
         { status: 403 }
+      );
+    }
+
+    if (formRes.status === 401) {
+      return NextResponse.json(
+        {
+          error:
+            "Your Google session has expired. Please disconnect and reconnect your account.",
+          code: "token_expired",
+        },
+        { status: 401 }
       );
     }
 
@@ -126,7 +165,7 @@ export async function GET(req: NextRequest) {
           "Failed to fetch form details from Google. Please try again in a moment.",
         code: "forms_api_error",
       },
-      { status: 500 }
+      { status: 502 }
     );
   }
 

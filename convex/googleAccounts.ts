@@ -28,46 +28,94 @@ export const getMyAccount = query({
   },
 });
 
+/**
+ * SECURITY FIX: Replaces the old `getFullAccountForServer` which accepted an
+ * arbitrary `ownerId` param — allowing any authenticated user to fetch
+ * anyone else's Google tokens if they knew the target's Clerk userId.
+ *
+ * This version derives the owner from the Convex auth identity, which is
+ * populated by the Clerk JWT forwarded via `convex.setAuth(token)` in the
+ * calling Next.js API route.
+ *
+ * Callers must set auth on ConvexHttpClient before calling:
+ *   const token = await getToken({ template: "convex" });
+ *   convex.setAuth(token!);
+ */
+export const getMyFullAccount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    return ctx.db
+      .query("googleAccounts")
+      .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
+      .first();
+  },
+});
+
 // ── Public mutations ──────────────────────────────────────────────────────────
 
+/**
+ * Upserts a Google account. Called from the OAuth callback route where a
+ * Clerk JWT is forwarded via convex.setAuth(), so ownerId is derived from
+ * the verified identity — not from caller-supplied args.
+ */
 export const upsert = mutation({
   args: {
-    ownerId: v.string(),
     email: v.string(),
     accessToken: v.string(),
     refreshToken: v.string(),
     expiresAt: v.number(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
+    const ownerId = identity.subject;
     const existing = await ctx.db
       .query("googleAccounts")
-      .withIndex("by_owner_id", (q) => q.eq("ownerId", args.ownerId))
+      .withIndex("by_owner_id", (q) => q.eq("ownerId", ownerId))
       .first();
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         email: args.email,
         accessToken: args.accessToken,
-        refreshToken: args.refreshToken,
+        // Only update refreshToken if a new one was issued (Google only
+        // sends it on first consent; omit update if empty to keep the old one)
+        ...(args.refreshToken ? { refreshToken: args.refreshToken } : {}),
         expiresAt: args.expiresAt,
       });
       return existing._id;
     }
-    return ctx.db.insert("googleAccounts", args);
+
+    return ctx.db.insert("googleAccounts", { ownerId, ...args });
   },
 });
 
+/**
+ * SECURITY FIX: Previous version accepted `ownerId` as a plain arg with no
+ * identity check, allowing any caller to overwrite another user's token.
+ * Now derives ownerId from the verified Clerk JWT identity.
+ *
+ * Callers must set auth on ConvexHttpClient before calling:
+ *   convex.setAuth(await getToken({ template: "convex" }));
+ */
 export const updateToken = mutation({
   args: {
-    ownerId: v.string(),
     accessToken: v.string(),
     expiresAt: v.number(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
     const account = await ctx.db
       .query("googleAccounts")
-      .withIndex("by_owner_id", (q) => q.eq("ownerId", args.ownerId))
+      .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .first();
     if (!account) throw new ConvexError("Google account not found");
+
     await ctx.db.patch(account._id, {
       accessToken: args.accessToken,
       expiresAt: args.expiresAt,
@@ -85,20 +133,6 @@ export const disconnect = mutation({
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .first();
     if (account) await ctx.db.delete(account._id);
-  },
-});
-
-// ── Server-side query (called from Next.js API routes, already Clerk-protected) ──
-
-export const getFullAccountForServer = query({
-  args: { ownerId: v.string() },
-  handler: async (ctx, args) => {
-    // This query is intentionally called from server-side API routes
-    // that have already verified the user via Clerk auth.
-    return ctx.db
-      .query("googleAccounts")
-      .withIndex("by_owner_id", (q) => q.eq("ownerId", args.ownerId))
-      .first();
   },
 });
 

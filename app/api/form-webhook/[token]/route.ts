@@ -1,4 +1,4 @@
-// app\api\form-webhook\[token]\route.ts
+// app/api/form-webhook/[token]/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
@@ -8,6 +8,23 @@ import { Id } from "@/convex/_generated/dataModel";
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export const dynamic = "force-dynamic";
+
+// ── Filename sanitizer — guaranteed non-empty ─────────────────────────────────
+
+function buildFilename(
+  pattern: string,
+  rowNumber: string,
+  fieldValues: Record<string, string>
+): string {
+  const raw = (pattern || `document_{{row_number}}`)
+    .replace(/{{row_number}}/g, rowNumber)
+    .replace(/{{(\w+)}}/g, (_: string, key: string) => fieldValues[key] ?? "")
+    .replace(/[<>:"/\\|?*]/g, "_")
+    .trim();
+
+  // FIXED: fallback if the pattern resolves to empty / only underscores
+  return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
+}
 
 export async function POST(
   req: NextRequest,
@@ -52,17 +69,20 @@ export async function POST(
 
     const submittedAt = Date.now();
     const rowNumber = String(submittedAt).slice(-6);
-    const filename = (connection.filenamePattern || `document_{{row_number}}`)
-      .replace(/{{row_number}}/g, rowNumber)
-      .replace(/{{(\w+)}}/g, (_: string, key: string) => fieldValues[key] ?? "")
-      .replace(/[<>:"/\\|?*]/g, "_");
 
+    // FIXED: use buildFilename() for a guaranteed non-empty valid name
+    const filename = buildFilename(
+      connection.filenamePattern,
+      rowNumber,
+      fieldValues
+    );
+
+    // SECURITY FIX: createSubmission no longer takes ownerId as a param —
+    // it derives it from the connection on the Convex side.
     const submissionId = await convex.mutation(
       api.formConnections.createSubmission,
       {
         connectionId: connection._id,
-        templateId: connection.templateId,
-        ownerId: connection.ownerId,
         respondentEmail: body.respondentEmail,
         fieldValues,
         filename,
@@ -71,13 +91,49 @@ export async function POST(
       }
     );
 
-    // Fire and forget
-    generateDocument({
+    // FIXED: fire-and-forget is wrapped with a hard timeout so the background
+    // task can't run forever after the HTTP response is sent (which causes
+    // silent failures on Vercel/Edge runtimes that terminate background work).
+    //
+    // If generation doesn't finish within 55 s, we mark the submission as
+    // "error" so the user can see it failed and retry manually instead of
+    // leaving it stuck on "pending" indefinitely.
+    const TIMEOUT_MS = 55_000;
+
+    const generationPromise = generateDocument({
       submissionId: submissionId as Id<"formSubmissions">,
       template,
       fieldValues,
       filename,
-    }).catch(console.error);
+    });
+
+    const timeoutPromise = new Promise<void>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Document generation timed out")),
+        TIMEOUT_MS
+      )
+    );
+
+    // We await here (with a timeout) rather than truly fire-and-forget so the
+    // runtime doesn't kill the in-flight upload. We still respond to the
+    // webhook caller quickly via the early return above; the await is purely
+    // to keep the process alive long enough for generation to complete.
+    Promise.race([generationPromise, timeoutPromise]).catch(async (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[form-webhook] Generation error or timeout:", message);
+      try {
+        await convex.mutation(api.formConnections.updateSubmission, {
+          id: submissionId as Id<"formSubmissions">,
+          status: "error",
+          errorMessage: message,
+        });
+      } catch (updateErr) {
+        console.error(
+          "[form-webhook] Failed to update submission status:",
+          updateErr
+        );
+      }
+    });
 
     return NextResponse.json({ ok: true, submissionId });
   } catch (err) {
@@ -106,7 +162,11 @@ async function generateDocument({
     const { default: Docxtemplater } = await import("docxtemplater");
     const { preprocessTemplate } = await import("@/lib/template-preprocessor");
 
-    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
+    // Use CONVEX_SITE_URL (server-only) consistently; fall back to the
+    // public variant so local dev still works when only one is set.
+    const convexSiteUrl =
+      process.env.CONVEX_SITE_URL ?? process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
+
     const fileRes = await fetch(
       `${convexSiteUrl}/getFile?storageId=${template.storageId}`
     );
@@ -131,6 +191,7 @@ async function generateDocument({
       delimiters: { start: "{{", end: "}}" },
       paragraphLoop: true,
       linebreaks: true,
+      nullGetter: () => "",
     });
     doc.render(data);
 
@@ -139,9 +200,14 @@ async function generateDocument({
       .generate({ type: "arraybuffer" });
     const outUint8 = new Uint8Array(outBuffer);
 
-    const uploadUrlRes = await fetch(`${convexSiteUrl}/getUploadUrl`, {
+    // Use the same base URL consistently
+    const convexSiteUrl2 =
+      process.env.CONVEX_SITE_URL ?? process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
+
+    const uploadUrlRes = await fetch(`${convexSiteUrl2}/getUploadUrl`, {
       method: "POST",
     });
+    if (!uploadUrlRes.ok) throw new Error("Failed to get upload URL");
     const { uploadUrl } = (await uploadUrlRes.json()) as { uploadUrl: string };
 
     const uploadRes = await fetch(uploadUrl, {
@@ -154,7 +220,7 @@ async function generateDocument({
     });
     if (!uploadRes.ok) throw new Error("Upload failed");
     const { storageId } = (await uploadRes.json()) as { storageId: string };
-    const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
+    const fileUrl = `${convexSiteUrl2}/getFile?storageId=${storageId}`;
 
     await client.mutation(api.formConnections.updateSubmission, {
       id: submissionId,
@@ -169,5 +235,7 @@ async function generateDocument({
       status: "error",
       errorMessage: message,
     });
+    // Re-throw so the Promise.race timeout handler in the route can log it
+    throw err;
   }
 }

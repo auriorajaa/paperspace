@@ -27,17 +27,21 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ formId: string }> }
 ) {
-  const { userId } = await auth();
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const { userId, getToken } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { formId } = await context.params;
 
-  const account = await convex.query(
-    api.googleAccounts.getFullAccountForServer,
-    { ownerId: userId }
-  );
+  // SECURITY FIX: Forward the Clerk JWT to Convex so the query can verify the
+  // caller's identity server-side, instead of trusting a caller-supplied ownerId.
+  const clerkToken = await getToken({ template: "convex" });
+  if (clerkToken) convex.setAuth(clerkToken);
+
+  // Fetch full account (tokens) via auth-gated query
+  const account = await convex.query(api.googleAccounts.getMyFullAccount, {});
 
   if (!account) {
     return NextResponse.json(
@@ -48,38 +52,119 @@ export async function GET(
 
   let accessToken = account.accessToken;
 
+  // ── Token refresh ─────────────────────────────────────────────────────────
   if (Date.now() > account.expiresAt - 60_000) {
-    const refreshed = await refreshAccessToken(account.refreshToken);
-    if (!refreshed.access_token) {
+    let refreshed: {
+      access_token?: string;
+      expires_in?: number;
+      error?: string;
+    };
+    try {
+      refreshed = await refreshAccessToken(account.refreshToken);
+    } catch {
       return NextResponse.json(
-        { error: "Failed to refresh access token. Please sign in again." },
+        {
+          error:
+            "Failed to reach Google's auth servers. Please try again in a moment.",
+          code: "network_error",
+        },
+        { status: 503 }
+      );
+    }
+
+    if (!refreshed.access_token) {
+      const isRevoked = refreshed.error === "invalid_grant";
+      return NextResponse.json(
+        {
+          error: isRevoked
+            ? "Your Google access has been revoked. Please disconnect and reconnect your account."
+            : "Failed to refresh access token. Please reconnect your Google account.",
+          code: isRevoked ? "token_revoked" : "token_expired",
+        },
         { status: 401 }
       );
     }
+
     accessToken = refreshed.access_token;
+
+    // Persist the refreshed token (auth-gated — no ownerId param needed)
     await convex.mutation(api.googleAccounts.updateToken, {
-      ownerId: userId,
       accessToken: refreshed.access_token,
       expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
     });
   }
 
-  const formRes = await fetch(
-    `https://forms.googleapis.com/v1/forms/${formId}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-
-  if (!formRes.ok) {
-    console.error("[google/forms/questions]", await formRes.text());
+  // ── Fetch form from Google Forms API ─────────────────────────────────────
+  let formRes: Response;
+  try {
+    formRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
     return NextResponse.json(
       {
         error:
-          "Failed to fetch form details from Google. Make sure you entered the correct link, or try again in a moment",
+          "Could not reach Google Forms. Check your internet connection and try again.",
+        code: "network_error",
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
+  // FIXED: Previous version returned 500 for all non-OK responses, so the
+  // client-side 401/403/404 handlers in template-connect-client.tsx were
+  // never triggered. Now we mirror the actual Google status code.
+  if (!formRes.ok) {
+    const bodyText = await formRes.text().catch(() => "");
+    console.error("[google/forms/questions]", formRes.status, bodyText);
+
+    if (formRes.status === 401) {
+      // Likely the access token we just used is already stale/revoked
+      return NextResponse.json(
+        {
+          error:
+            "Your Google session has expired. Please disconnect and reconnect your account.",
+          code: "token_expired",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (formRes.status === 403) {
+      return NextResponse.json(
+        {
+          error:
+            "You don't have permission to access this form. Make sure you're signed in " +
+            "with the Google account that owns the form.",
+          code: "form_forbidden",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (formRes.status === 404) {
+      return NextResponse.json(
+        {
+          error:
+            "Form not found. Double-check the URL or ID — the form may have been deleted or moved.",
+          code: "form_not_found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Catch-all for unexpected Google-side errors (5xx, etc.)
+    return NextResponse.json(
+      {
+        error:
+          "Google Forms is temporarily unavailable. Please wait a moment and try again.",
+        code: "forms_api_error",
+      },
+      { status: 502 }
+    );
+  }
+
+  // ── Parse form ────────────────────────────────────────────────────────────
   const form = await formRes.json();
 
   const questions: { id: string; title: string }[] = [];
@@ -94,8 +179,6 @@ export async function GET(
     }
   }
 
-  // Extract linked spreadsheet ID if responses are collected in a Google Sheet.
-  // Google Forms API v1 exposes this as `linkedSheetId` at the top level.
   const spreadsheetId: string | null =
     form.linkedSheetId ??
     form.info?.responseDestination?.drive?.spreadsheetId ??
