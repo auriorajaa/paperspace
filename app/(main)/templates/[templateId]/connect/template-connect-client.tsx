@@ -746,7 +746,7 @@ function GoogleFormWizard({
           {/* Permissions note */}
           <InfoBox>
             <span style={{ color: "var(--accent-light)" }}>
-              ℹ️ Access requirement:
+              Access requirement:
             </span>{" "}
             You must be the <strong>owner</strong> of the form. Forms shared
             with you (view-only) may not be accessible due to Google API
