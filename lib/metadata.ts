@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 // ─── Site constants ───────────────────────────────────────────────────────────
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.paperspace.work";
 export const SITE_NAME = "Paperspace";
 export const SITE_HANDLE = "@paperspace"; // Twitter/X handle
 export const SITE_DESCRIPTION =
