@@ -891,32 +891,12 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
       {/* Logo */}
       <div className="flex items-center gap-2 flex-1">
         <div
-          className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--primary), var(--chart-2))",
-          }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          // style={{
+          //   background: "rgba(255, 255, 255, 0.92)",
+          // }}
         >
-          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M2 2h6l3 3v7H2V2z"
-              stroke="white"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M8 2v3h3"
-              stroke="white"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M4 7h5M4 9.5h3"
-              stroke="white"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
+          <img src="/favicon.svg" alt="Logo" width={32} height={32} />
         </div>
         <span
           className="text-[13px] font-semibold tracking-tight"
@@ -1045,33 +1025,14 @@ export function Navbar() {
           {!collapsed && (
             <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
               <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--primary), var(--chart-2))",
-                  boxShadow: "var(--shadow-logo-glow)",
-                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                // style={{
+                //   background:
+                //     "linear-gradient(135deg, var(--primary), var(--chart-2))",
+                //   boxShadow: "var(--shadow-logo-glow)",
+                // }}
               >
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                  <path
-                    d="M2 2h6l3 3v7H2V2z"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M8 2v3h3"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M4 7h5M4 9.5h3"
-                    stroke="white"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <img src="/favicon.svg" alt="Logo" width={32} height={32} />
               </div>
               <span
                 className="text-sm font-semibold tracking-tight whitespace-nowrap"

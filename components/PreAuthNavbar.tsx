@@ -27,34 +27,15 @@ export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2 group shrink-0">
         <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover:scale-105"
-          style={{
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            boxShadow: isDark
-              ? "0 0 12px rgba(99,102,241,0.38)"
-              : "0 1px 6px rgba(79,70,229,0.2)",
-          }}
+          className="w-8 h-8 rounded-md flex items-center justify-center"
+          // style={{
+          //   background: isDark ? "rgba(255, 255, 255, 0.92)" : "#0a0a0c",
+          //   boxShadow: isDark
+          //     ? "0 0 12px rgba(99,102,241,0.38)"
+          //     : "0 1px 6px rgba(79,70,229,0.2)",
+          // }}
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M2 2h6l3 3v7H2V2z"
-              stroke="white"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M8 2v3h3"
-              stroke="white"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M4 7h5M4 9.5h3"
-              stroke="white"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
+          <img src="/favicon.svg" alt="Logo" width={32} height={32} />
         </div>
         <span
           className="text-[15px] font-semibold tracking-tight"

@@ -1645,31 +1645,12 @@ export default async function LandingPage() {
             <div className="col-span-2 sm:col-span-1">
               <div className="flex items-center gap-2 mb-3">
                 <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center"
-                  style={{
-                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                  }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  // style={{
+                  //   background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  // }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M2 2h6l3 3v7H2V2z"
-                      stroke="white"
-                      strokeWidth="1.4"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M8 2v3h3"
-                      stroke="white"
-                      strokeWidth="1.4"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M4 7h5M4 9.5h3"
-                      stroke="white"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <img src="/favicon.svg" alt="Logo" width={32} height={32} />
                 </div>
                 <span
                   className="text-[14px] font-semibold"

@@ -11,6 +11,8 @@ import {
   ArrowRightIcon,
 } from "lucide-react";
 
+import { buildPageMetadata } from "@/lib/metadata";
+
 const benefits = [
   {
     icon: FileTextIcon,
@@ -43,6 +45,13 @@ const steps = [
   { num: "02", label: "Upload or create a document" },
   { num: "03", label: "Invite your team" },
 ];
+
+export const metadata = buildPageMetadata({
+  title: "Get started for free",
+  description:
+    "Create your free Paperspace account. No credit card required. Start writing, organising, and generating documents in minutes.",
+  path: "/sign-up",
+});
 
 export default async function SignUpPage() {
   const { userId } = await auth();
