@@ -52,7 +52,7 @@ export async function GET(
     const refreshed = await refreshAccessToken(account.refreshToken);
     if (!refreshed.access_token) {
       return NextResponse.json(
-        { error: "Token refresh failed" },
+        { error: "Failed to refresh access token. Please sign in again." },
         { status: 401 }
       );
     }
@@ -72,7 +72,10 @@ export async function GET(
   if (!formRes.ok) {
     console.error("[google/forms/questions]", await formRes.text());
     return NextResponse.json(
-      { error: "Failed to fetch form" },
+      {
+        error:
+          "Failed to fetch form details from Google. Make sure you entered the correct link, or try again in a moment",
+      },
       { status: 500 }
     );
   }
