@@ -1,4 +1,10 @@
-// app\api\google\forms\route.ts
+// app/api/google/forms/route.ts
+//
+// Previously: listed all Google Forms via Drive API (required drive.readonly scope).
+// Now: validates and fetches metadata for a single form by ID using the Forms API
+// (forms.body.readonly scope), which is already approved.
+//
+// Usage: GET /api/google/forms?formId=<google_form_id>
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -29,6 +35,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const formId = searchParams.get("formId");
+
+  if (!formId) {
+    return NextResponse.json(
+      {
+        error:
+          "formId is required. Please provide the Google Form ID or URL as ?formId=...",
+      },
+      { status: 400 }
+    );
+  }
+
   const account = await convex.query(
     api.googleAccounts.getFullAccountForServer,
     { ownerId: userId }
@@ -36,18 +55,28 @@ export async function GET(req: NextRequest) {
 
   if (!account) {
     return NextResponse.json(
-      { error: "No Google account connected" },
+      {
+        error:
+          "No Google account connected. Please connect your Google account first.",
+      },
       { status: 404 }
     );
   }
 
   let accessToken = account.accessToken;
 
+  // Refresh token if expired or about to expire
   if (Date.now() > account.expiresAt - 60_000) {
     const refreshed = await refreshAccessToken(account.refreshToken);
     if (!refreshed.access_token) {
+      const isRevoked = refreshed.error === "invalid_grant";
       return NextResponse.json(
-        { error: "Token refresh failed" },
+        {
+          error: isRevoked
+            ? "Your Google access has been revoked. Please disconnect and reconnect your account."
+            : "Your Google session has expired. Please reconnect your account.",
+          code: isRevoked ? "token_revoked" : "token_expired",
+        },
         { status: 401 }
       );
     }
@@ -59,25 +88,53 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const driveRes = await fetch(
-    "https://www.googleapis.com/drive/v3/files?" +
-      new URLSearchParams({
-        q: "mimeType='application/vnd.google-apps.form' and trashed=false",
-        fields: "files(id,name,modifiedTime)",
-        orderBy: "modifiedTime desc",
-        pageSize: "50",
-      }),
+  // Fetch form metadata via Forms API (forms.body.readonly scope)
+  const formRes = await fetch(
+    `https://forms.googleapis.com/v1/forms/${formId}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 
-  if (!driveRes.ok) {
-    console.error("[google/forms] Drive API error:", await driveRes.text());
+  if (!formRes.ok) {
+    const body = await formRes.text();
+    console.error("[google/forms] Forms API error:", formRes.status, body);
+
+    if (formRes.status === 404) {
+      return NextResponse.json(
+        {
+          error:
+            "Form not found. Double-check the Form ID or URL and make sure the form still exists.",
+          code: "form_not_found",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (formRes.status === 403) {
+      return NextResponse.json(
+        {
+          error:
+            "You don't have permission to access this form. Make sure you are the form owner and that access hasn't been restricted.",
+          code: "form_forbidden",
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to list forms" },
+      {
+        error:
+          "Failed to fetch form details from Google. Please try again in a moment.",
+        code: "forms_api_error",
+      },
       { status: 500 }
     );
   }
 
-  const { files = [] } = await driveRes.json();
-  return NextResponse.json({ forms: files });
+  const form = await formRes.json();
+
+  return NextResponse.json({
+    formId,
+    formTitle: form.info?.title ?? "Untitled Form",
+    ok: true,
+  });
 }

@@ -1,4 +1,4 @@
-// app\(main)\templates\[templateId]\connect\template-connect-client.tsx
+// app/(main)/templates/[templateId]/connect/template-connect-client.tsx
 "use client";
 
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -17,7 +17,6 @@ import {
   ZapIcon,
   RefreshCwIcon,
   CheckCircleIcon,
-  SearchIcon,
   ChevronRightIcon,
   LogOutIcon,
   ExternalLinkIcon,
@@ -25,6 +24,7 @@ import {
   XIcon,
   AlertTriangleIcon,
   FileSpreadsheetIcon,
+  ArrowRightIcon,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
@@ -43,15 +43,28 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface GoogleForm {
-  id: string;
-  name: string;
-  modifiedTime: string;
-}
-
 interface FormQuestion {
   id: string;
   title: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Extracts a Google Form ID from a full URL or a bare ID string.
+ *
+ * Accepts:
+ *   https://docs.google.com/forms/d/FORM_ID/edit
+ *   https://docs.google.com/forms/d/FORM_ID/viewform
+ *   FORM_ID   (raw alphanumeric string, ≥10 chars)
+ */
+function extractFormId(input: string): string | null {
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(/\/forms\/d\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch) return urlMatch[1];
+  // Bare ID: alphanumeric + hyphens/underscores, reasonable minimum length
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
+  return null;
 }
 
 // ── Error Banner ──────────────────────────────────────────────────────────────
@@ -305,7 +318,6 @@ function AccountBadge({
           </button>
         </div>
 
-        {/* Always-visible token info — replaces hover-only tooltip on mobile */}
         <p
           className="text-[11px] leading-relaxed px-1"
           style={{ color: "var(--text-dim)" }}
@@ -429,84 +441,106 @@ function GoogleFormWizard({
   const createConnection = useMutation(api.formConnections.create);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  const [forms, setForms] = useState<GoogleForm[]>([]);
-  const [formsLoading, setFormsLoading] = useState(true);
-  const [formsError, setFormsError] = useState("");
-  const [search, setSearch] = useState("");
-  const [selectedForm, setSelectedForm] = useState<GoogleForm | null>(null);
+  // ── Step 1: form URL / ID entry ──────────────────────────────────────────
+  const [formInput, setFormInput] = useState("");
+  const [formInputError, setFormInputError] = useState("");
+  const [formLoading, setFormLoading] = useState(false);
 
+  const [selectedForm, setSelectedForm] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  // ── Step 2: questions + field mapping ─────────────────────────────────────
   const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [questionIdMap, setQuestionIdMap] = useState<Record<string, string>>(
     {}
   );
-  // Store linked spreadsheet ID fetched from the questions API
   const [linkedSpreadsheetId, setLinkedSpreadsheetId] = useState<string | null>(
     null
   );
-  const [questionsLoading, setQuestionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState("");
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [mappingError, setMappingError] = useState("");
 
+  // ── Step 3: filename pattern ──────────────────────────────────────────────
   const [filenamePattern, setFilenamePattern] = useState("");
   const [filenameError, setFilenameError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const ILLEGAL_CHARS = /[<>:"/\\|?*]/;
 
-  useEffect(() => {
-    fetch("/api/google/forms")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) setFormsError(data.error);
-        else setForms(data.forms ?? []);
-      })
-      .catch(() =>
-        setFormsError(
-          "Unable to fetch your forms. Check your internet connection or try again."
-        )
-      )
-      .finally(() => setFormsLoading(false));
-  }, []);
+  // ── Step 1: load form by ID extracted from URL or raw ID ──────────────────
+  const handleLoadForm = useCallback(async () => {
+    const formId = extractFormId(formInput);
+    if (!formId) {
+      setFormInputError(
+        "Couldn't recognise a valid Form ID. Paste the full Google Forms URL " +
+          "(e.g. https://docs.google.com/forms/d/…/edit) or just the ID part."
+      );
+      return;
+    }
 
-  const loadQuestions = useCallback(async (form: GoogleForm) => {
-    setSelectedForm(form);
-    setQuestionsLoading(true);
-    setQuestionsError("");
-    setLinkedSpreadsheetId(null);
+    setFormInputError("");
+    setFormLoading(true);
+
     try {
-      const res = await fetch(`/api/google/forms/${form.id}/questions`);
+      const res = await fetch(`/api/google/forms/${formId}/questions`);
       const data = await res.json();
-      if (data.error) {
-        setQuestionsError(`Failed to load questions: ${data.error}`);
+
+      if (!res.ok || data.error) {
+        // Surface actionable messages based on error codes / HTTP status
+        if (res.status === 401) {
+          setFormInputError(
+            data.error ??
+              "Your Google session has expired. Please disconnect and reconnect your account."
+          );
+        } else if (res.status === 403) {
+          setFormInputError(
+            "You don't have permission to access this form. " +
+              "Make sure you are signed in with the Google account that owns the form."
+          );
+        } else if (res.status === 404) {
+          setFormInputError(
+            "Form not found. Double-check the URL or ID — the form may have been deleted or moved."
+          );
+        } else {
+          setFormInputError(
+            data.error ??
+              "Failed to load the form. Check your connection and try again."
+          );
+        }
         return;
       }
+
+      const formName: string = data.formTitle ?? "Untitled Form";
+      setSelectedForm({ id: formId, name: formName });
+
       const qs: FormQuestion[] = data.questions ?? [];
-      if (qs.length === 0) {
-        setQuestionsError(
-          "This form has no questions that can be mapped. Make sure your form has at least one question."
-        );
-        setQuestions([]);
-        setQuestionIdMap({});
-        setStep(2);
-        return;
-      }
       setQuestions(qs);
       setQuestionIdMap(data.questionIdMap ?? {});
-      // Store linked spreadsheet ID if present
-      if (data.spreadsheetId) {
-        setLinkedSpreadsheetId(data.spreadsheetId);
+      if (data.spreadsheetId) setLinkedSpreadsheetId(data.spreadsheetId);
+
+      if (qs.length === 0) {
+        setQuestionsError(
+          "This form has no questions that can be mapped. " +
+            "Make sure your form has at least one question before connecting it."
+        );
+      } else {
+        setQuestionsError("");
       }
+
       setStep(2);
     } catch {
-      setQuestionsError(
-        "Failed to load form questions. Please check your connection and try again."
+      setFormInputError(
+        "Could not reach Google Forms. Check your internet connection and try again."
       );
     } finally {
-      setQuestionsLoading(false);
+      setFormLoading(false);
     }
-  }, []);
+  }, [formInput]);
 
+  // ── Step 3: create connection ─────────────────────────────────────────────
   const handleCreate = async () => {
     const validMappings = Object.entries(mappings)
       .filter(([, questionTitle]) => questionTitle)
@@ -540,7 +574,6 @@ function GoogleFormWizard({
         templateId,
         formId: selectedForm.id,
         formTitle: selectedForm.name,
-        // Pass the linked spreadsheet ID so the Spreadsheet button works
         spreadsheetId: linkedSpreadsheetId ?? undefined,
         fieldMappings: validMappings,
         filenamePattern: pattern,
@@ -558,10 +591,6 @@ function GoogleFormWizard({
       setSaving(false);
     }
   };
-
-  const filteredForms = forms.filter((f) =>
-    f.name.toLowerCase().includes(search.toLowerCase())
-  );
 
   const NON_MAPPABLE = ["loop", "condition", "condition_inverse"];
   const mappableFields = templateFields.filter(
@@ -581,7 +610,7 @@ function GoogleFormWizard({
     <div className="space-y-5">
       <StepIndicator step={step} steps={STEPS} />
 
-      {/* ── Step 1 ── */}
+      {/* ── Step 1: Form URL / ID entry ─────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div>
@@ -589,169 +618,144 @@ function GoogleFormWizard({
               className="text-sm font-semibold mb-1"
               style={{ color: "var(--text)" }}
             >
-              Select a Google Form
+              Enter your Google Form
             </h3>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Choose a form from your Drive — we'll read its questions
+              Paste the form URL or just the Form ID — we'll load its questions
               automatically.
             </p>
           </div>
 
-          {formsError ? (
-            <ErrorBanner
-              message={formsError}
-              onDismiss={() => setFormsError("")}
-              onRetry={() => {
-                setFormsError("");
-                setFormsLoading(true);
-                fetch("/api/google/forms")
-                  .then((r) => r.json())
-                  .then((d) => {
-                    if (d.error) setFormsError(d.error);
-                    else setForms(d.forms ?? []);
-                  })
-                  .catch(() =>
-                    setFormsError(
-                      "Unable to fetch your forms. Check your connection."
-                    )
-                  )
-                  .finally(() => setFormsLoading(false));
-              }}
-            />
-          ) : (
-            <>
-              <div className="relative">
-                <SearchIcon
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-                  style={{ color: "var(--text-dim)" }}
-                />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search forms…"
-                  className="w-full rounded-xl pl-9 pr-3 py-3 text-sm outline-none min-h-[44px]"
-                  style={{
-                    background: "var(--bg-muted)",
-                    border: `1px solid var(--border-subtle)`,
-                    color: "var(--text)",
-                  }}
-                  onFocus={(e) =>
-                    (e.currentTarget.style.border = `1px solid var(--accent-border)`)
-                  }
-                  onBlur={(e) =>
-                    (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
-                  }
-                />
-              </div>
-
-              {formsLoading ? (
-                <div className="flex items-center justify-center py-12 gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: "var(--accent-light)" }}
-                  />
-                  <span
-                    className="text-xs"
-                    style={{ color: "var(--text-dim)" }}
-                  >
-                    Loading your forms…
-                  </span>
-                </div>
-              ) : filteredForms.length === 0 ? (
-                <div className="text-center py-10">
-                  <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-                    {search
-                      ? "No forms match your search"
-                      : "No Google Forms found in your Drive"}
-                  </p>
-                </div>
-              ) : (
-                <div
-                  className="rounded-xl overflow-hidden max-h-64 overflow-y-auto"
-                  style={{ border: `1px solid var(--border-subtle)` }}
-                >
-                  {filteredForms.map((form) => (
+          {/* URL / ID input */}
+          <div className="space-y-2">
+            <label
+              className="text-[11px] font-medium"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Form URL or ID
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={formInput}
+                onChange={(e) => {
+                  setFormInput(e.target.value);
+                  if (formInputError) setFormInputError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !formLoading) handleLoadForm();
+                }}
+                placeholder="https://docs.google.com/forms/d/…/edit"
+                className="flex-1 rounded-xl px-3 py-3 text-sm outline-none min-h-[44px]"
+                style={{
+                  background: "var(--bg-muted)",
+                  border: `1px solid ${
+                    formInputError
+                      ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                      : "var(--border-subtle)"
+                  }`,
+                  color: "var(--text)",
+                }}
+                onFocus={(e) =>
+                  (e.currentTarget.style.border = `1px solid var(--accent-border)`)
+                }
+                onBlur={(e) =>
+                  (e.currentTarget.style.border = `1px solid ${
+                    formInputError
+                      ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                      : "var(--border-subtle)"
+                  }`)
+                }
+                disabled={formLoading}
+              />
+              <button
+                onClick={handleLoadForm}
+                disabled={formLoading || !formInput.trim()}
+                className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] shrink-0 transition-all duration-150"
+                style={{
+                  background:
+                    formLoading || !formInput.trim()
+                      ? "var(--bg-input)"
+                      : "var(--accent-strong-bg)",
+                  color:
+                    formLoading || !formInput.trim()
+                      ? "var(--text-dim)"
+                      : "var(--accent-pale)",
+                  border: "1px solid var(--accent-border)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!formLoading && formInput.trim())
+                    e.currentTarget.style.background = "var(--accent-mid)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!formLoading && formInput.trim())
+                    e.currentTarget.style.background =
+                      "var(--accent-strong-bg)";
+                }}
+              >
+                {formLoading ? (
+                  <>
                     <div
-                      key={form.id}
-                      className="flex items-center"
-                      style={{ borderBottom: `1px solid var(--border-subtle)` }}
-                    >
-                      <button
-                        onClick={() => loadQuestions(form)}
-                        disabled={questionsLoading}
-                        className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-h-[56px] transition-colors"
-                        style={{ background: "transparent" }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background =
-                            "var(--accent-bg)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "transparent")
-                        }
-                      >
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ background: "var(--accent-soft)" }}
-                        >
-                          📋
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="text-sm font-medium truncate"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {form.name}
-                          </p>
-                          <p
-                            className="text-xs"
-                            style={{ color: "var(--text-dim)" }}
-                          >
-                            Modified{" "}
-                            {formatDistanceToNow(new Date(form.modifiedTime), {
-                              addSuffix: true,
-                            })}
-                          </p>
-                        </div>
-                        {questionsLoading && selectedForm?.id === form.id ? (
-                          <div
-                            className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin shrink-0"
-                            style={{ borderColor: "var(--accent-light)" }}
-                          />
-                        ) : (
-                          <ChevronRightIcon
-                            className="w-3.5 h-3.5 shrink-0"
-                            style={{ color: "var(--text-dim)" }}
-                          />
-                        )}
-                      </button>
-                      <a
-                        href={`https://docs.google.com/forms/d/${form.id}/edit`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="Open in Google Forms"
-                        className="flex items-center justify-center w-11 h-11 shrink-0 mr-2 rounded-lg transition-colors"
-                        style={{ color: "var(--text-dim)" }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = "var(--accent-light)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = "var(--text-dim)")
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                        title="Open in Google Forms"
-                      >
-                        <ExternalLinkIcon className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                      className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                      style={{ borderColor: "var(--accent-light)" }}
+                    />
+                    <span className="hidden sm:inline">Loading…</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRightIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Load</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {formInputError && (
+              <ErrorBanner
+                message={formInputError}
+                onDismiss={() => setFormInputError("")}
+              />
+            )}
+          </div>
+
+          {/* How to find the Form ID */}
+          <InfoBox>
+            <p
+              className="font-medium mb-1"
+              style={{ color: "var(--accent-light)" }}
+            >
+              Where to find your Form ID:
+            </p>
+            <ol className="space-y-1 list-decimal list-inside">
+              <li>Open your form in Google Forms</li>
+              <li>Copy the URL from the address bar</li>
+              <li>
+                Paste it above — the ID is the long string between{" "}
+                <code className="font-mono">/d/</code> and{" "}
+                <code className="font-mono">/edit</code>
+              </li>
+            </ol>
+            <p className="mt-2 font-mono text-[10px] break-all opacity-70">
+              docs.google.com/forms/d/
+              <span style={{ color: "var(--accent-light)" }}>
+                YOUR_FORM_ID_HERE
+              </span>
+              /edit
+            </p>
+          </InfoBox>
+
+          {/* Permissions note */}
+          <InfoBox>
+            <span style={{ color: "var(--accent-light)" }}>
+              ℹ️ Access requirement:
+            </span>{" "}
+            You must be the <strong>owner</strong> of the form. Forms shared
+            with you (view-only) may not be accessible due to Google API
+            restrictions.
+          </InfoBox>
         </div>
       )}
 
-      {/* ── Step 2 ── */}
+      {/* ── Step 2: Field mapping ────────────────────────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
           <div>
@@ -888,7 +892,11 @@ function GoogleFormWizard({
 
           <div className="flex gap-2 pt-1">
             <button
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setStep(1);
+                setQuestionsError("");
+                setMappingError("");
+              }}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
               style={{
                 background: "var(--bg-muted)",
@@ -928,7 +936,7 @@ function GoogleFormWizard({
         </div>
       )}
 
-      {/* ── Step 3 ── */}
+      {/* ── Step 3: Filename pattern ─────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-4">
           <div>
@@ -1008,7 +1016,6 @@ function GoogleFormWizard({
               ))}
             </div>
 
-            {/* Show linked spreadsheet info if detected */}
             {linkedSpreadsheetId && (
               <div
                 className="flex items-center gap-2 p-2 rounded-lg"
@@ -1133,13 +1140,35 @@ function ConnectionCard({ connection }: { connection: any }) {
       toast.success("Sync complete");
     } catch (err: any) {
       const msg = err?.message ?? "Sync failed";
-      setSyncError(
-        msg.includes("token") || msg.includes("Token")
-          ? "Sync failed — Google token may have expired. Try reconnecting your Google account."
-          : msg.includes("Template")
-            ? "Sync failed — template file is missing. Please check your template."
-            : "Sync failed. Check your Google connection and try again."
-      );
+      if (
+        msg.includes("token") ||
+        msg.includes("Token") ||
+        msg.includes("revoked")
+      ) {
+        setSyncError(
+          "Sync failed — your Google token may have expired or been revoked. " +
+            "Please disconnect and reconnect your Google account."
+        );
+      } else if (msg.includes("Template") || msg.includes("template")) {
+        setSyncError(
+          "Sync failed — the template file is missing or corrupt. " +
+            "Please check your template in the editor."
+        );
+      } else if (msg.includes("403") || msg.includes("permission")) {
+        setSyncError(
+          "Sync failed — Google Forms access was denied. " +
+            "Make sure you still own the form and it hasn't been restricted."
+        );
+      } else if (msg.includes("404") || msg.includes("not found")) {
+        setSyncError(
+          "Sync failed — the form could not be found. " +
+            "It may have been deleted. Consider removing this connection."
+        );
+      } else {
+        setSyncError(
+          "Sync failed. Check your Google connection and try again."
+        );
+      }
     } finally {
       setSyncing(false);
     }
@@ -1620,14 +1649,16 @@ export default function ConnectFormPage() {
   useEffect(() => {
     const p = searchParams.get("error");
     if (p === "google_oauth_denied")
-      setGlobalError("Google sign-in was cancelled. Please try again.");
+      setGlobalError(
+        "Google sign-in was cancelled. Please try again if you'd like to connect your account."
+      );
     else if (p === "token_exchange_failed")
       setGlobalError(
-        "Google authentication failed. Please try connecting again."
+        "Google authentication failed — the authorisation code may have expired. Please try connecting again."
       );
     else if (p === "oauth_state_invalid")
       setGlobalError(
-        "Something went wrong during Google sign-in. Please try again."
+        "Something went wrong during Google sign-in (invalid state). Please try again."
       );
 
     if (searchParams.get("connected") === "1") {
@@ -1824,7 +1855,7 @@ export default function ConnectFormPage() {
                 className="text-xs max-w-xs leading-relaxed mx-auto"
                 style={{ color: "var(--text-dim)" }}
               >
-                Connect once, then pick any Google Form from your Drive.
+                Connect once, then paste any Google Form URL to link it.
                 Responses automatically generate documents — no code needed.
               </p>
             </div>
@@ -1931,8 +1962,8 @@ export default function ConnectFormPage() {
                   className="text-xs mb-5 max-w-xs leading-relaxed"
                   style={{ color: "var(--text-dim)" }}
                 >
-                  Pick a Google Form to start generating documents
-                  automatically.
+                  Paste a Google Form URL to start generating documents
+                  automatically from responses.
                 </p>
                 <button
                   onClick={() => setShowWizard(true)}
