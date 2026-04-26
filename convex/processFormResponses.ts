@@ -40,8 +40,24 @@ async function getValidToken(
     return { token: account.accessToken };
   }
 
-  // Refresh
-  const refreshed = await refreshGoogleToken(account.refreshToken);
+  // FIXED: wrap the network call so a transient fetch failure (DNS, timeout)
+  // is caught and surfaced as an error instead of an uncaught exception that
+  // bypasses the stampPolledAt() call in the caller.
+  let refreshed: { access_token?: string; expires_in?: number; error?: string };
+  try {
+    refreshed = await refreshGoogleToken(account.refreshToken);
+  } catch (fetchErr) {
+    console.error(
+      "[getValidToken] Network error during token refresh:",
+      fetchErr
+    );
+    return {
+      token: null,
+      error:
+        "Token refresh failed due to a network error. Will retry next cycle.",
+    };
+  }
+
   if (!refreshed.access_token) {
     const errMsg =
       refreshed.error === "invalid_grant"
@@ -60,31 +76,14 @@ async function getValidToken(
 }
 
 // ── Preprocessor: stitch {{placeholders}} split across Word XML runs ──────────
-//
-// Word/ONLYOFFICE often breaks {{tag}} into multiple <w:r> runs in the XML.
-// docxtemplater can't parse split tags → "Multi error". We fix them first.
-//
-// Root causes of the original approach failing:
-//   1. String.replace(node.full, ...) finds the FIRST occurrence — breaks when
-//      two nodes have identical XML (e.g. two empty <w:t></w:t>).
-//   2. The replacement string passed to String.replace() is interpreted for
-//      special $ sequences ($&, $1, etc.), corrupting the output.
-//
-// This version uses **index-based slicing** on the raw text content positions,
-// so neither problem applies.
 
 function stitchParagraph(para: string): string {
-  // Collect every <w:t>…</w:t> node: store the byte-offset range of the
-  // TEXT CONTENT only (between the closing > of the opening tag and </w:t>).
   const nodes: { tStart: number; tEnd: number; text: string }[] = [];
   const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
   let m: RegExpExecArray | null;
 
   while ((m = re.exec(para)) !== null) {
-    // m[0] = full element, e.g. `<w:t xml:space="preserve">hello</w:t>`
-    // m[1] = text content = "hello"
-    // Text content ends just before </w:t> (6 chars), so:
-    const tEnd = m.index + m[0].length - 6; // 6 = "</w:t>".length
+    const tEnd = m.index + m[0].length - 6;
     const tStart = tEnd - m[1].length;
     nodes.push({ tStart, tEnd, text: m[1] });
   }
@@ -92,14 +91,11 @@ function stitchParagraph(para: string): string {
   if (nodes.length <= 1) return para;
 
   const combined = nodes.map((n) => n.text).join("");
-  // Only touch paragraphs that actually contain a (possibly split) placeholder
   if (!combined.includes("{{") || !combined.includes("}}")) return para;
 
-  // Replace text content back-to-front so earlier offsets stay valid
   let result = para;
   for (let i = nodes.length - 1; i >= 0; i--) {
     const { tStart, tEnd } = nodes[i];
-    // First node gets ALL the combined text; the rest become empty
     const newText = i === 0 ? combined : "";
     result = result.slice(0, tStart) + newText + result.slice(tEnd);
   }
@@ -121,17 +117,36 @@ function preprocessDocxBuffer(buf: ArrayBuffer, PizZip: any): ArrayBuffer {
   for (const path of xmlPaths) {
     if (!zip.files[path]) continue;
     let xml: string = zip.files[path].asText();
-
-    // Pass 1 – stitch within each paragraph
     xml = xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, stitchParagraph);
-
     zip.file(path, xml);
   }
 
   return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
 }
 
-// ── Core document generation logic (shared by pollConnection and retrySubmission) ──
+// ── Filename sanitizer — guaranteed to never return an empty string ───────────
+
+/**
+ * FIXED: Previous implementation could yield an empty string (or only
+ * underscores) if filenamePattern contained only special characters or all
+ * template tokens resolved to "". We now guarantee a non-empty, valid filename.
+ */
+function buildFilename(
+  pattern: string,
+  rowNumber: string,
+  fieldValues: Record<string, string>
+): string {
+  const raw = (pattern || `document_{{row_number}}`)
+    .replace(/{{row_number}}/g, rowNumber)
+    .replace(/{{(\w+)}}/g, (_: string, key: string) => fieldValues[key] ?? "")
+    .replace(/[<>:"/\\|?*]/g, "_")
+    .trim();
+
+  // Fallback: if everything resolved to empty / whitespace / only underscores
+  return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
+}
+
+// ── Core document generation logic ────────────────────────────────────────────
 
 async function generateDocxFromTemplate(
   ctx: any,
@@ -164,13 +179,11 @@ async function generateDocxFromTemplate(
 
   const buffer = preprocessDocxBuffer(rawBuffer, PizZip);
 
-  // Build data object with correct type coercion
   const data: Record<string, unknown> = {};
   for (const field of template.fields) {
     if (field.type === "condition" || field.type === "condition_inverse") {
       data[field.name] = fieldValues[field.name]?.toLowerCase() === "true";
     } else if (field.type === "loop") {
-      // Loop fields are not mappable from Google Forms — leave as empty array
       data[field.name] = [];
     } else {
       data[field.name] = fieldValues[field.name] ?? "";
@@ -207,7 +220,6 @@ async function generateDocxFromTemplate(
             return `Raw tag {{@${tag}}} must be the only content in its paragraph${tagHint}`;
           if (id === "loop_tag_not_in_cell")
             return `Loop tag {{#${tag}}} and its closing tag must be in separate table rows${tagHint}`;
-          // Fallback: use explanation or message
           return e?.properties?.explanation ?? e?.message ?? String(e);
         })
         .join("; ");
@@ -252,18 +264,28 @@ export const pollConnection = internalAction({
     );
     if (!connection || !connection.isActive || !connection.googleFormId) return;
 
-    // Helper — always stamp lastPolledAt so the next poll doesn't re-fetch
-    // responses we already processed (or attempted), even if this run failed.
     const stampPolledAt = () =>
       ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
         id: args.connectionId,
         lastPolledAt: Date.now(),
       });
 
-    const { token: accessToken, error: tokenError } = await getValidToken(
-      ctx,
-      connection.ownerId
-    );
+    // FIXED: token fetch is now wrapped in try/catch in getValidToken itself.
+    // If getValidToken throws unexpectedly (shouldn't happen now), we still
+    // stamp lastPolledAt to avoid infinite retries on the same window.
+    let tokenResult: { token: string | null; error?: string };
+    try {
+      tokenResult = await getValidToken(ctx, connection.ownerId);
+    } catch (err) {
+      console.error(
+        `[pollConnection] Unexpected error fetching token for owner ${connection.ownerId}:`,
+        err
+      );
+      await stampPolledAt();
+      return;
+    }
+
+    const { token: accessToken, error: tokenError } = tokenResult;
     if (!accessToken) {
       console.error(
         `[pollConnection] Token error for owner ${connection.ownerId}: ${tokenError}`
@@ -272,7 +294,6 @@ export const pollConnection = internalAction({
       return;
     }
 
-    // Fetch responses from Google Forms API
     const url = new URL(
       `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`
     );
@@ -283,18 +304,28 @@ export const pollConnection = internalAction({
       );
     }
 
-    const responsesRes = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    let responsesRes: Response;
+    try {
+      responsesRes = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch (fetchErr) {
+      console.error(
+        "[pollConnection] Network error fetching form responses:",
+        fetchErr
+      );
+      // Don't stamp — transient network error, let the next cron cycle retry.
+      // We intentionally don't stamp here because no responses were processed.
+      return;
+    }
 
     if (!responsesRes.ok) {
       console.error(
         "[pollConnection] Forms API error:",
-        await responsesRes.text()
+        responsesRes.status,
+        await responsesRes.text().catch(() => "(body unreadable)")
       );
-      // FIX: stamp lastPolledAt even on API error so the cron doesn't re-try
-      // the same time-window forever, which caused the "error count keeps
-      // growing after delete" bug.
+      // Stamp to avoid re-fetching the same window forever on persistent errors.
       await stampPolledAt();
       return;
     }
@@ -326,10 +357,6 @@ export const pollConnection = internalAction({
       }
 
       // ── Dedup: fallback key is (connectionId, submittedAt) ─────────────────
-      // Covers the case where responseId is absent (old API format) or two
-      // concurrent sync runs race before lastPolledAt is written — this was
-      // the cause of the "double documents" bug when connecting the same form
-      // to a second template.
       {
         const existing = await ctx.runQuery(
           internal.formConnections.getSubmissionByTimestampInternal,
@@ -338,7 +365,6 @@ export const pollConnection = internalAction({
         if (existing) continue;
       }
 
-      // Map answers → fieldValues
       const fieldValues: Record<string, string> = {};
       const answers: Record<string, any> = response.answers ?? {};
 
@@ -354,15 +380,13 @@ export const pollConnection = internalAction({
         fieldValues[mapping.templateFieldName] = value;
       }
 
-      // Build filename
+      // FIXED: use buildFilename() to guarantee a non-empty valid string
       const rowNumber = String(submittedAt).slice(-6);
-      const filename = (connection.filenamePattern || `document_{{row_number}}`)
-        .replace(/{{row_number}}/g, rowNumber)
-        .replace(
-          /{{(\w+)}}/g,
-          (_: string, key: string) => fieldValues[key] ?? ""
-        )
-        .replace(/[<>:"/\\|?*]/g, "_");
+      const filename = buildFilename(
+        connection.filenamePattern,
+        rowNumber,
+        fieldValues
+      );
 
       const submissionId = await ctx.runMutation(
         internal.formConnections.createSubmissionInternal,
@@ -409,10 +433,20 @@ export const pollConnection = internalAction({
 export const pollAll = internalAction({
   args: {},
   handler: async (ctx) => {
-    const connections = await ctx.runQuery(
-      internal.formConnections.getAllGoogleConnectionsInternal
-    );
-    // Process sequentially to avoid race conditions
+    // FIXED: wrap the initial query so a DB failure doesn't silently kill the
+    // whole cron without any log output.
+    let connections: any[];
+    try {
+      connections = await ctx.runQuery(
+        internal.formConnections.getAllGoogleConnectionsInternal
+      );
+    } catch (err) {
+      console.error("[pollAll] Failed to load connections:", err);
+      return;
+    }
+
+    if (connections.length === 0) return;
+
     for (const conn of connections) {
       try {
         await ctx.runAction(internal.processFormResponses.pollConnection, {
@@ -440,7 +474,6 @@ export const syncConnection = action({
       throw new Error("Connection not found");
     }
 
-    // Allow sync even when paused (force poll)
     await ctx.runAction(internal.processFormResponses.pollConnection, {
       connectionId: args.connectionId,
     });
@@ -466,12 +499,10 @@ export const retrySubmission = action({
       throw new Error("Only error submissions can be retried");
     }
 
-    // Reset to pending
     await ctx.runMutation(internal.formConnections.resetSubmissionInternal, {
       id: args.submissionId,
     });
 
-    // Re-generate
     try {
       await generateDocxFromTemplate(ctx, {
         submissionId: args.submissionId,

@@ -17,7 +17,6 @@ import {
   ZapIcon,
   RefreshCwIcon,
   CheckCircleIcon,
-  ChevronRightIcon,
   LogOutIcon,
   ExternalLinkIcon,
   InfoIcon,
@@ -25,6 +24,8 @@ import {
   AlertTriangleIcon,
   FileSpreadsheetIcon,
   ArrowRightIcon,
+  ChevronDownIcon,
+  CheckIcon,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
@@ -48,21 +49,14 @@ interface FormQuestion {
   title: string;
 }
 
+const NON_MAPPABLE_TYPES = ["loop", "condition", "condition_inverse"];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Extracts a Google Form ID from a full URL or a bare ID string.
- *
- * Accepts:
- *   https://docs.google.com/forms/d/FORM_ID/edit
- *   https://docs.google.com/forms/d/FORM_ID/viewform
- *   FORM_ID   (raw alphanumeric string, ≥10 chars)
- */
 function extractFormId(input: string): string | null {
   const trimmed = input.trim();
   const urlMatch = trimmed.match(/\/forms\/d\/([a-zA-Z0-9_-]+)/);
   if (urlMatch) return urlMatch[1];
-  // Bare ID: alphanumeric + hyphens/underscores, reasonable minimum length
   if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
   return null;
 }
@@ -218,6 +212,89 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Custom Select ─────────────────────────────────────────────────────────────
+
+function MappingSelect({
+  value,
+  onChange,
+  questions,
+  placeholder = "— not mapped —",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  questions: FormQuestion[];
+  placeholder?: string;
+}) {
+  const isMapped = !!value;
+
+  return (
+    <div className="relative w-full">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl text-sm outline-none min-h-[44px] transition-all duration-150"
+        style={{
+          appearance: "none",
+          WebkitAppearance: "none",
+          MozAppearance: "none",
+          paddingTop: "10px",
+          paddingBottom: "10px",
+          paddingLeft: "12px",
+          paddingRight: "36px",
+          background: isMapped
+            ? "color-mix(in srgb, var(--accent) 6%, var(--bg-muted))"
+            : "var(--bg-muted)",
+          border: `1.5px solid ${isMapped ? "var(--accent-border)" : "var(--border-subtle)"}`,
+          color: isMapped ? "var(--text)" : "var(--text-dim)",
+          cursor: "pointer",
+          lineHeight: "1.4",
+        }}
+        onFocus={(e) =>
+          (e.currentTarget.style.border = `1.5px solid var(--accent-border)`)
+        }
+        onBlur={(e) =>
+          (e.currentTarget.style.border = `1.5px solid ${
+            isMapped ? "var(--accent-border)" : "var(--border-subtle)"
+          }`)
+        }
+      >
+        <option
+          value=""
+          style={{ background: "var(--popover)", color: "var(--text-dim)" }}
+        >
+          {placeholder}
+        </option>
+        {questions.map((q) => (
+          <option
+            key={q.id}
+            value={q.title}
+            style={{ background: "var(--popover)", color: "var(--text)" }}
+          >
+            {q.title}
+          </option>
+        ))}
+      </select>
+
+      <div
+        className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
+        style={{ right: "12px" }}
+      >
+        {isMapped ? (
+          <ChevronDownIcon
+            className="w-3.5 h-3.5"
+            style={{ color: "var(--accent-light)" }}
+          />
+        ) : (
+          <ChevronDownIcon
+            className="w-3.5 h-3.5"
+            style={{ color: "var(--text-dim)" }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Google Account Badge ──────────────────────────────────────────────────────
 
 function AccountBadge({
@@ -322,8 +399,8 @@ function AccountBadge({
           className="text-[11px] leading-relaxed px-1"
           style={{ color: "var(--text-dim)" }}
         >
-          Token auto-refreshes in the background. You only need to reconnect if
-          you revoke access in your Google Account settings.
+          Token auto-refreshes in the background. Only reconnect if you revoke
+          access in Google Account settings.
         </p>
 
         {tokenExpired && (
@@ -441,17 +518,16 @@ function GoogleFormWizard({
   const createConnection = useMutation(api.formConnections.create);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  // ── Step 1: form URL / ID entry ──────────────────────────────────────────
+  // ── Step 1 ───────────────────────────────────────────────────────────────
   const [formInput, setFormInput] = useState("");
   const [formInputError, setFormInputError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
-
   const [selectedForm, setSelectedForm] = useState<{
     id: string;
     name: string;
   } | null>(null);
 
-  // ── Step 2: questions + field mapping ─────────────────────────────────────
+  // ── Step 2 ───────────────────────────────────────────────────────────────
   const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [questionIdMap, setQuestionIdMap] = useState<Record<string, string>>(
     {}
@@ -459,18 +535,21 @@ function GoogleFormWizard({
   const [linkedSpreadsheetId, setLinkedSpreadsheetId] = useState<string | null>(
     null
   );
-  const [questionsError, setQuestionsError] = useState("");
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [mappingError, setMappingError] = useState("");
 
-  // ── Step 3: filename pattern ──────────────────────────────────────────────
+  // ── Step 3 ───────────────────────────────────────────────────────────────
   const [filenamePattern, setFilenamePattern] = useState("");
   const [filenameError, setFilenameError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const ILLEGAL_CHARS = /[<>:"/\\|?*]/;
 
-  // ── Step 1: load form by ID extracted from URL or raw ID ──────────────────
+  const mappableFields = templateFields.filter(
+    (f) => !NON_MAPPABLE_TYPES.includes(f.type)
+  );
+
+  // ── Step 1: load form ─────────────────────────────────────────────────────
   const handleLoadForm = useCallback(async () => {
     const formId = extractFormId(formInput);
     if (!formId) {
@@ -486,23 +565,42 @@ function GoogleFormWizard({
 
     try {
       const res = await fetch(`/api/google/forms/${formId}/questions`);
-      const data = await res.json();
 
-      if (!res.ok || data.error) {
-        // Surface actionable messages based on error codes / HTTP status
+      if (!res.ok) {
+        let data: { error?: string; code?: string } = {};
+        try {
+          data = await res.json();
+        } catch {
+          // Response body wasn't JSON — use status-based fallback
+        }
+
         if (res.status === 401) {
+          const isRevoked = data.code === "token_revoked";
           setFormInputError(
-            data.error ??
-              "Your Google session has expired. Please disconnect and reconnect your account."
+            isRevoked
+              ? "Your Google access has been revoked. Please disconnect and reconnect your account from the account badge above."
+              : (data.error ??
+                  "Your Google session has expired. Please disconnect and reconnect your account.")
           );
         } else if (res.status === 403) {
           setFormInputError(
-            "You don't have permission to access this form. " +
-              "Make sure you are signed in with the Google account that owns the form."
+            data.error ??
+              "You don't have permission to access this form. Make sure you're signed in " +
+                "with the Google account that owns the form, and that access hasn't been restricted."
           );
         } else if (res.status === 404) {
           setFormInputError(
-            "Form not found. Double-check the URL or ID — the form may have been deleted or moved."
+            data.error ??
+              "Form not found. Double-check the URL or ID — the form may have been deleted or moved."
+          );
+        } else if (res.status === 503) {
+          setFormInputError(
+            data.error ??
+              "Could not reach Google. Check your internet connection and try again."
+          );
+        } else if (res.status >= 500) {
+          setFormInputError(
+            "Google Forms is temporarily unavailable. Please wait a moment and try again."
           );
         } else {
           setFormInputError(
@@ -513,6 +611,8 @@ function GoogleFormWizard({
         return;
       }
 
+      const data = await res.json();
+
       const formName: string = data.formTitle ?? "Untitled Form";
       setSelectedForm({ id: formId, name: formName });
 
@@ -521,20 +621,28 @@ function GoogleFormWizard({
       setQuestionIdMap(data.questionIdMap ?? {});
       if (data.spreadsheetId) setLinkedSpreadsheetId(data.spreadsheetId);
 
+      // FIXED: If the form has no mappable questions, show an error and stay
+      // on Step 1 instead of silently advancing to Step 2 where the user
+      // would hit a dead-end mapping screen with nothing to select.
       if (qs.length === 0) {
-        setQuestionsError(
-          "This form has no questions that can be mapped. " +
-            "Make sure your form has at least one question before connecting it."
+        setFormInputError(
+          "This form has no questions that can be mapped. Make sure your form has at " +
+            "least one question before connecting it."
         );
-      } else {
-        setQuestionsError("");
+        // Reset selected form so the user knows nothing was committed
+        setSelectedForm(null);
+        return; // ← stay on Step 1
       }
 
       setStep(2);
-    } catch {
+    } catch (err) {
+      const isOffline = !navigator.onLine;
       setFormInputError(
-        "Could not reach Google Forms. Check your internet connection and try again."
+        isOffline
+          ? "You appear to be offline. Check your internet connection and try again."
+          : "Could not reach Google Forms. Check your internet connection and try again."
       );
+      console.error("[handleLoadForm]", err);
     } finally {
       setFormLoading(false);
     }
@@ -583,22 +691,18 @@ function GoogleFormWizard({
       });
       toast.success("Connection created — first sync in ≤5 minutes");
       onDone();
-    } catch (err: any) {
-      toast.error(
-        err?.message ?? "Failed to create connection. Please try again."
-      );
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to create connection. Please try again.";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
   };
 
-  const NON_MAPPABLE = ["loop", "condition", "condition_inverse"];
-  const mappableFields = templateFields.filter(
-    (f) => !NON_MAPPABLE.includes(f.type)
-  );
-  const nonMappableFields = templateFields.filter((f) =>
-    NON_MAPPABLE.includes(f.type)
-  );
+  const mappedCount = Object.values(mappings).filter(Boolean).length;
 
   const STEPS = [
     { n: 1, label: "Select form" },
@@ -610,7 +714,7 @@ function GoogleFormWizard({
     <div className="space-y-5">
       <StepIndicator step={step} steps={STEPS} />
 
-      {/* ── Step 1: Form URL / ID entry ─────────────────────────────────── */}
+      {/* ── Step 1: Form URL / ID ─────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div>
@@ -626,7 +730,6 @@ function GoogleFormWizard({
             </p>
           </div>
 
-          {/* URL / ID input */}
           <div className="space-y-2">
             <label
               className="text-[11px] font-medium"
@@ -717,7 +820,6 @@ function GoogleFormWizard({
             )}
           </div>
 
-          {/* How to find the Form ID */}
           <InfoBox>
             <p
               className="font-medium mb-1"
@@ -743,7 +845,6 @@ function GoogleFormWizard({
             </p>
           </InfoBox>
 
-          {/* Permissions note */}
           <InfoBox>
             <span style={{ color: "var(--accent-light)" }}>
               Access requirement:
@@ -755,7 +856,7 @@ function GoogleFormWizard({
         </div>
       )}
 
-      {/* ── Step 2: Field mapping ────────────────────────────────────────── */}
+      {/* ── Step 2: Field mapping ─────────────────────────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
           <div>
@@ -768,11 +869,12 @@ function GoogleFormWizard({
               </h3>
               {selectedForm && (
                 <span
-                  className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                  className="text-[10px] px-2 py-0.5 rounded-full font-medium truncate max-w-[180px]"
                   style={{
                     background: "var(--success-bg)",
                     color: "var(--success)",
                   }}
+                  title={selectedForm.name}
                 >
                   {selectedForm.name}
                 </span>
@@ -780,11 +882,10 @@ function GoogleFormWizard({
             </div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Match each template field to the Google Form question that
-              provides its value.
+              provides its value. Loop and condition fields are template logic —
+              they can't be mapped from form answers.
             </p>
           </div>
-
-          {questionsError && <WarningBanner message={questionsError} />}
 
           {mappingError && (
             <ErrorBanner
@@ -793,99 +894,137 @@ function GoogleFormWizard({
             />
           )}
 
-          {nonMappableFields.length > 0 && (
-            <InfoBox>
-              <span
-                className="font-medium"
-                style={{ color: "var(--accent-light)" }}
+          {mappableFields.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div
+                className="flex-1 h-1.5 rounded-full overflow-hidden"
+                style={{ background: "var(--bg-input)" }}
               >
-                {nonMappableFields.length} field
-                {nonMappableFields.length !== 1 ? "s" : ""} skipped:
-              </span>{" "}
-              Condition and loop fields (
-              <code className="font-mono">
-                {nonMappableFields.map((f) => f.label).join(", ")}
-              </code>
-              ) are internal template logic and cannot be mapped from Google
-              Forms.
-            </InfoBox>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(mappedCount / mappableFields.length) * 100}%`,
+                    background:
+                      mappedCount === mappableFields.length
+                        ? "var(--success)"
+                        : "var(--accent-light)",
+                  }}
+                />
+              </div>
+              <span
+                className="text-[11px] font-medium shrink-0"
+                style={{
+                  color:
+                    mappedCount === mappableFields.length
+                      ? "var(--success)"
+                      : "var(--text-dim)",
+                }}
+              >
+                {mappedCount}/{mappableFields.length} mapped
+              </span>
+            </div>
           )}
 
           {mappableFields.length > 0 ? (
-            <div className="space-y-2">
-              {mappableFields.map((field) => {
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{
+                border: "1px solid var(--border-subtle)",
+                background: "var(--bg-card)",
+              }}
+            >
+              {mappableFields.map((field, idx) => {
                 const c = fieldTypeColors[field.type] ?? "var(--text-muted)";
+                const isMapped = !!mappings[field.name];
+                const isLast = idx === mappableFields.length - 1;
+
                 return (
                   <div
                     key={field.name}
-                    className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl"
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3"
                     style={{
-                      background: "var(--bg-muted)",
-                      border: `1px solid ${mappings[field.name] ? `${c}30` : "var(--border-subtle)"}`,
+                      borderBottom: isLast
+                        ? "none"
+                        : "1px solid var(--border-subtle)",
+                      background: isMapped
+                        ? "color-mix(in srgb, var(--accent) 3%, transparent)"
+                        : "transparent",
+                      transition: "background 0.15s ease",
                     }}
                   >
-                    <div className="flex items-center gap-2 sm:w-36 sm:shrink-0">
+                    <div className="flex items-center gap-2.5 sm:w-40 sm:shrink-0">
                       <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        className="w-2 h-2 rounded-full shrink-0"
                         style={{ background: c }}
                       />
                       <div className="min-w-0">
                         <p
-                          className="text-xs font-medium truncate"
+                          className="text-xs font-semibold leading-tight"
                           style={{ color: "var(--text-secondary)" }}
                         >
                           {field.label}
                         </p>
                         <code
-                          className="text-[9px] font-mono"
+                          className="text-[10px] font-mono"
                           style={{ color: "var(--text-dim)" }}
-                        >{`{{${field.name}}}`}</code>
+                        >
+                          {`{{${field.name}}}`}
+                        </code>
                       </div>
                     </div>
+
                     <span
-                      className="text-xs shrink-0 hidden sm:block"
-                      style={{ color: "var(--text-dim)" }}
+                      className="hidden sm:flex items-center shrink-0"
+                      style={{ color: "var(--border-subtle)" }}
                     >
-                      ←
+                      <ArrowRightIcon className="w-3.5 h-3.5" />
                     </span>
-                    <select
-                      value={mappings[field.name] ?? ""}
-                      onChange={(e) =>
-                        setMappings((prev) => ({
-                          ...prev,
-                          [field.name]: e.target.value,
-                        }))
-                      }
-                      className="flex-1 w-full rounded-lg px-2.5 py-2.5 text-sm outline-none min-h-[44px]"
+
+                    <div className="flex-1 min-w-0">
+                      <MappingSelect
+                        value={mappings[field.name] ?? ""}
+                        onChange={(v) =>
+                          setMappings((prev) => ({ ...prev, [field.name]: v }))
+                        }
+                        questions={questions}
+                      />
+                    </div>
+
+                    <div
+                      className="hidden sm:flex items-center justify-center w-5 h-5 rounded-full shrink-0 transition-all duration-200"
                       style={{
-                        background: "var(--bg-muted)",
-                        border: `1px solid var(--border-subtle)`,
-                        color: mappings[field.name]
-                          ? "var(--text)"
-                          : "var(--text-dim)",
+                        background: isMapped
+                          ? "var(--success-bg)"
+                          : "transparent",
+                        border: isMapped
+                          ? "1px solid color-mix(in srgb, var(--success) 30%, transparent)"
+                          : "1px solid transparent",
                       }}
                     >
-                      <option value="" style={{ background: "var(--popover)" }}>
-                        — not mapped —
-                      </option>
-                      {questions.map((q) => (
-                        <option
-                          key={q.id}
-                          value={q.title}
-                          style={{ background: "var(--popover)" }}
-                        >
-                          {q.title}
-                        </option>
-                      ))}
-                    </select>
+                      {isMapped && (
+                        <CheckIcon
+                          className="w-2.5 h-2.5"
+                          style={{ color: "var(--success)" }}
+                        />
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="text-center py-6">
+            <div
+              className="flex flex-col items-center justify-center py-10 rounded-xl text-center"
+              style={{ border: "1px dashed var(--border-subtle)" }}
+            >
               <p className="text-xs" style={{ color: "var(--text-dim)" }}>
                 No mappable fields in this template.
+              </p>
+              <p
+                className="text-[11px] mt-1"
+                style={{ color: "var(--text-dim)" }}
+              >
+                Loops and conditions are handled automatically.
               </p>
             </div>
           )}
@@ -894,7 +1033,6 @@ function GoogleFormWizard({
             <button
               onClick={() => {
                 setStep(1);
-                setQuestionsError("");
                 setMappingError("");
               }}
               className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl min-h-[44px] transition-all duration-150"
@@ -914,6 +1052,13 @@ function GoogleFormWizard({
             </button>
             <button
               onClick={() => {
+                const validMappings = Object.values(mappings).filter(Boolean);
+                if (validMappings.length === 0 && mappableFields.length > 0) {
+                  setMappingError(
+                    "Please map at least one template field to a Google Form question."
+                  );
+                  return;
+                }
                 setMappingError("");
                 setStep(3);
               }}
@@ -936,7 +1081,7 @@ function GoogleFormWizard({
         </div>
       )}
 
-      {/* ── Step 3: Filename pattern ─────────────────────────────────────── */}
+      {/* ── Step 3: Filename pattern ──────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-4">
           <div>
@@ -991,6 +1136,7 @@ function GoogleFormWizard({
               {[
                 "{{row_number}}",
                 ...Object.keys(mappings)
+                  .filter((k) => mappings[k])
                   .slice(0, 4)
                   .map((k) => `{{${k}}}`),
               ].map((token) => (
@@ -1139,30 +1285,30 @@ function ConnectionCard({ connection }: { connection: any }) {
       await syncNow({ connectionId: connection._id });
       toast.success("Sync complete");
     } catch (err: any) {
-      const msg = err?.message ?? "Sync failed";
-      if (
-        msg.includes("token") ||
-        msg.includes("Token") ||
-        msg.includes("revoked")
-      ) {
+      const msg: string = err?.message ?? "";
+      if (/token|revoked/i.test(msg)) {
         setSyncError(
           "Sync failed — your Google token may have expired or been revoked. " +
             "Please disconnect and reconnect your Google account."
         );
-      } else if (msg.includes("Template") || msg.includes("template")) {
+      } else if (/template/i.test(msg)) {
         setSyncError(
           "Sync failed — the template file is missing or corrupt. " +
             "Please check your template in the editor."
         );
-      } else if (msg.includes("403") || msg.includes("permission")) {
+      } else if (/403|permission/i.test(msg)) {
         setSyncError(
-          "Sync failed — Google Forms access was denied. " +
-            "Make sure you still own the form and it hasn't been restricted."
+          "Sync failed — Google Forms access was denied. Make sure you still own " +
+            "the form and it hasn't been restricted."
         );
-      } else if (msg.includes("404") || msg.includes("not found")) {
+      } else if (/404|not found/i.test(msg)) {
         setSyncError(
-          "Sync failed — the form could not be found. " +
-            "It may have been deleted. Consider removing this connection."
+          "Sync failed — the form could not be found. It may have been deleted. " +
+            "Consider removing this connection."
+        );
+      } else if (/offline|network|fetch/i.test(msg) || !navigator.onLine) {
+        setSyncError(
+          "Sync failed — you appear to be offline. Check your internet connection."
         );
       } else {
         setSyncError(
@@ -1181,6 +1327,8 @@ function ConnectionCard({ connection }: { connection: any }) {
         id: connection._id,
         isActive: !connection.isActive,
       });
+    } catch {
+      toast.error("Failed to update connection. Please try again.");
     } finally {
       setToggling(false);
     }
@@ -1205,7 +1353,11 @@ function ConnectionCard({ connection }: { connection: any }) {
         className="rounded-2xl overflow-hidden"
         style={{
           background: "var(--bg-card)",
-          border: `1px solid ${connection.isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
+          border: `1px solid ${
+            connection.isActive
+              ? "var(--accent-border)"
+              : "var(--border-subtle)"
+          }`,
         }}
       >
         {/* Header */}
@@ -1216,7 +1368,11 @@ function ConnectionCard({ connection }: { connection: any }) {
               background: connection.isActive
                 ? "var(--accent-bg)"
                 : "var(--bg-input)",
-              border: `1px solid ${connection.isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              border: `1px solid ${
+                connection.isActive
+                  ? "var(--accent-border)"
+                  : "var(--border-subtle)"
+              }`,
             }}
           >
             📋
@@ -1411,7 +1567,7 @@ function ConnectionCard({ connection }: { connection: any }) {
             onClick={() => setExpanded((v) => !v)}
             className="text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
             style={{
-              background: "var(--bg-input)",
+              background: expanded ? "var(--bg-muted)" : "var(--bg-input)",
               color: "var(--text-muted)",
               border: `1px solid var(--border-subtle)`,
             }}
@@ -1419,14 +1575,15 @@ function ConnectionCard({ connection }: { connection: any }) {
               (e.currentTarget.style.background = "var(--bg-muted)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "var(--bg-input)")
+              (e.currentTarget.style.background = expanded
+                ? "var(--bg-muted)"
+                : "var(--bg-input)")
             }
           >
             {expanded ? "Hide" : "Details"}
           </button>
         </div>
 
-        {/* Sync error */}
         {syncError && (
           <div className="px-4 pb-4">
             <ErrorBanner
@@ -1437,13 +1594,11 @@ function ConnectionCard({ connection }: { connection: any }) {
           </div>
         )}
 
-        {/* Expanded section */}
         {expanded && (
           <div
             className="border-t p-4 space-y-5"
             style={{ borderColor: "var(--border-subtle)" }}
           >
-            {/* Field mappings */}
             <div className="space-y-2">
               <p
                 className="text-xs font-semibold"
@@ -1481,7 +1636,6 @@ function ConnectionCard({ connection }: { connection: any }) {
               </div>
             </div>
 
-            {/* Recent submissions */}
             {submissions && submissions.length > 0 && (
               <div className="space-y-2">
                 <p
@@ -1577,7 +1731,6 @@ function ConnectionCard({ connection }: { connection: any }) {
               </div>
             )}
 
-            {/* Remove connection */}
             <button
               onClick={() => setConfirmRemove(true)}
               className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
