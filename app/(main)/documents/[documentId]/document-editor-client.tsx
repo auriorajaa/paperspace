@@ -257,7 +257,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           className="flex items-center justify-center text-[11px] py-1"
           style={{ color: "var(--text-dim)" }}
         >
-          ← Back to documents
+          ← Back to Papers
         </Link>
       </div>
     </div>
@@ -827,7 +827,7 @@ export default function DocumentEditorPage() {
                 border: `1px solid var(--border-subtle)`,
               }}
             >
-              ← Back to Documents
+              ← Back to Papers
             </button>
             {!organization && (
               <span

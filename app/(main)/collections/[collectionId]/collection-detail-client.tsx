@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import {
@@ -57,6 +57,8 @@ import {
   ClipboardIcon,
   TerminalIcon,
   PackageIcon,
+  FileXIcon,
+  ShieldOffIcon,
 } from "lucide-react";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { Doc, Id } from "@/convex/_generated/dataModel";
@@ -85,6 +87,91 @@ import {
 } from "@/components/ui/dialog";
 import Link from "next/link";
 import { useDebounce } from "@/lib/useDebounce";
+
+type ErrorVariant = "not-found" | "no-access" | "generic";
+
+const ERROR_META: Record<
+  ErrorVariant,
+  { icon: React.ReactNode; title: string; hint: string }
+> = {
+  "not-found": {
+    icon: (
+      <FileXIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
+    ),
+    title: "Collection not found",
+    hint: "This collection may have been deleted or moved.",
+  },
+  "no-access": {
+    icon: (
+      <ShieldOffIcon className="w-6 h-6" style={{ color: "var(--text-dim)" }} />
+    ),
+    title: "Access denied",
+    hint: "You don't have permission to view this collection.",
+  },
+  generic: {
+    icon: (
+      <AlertCircleIcon
+        className="w-6 h-6"
+        style={{ color: "var(--text-dim)" }}
+      />
+    ),
+    title: "Something went wrong",
+    hint: "An unexpected error occurred. Please try again.",
+  },
+};
+
+function ErrorState({
+  variant,
+  extraHint,
+  action,
+}: {
+  variant: ErrorVariant;
+  extraHint?: string;
+  action?: React.ReactNode;
+}) {
+  const meta = ERROR_META[variant];
+  return (
+    <div
+      className="flex flex-col items-center justify-center h-full gap-5 p-8 text-center"
+      style={{ background: "var(--bg)" }}
+    >
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{
+          background: "var(--bg-muted)",
+          border: `1px solid var(--border-subtle)`,
+        }}
+      >
+        {meta.icon}
+      </div>
+      <div className="space-y-1.5 max-w-sm">
+        <p
+          className="text-[14px] font-semibold"
+          style={{ color: "var(--text)" }}
+        >
+          {meta.title}
+        </p>
+        <p
+          className="text-[12px] leading-relaxed"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {meta.hint}
+          {extraHint && (
+            <>
+              {" "}
+              <span style={{ color: "var(--text-dim)" }}>{extraHint}</span>
+            </>
+          )}
+        </p>
+      </div>
+      {action && (
+        <div className="flex items-center gap-2 flex-wrap justify-center">
+          {action}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities (shared with collections page)
@@ -785,6 +872,7 @@ export default function CollectionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
+  const { organization } = useOrganization();
   const collectionId = params.collectionId as Id<"collections">;
 
   const collection = useQuery(
@@ -794,6 +882,10 @@ export default function CollectionDetailPage() {
   const documents = useQuery(
     api.collections.getDocuments,
     isLoaded && isSignedIn ? { collectionId } : "skip"
+  );
+  const accessStatus = useQuery(
+    api.collections.getCollectionAccessStatus,
+    isLoaded && isSignedIn ? { id: collectionId } : "skip"
   );
   const toggleFavorite = useMutation(api.collections.toggleFavorite);
   const remove = useMutation(api.collections.remove);
@@ -893,38 +985,43 @@ export default function CollectionDetailPage() {
   }
 
   if (collection === null) {
+    const isNoAccess =
+      accessStatus?.exists === true && !accessStatus?.hasAccess;
+    const variant: ErrorVariant = isNoAccess ? "no-access" : "not-found";
+
+    const extraHint = isNoAccess
+      ? "If this is a shared collection, switch to your organization and try again."
+      : undefined;
+
     return (
-      <div
-        className="flex flex-col items-center justify-center h-full gap-4"
-        style={{ background: "var(--bg)" }}
-      >
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center"
-          style={{ background: "var(--danger-bg)" }}
-        >
-          <AlertCircleIcon
-            className="w-6 h-6"
-            style={{ color: "var(--danger)" }}
-          />
-        </div>
-        <p
-          className="text-[14px] font-semibold"
-          style={{ color: "var(--text)" }}
-        >
-          Collection not found
-        </p>
-        <button
-          onClick={() => router.push("/collections")}
-          className="text-[12px] font-medium px-4 py-2 rounded-xl"
-          style={{
-            background: "var(--bg-input)",
-            color: "var(--text-secondary)",
-            border: `1px solid var(--border-subtle)`,
-          }}
-        >
-          Back to Collections
-        </button>
-      </div>
+      <ErrorState
+        variant={variant}
+        extraHint={extraHint}
+        action={
+          <>
+            <button
+              onClick={() => router.push("/collections")}
+              className="text-[12px] font-medium px-4 py-2 rounded-xl transition-colors"
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-secondary)",
+                border: `1px solid var(--border-subtle)`,
+              }}
+            >
+              ← Back to Collections
+            </button>
+            {isNoAccess && !organization && (
+              <span
+                className="flex items-center gap-1.5 text-[11px]"
+                style={{ color: "var(--text-dim)" }}
+              >
+                <BuildingIcon className="w-3.5 h-3.5" />
+                Switch org via the account menu
+              </span>
+            )}
+          </>
+        }
+      />
     );
   }
 

@@ -1,8 +1,43 @@
 // app/api/onlyoffice-token/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import { auth } from "@clerk/nextjs/server";
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  if (entry.count >= 30) return true;
+  entry.count++;
+  return false;
+}
+
+function getClientIp(req: NextRequest): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp;
+
+  return "unknown";
+}
 
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getClientIp(req);
+  if (isRateLimited(ip)) {
+    return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+  }
+
   try {
     const {
       fileUrl,
@@ -11,23 +46,21 @@ export async function POST(req: NextRequest) {
       documentId,
       templateId,
       storageId,
-      userId,
+      userId: editorUserId,
       userName,
       userAvatar,
     } = await req.json();
 
-    // App URL — used for callback and file proxy (stays on Vercel/Next.js)
     const appUrl = (
       process.env.NEXT_PUBLIC_APP_URL ??
       `${req.nextUrl.protocol}//${req.nextUrl.host}`
     ).replace(/\/$/, "");
 
-    // OnlyOffice server URL — browser connects DIRECTLY here (WebSocket needs direct connection)
     const ooServerUrl = (
       process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL ?? ""
     ).replace(/\/$/, "");
 
-    const proxiedUrl = `${appUrl}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
+    // const proxiedUrl = `${appUrl}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
 
     const params = new URLSearchParams();
     if (documentId) params.set("documentId", documentId);
@@ -40,7 +73,7 @@ export async function POST(req: NextRequest) {
         fileType: "docx",
         key: storageId ? `${fileKey}-${storageId.slice(-8)}` : fileKey,
         title: fileName,
-        url: proxiedUrl,
+        url: fileUrl,
         permissions: {
           chat: false,
           comment: true,
@@ -59,7 +92,7 @@ export async function POST(req: NextRequest) {
         mode: "edit",
         lang: "en",
         user: {
-          id: userId ?? `guest-${Math.random().toString(36).slice(2, 8)}`,
+          id: editorUserId ?? `guest-${Math.random().toString(36).slice(2, 8)}`,
           name: userName ?? "Anonymous",
           ...(userAvatar ? { image: userAvatar } : {}),
         },
@@ -83,7 +116,6 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // Sign the config with JWT if secret is set
     const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
     if (jwtSecret) {
       config.token = jwt.sign(config, jwtSecret, { algorithm: "HS256" });
@@ -91,7 +123,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       config,
-      // Return direct OO server URL — browser must connect directly for WebSocket
       serverUrl: ooServerUrl,
     });
   } catch (err) {

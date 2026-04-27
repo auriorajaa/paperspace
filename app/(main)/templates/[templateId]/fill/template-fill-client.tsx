@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   ChevronLeftIcon,
   AlertCircleIcon,
@@ -19,19 +19,14 @@ import {
   InfoIcon,
   CheckIcon,
   ToggleLeftIcon,
-  ToggleRightIcon,
   TableIcon,
   HashIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   SparklesIcon,
   FileSpreadsheetIcon,
-  RefreshCwIcon,
-  GripVerticalIcon,
   EyeOffIcon,
   EyeIcon,
   CircleCheckIcon,
-  CircleIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Id } from "@/convex/_generated/dataModel";
@@ -49,16 +44,11 @@ interface ConditionGroup {
 
 // ── Business logic helpers ────────────────────────────────────────────────────
 
-/**
- * Given template preview text and a condition field name,
- * return the list of {{field}} names found inside the condition block.
- */
 function getConditionInnerFieldNames(
   previewText: string,
   conditionName: string
 ): Set<string> {
   const result = new Set<string>();
-  // Match {{#conditionName}} ... {{/conditionName}} or {{^conditionName}} ... {{/conditionName}}
   const openRe = new RegExp(
     `\\{\\{[#^]\\s*${conditionName}\\s*\\}\\}([\\s\\S]*?)\\{\\{/\\s*${conditionName}\\s*\\}\\}`,
     "gi"
@@ -75,12 +65,6 @@ function getConditionInnerFieldNames(
   return result;
 }
 
-/**
- * Build the complete field hierarchy:
- * - trueSimpleFields: standalone fields (not inside any loop or condition)
- * - loopFields: loop fields (already have sub-fields)
- * - conditionGroups: each condition + its inner fields
- */
 function buildFieldHierarchy(
   fields: TemplateField[],
   previewText: string
@@ -89,20 +73,17 @@ function buildFieldHierarchy(
   loopFields: TemplateField[];
   conditionGroups: ConditionGroup[];
 } {
-  // 1. Collect all sub-field names from loops (to exclude from simple fields)
   const loopSubNames = new Set(
     fields
       .filter((f) => f.type === "loop")
       .flatMap((f) => (f.subFields ?? []).map((sf) => sf.name))
   );
 
-  // 2. Find condition fields and their inner field names
   const conditionFields = fields.filter(
     (f) => f.type === "condition" || f.type === "condition_inverse"
   );
   const loopFields = fields.filter((f) => f.type === "loop");
 
-  // For each condition, find inner field names from the template text
   const conditionGroups: ConditionGroup[] = [];
   const conditionInnerNames = new Set<string>();
 
@@ -120,15 +101,11 @@ function buildFieldHierarchy(
       conditionGroups.push({ conditionField: cf, innerFields });
     }
   } else {
-    // No preview text — just show condition fields with no inner grouping
     for (const cf of conditionFields) {
       conditionGroups.push({ conditionField: cf, innerFields: [] });
     }
   }
 
-  // 3. Simple fields = all text/date/number/email fields that are NOT
-  //    - sub-fields of a loop
-  //    - inner fields of a condition block
   const trueSimpleFields = fields.filter(
     (f) =>
       f.type !== "loop" &&
@@ -271,14 +248,13 @@ function FieldInput({
     );
   }
 
-  // text + date
   return (
     <div className="space-y-1">
       <input
         type="text"
         placeholder={
           field.type === "date"
-            ? "e.g. 12 Maret 2026"
+            ? "e.g. 12 March 2026"
             : `Enter ${field.label.toLowerCase()}…`
         }
         value={value ?? ""}
@@ -326,14 +302,12 @@ function FieldItem({
           {field.label}
         </label>
         <div className="ml-auto flex items-center gap-1">
-          {/* Filled indicator */}
           {isFilled ? (
             <CircleCheckIcon
               className="w-3 h-3"
               style={{ color: "var(--success)" }}
             />
           ) : null}
-          {/* Type badge for non-text fields */}
           {field.type !== "text" && (
             <span
               className="text-[9px] font-medium px-1.5 py-0.5 rounded-md"
@@ -375,7 +349,6 @@ function LoopSection({
       className="rounded-2xl overflow-hidden"
       style={{ border: `1px solid var(--accent-border)` }}
     >
-      {/* Header */}
       <div
         className="flex items-center justify-between gap-3 px-4 py-3"
         style={{
@@ -438,7 +411,6 @@ function LoopSection({
         </button>
       </div>
 
-      {/* Empty state */}
       {rows.length === 0 ? (
         <button
           onClick={onAddRow}
@@ -483,7 +455,6 @@ function LoopSection({
           className="divide-y"
           style={{ borderColor: "var(--border-subtle)" }}
         >
-          {/* Column headers — desktop */}
           {subFields.length > 0 && (
             <div
               className="hidden sm:grid gap-3 px-4 py-2"
@@ -506,7 +477,6 @@ function LoopSection({
             </div>
           )}
 
-          {/* Rows */}
           {rows.map((row, rowIdx) => (
             <div
               key={rowIdx}
@@ -521,11 +491,9 @@ function LoopSection({
               </span>
 
               {subFields.length > 0 ? (
-                /* Desktop: grid, Mobile: stack */
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {subFields.map((sf) => (
                     <div key={sf.name} className="space-y-1 sm:space-y-0">
-                      {/* Mobile label */}
                       <p
                         className="text-[10px] font-medium sm:hidden"
                         style={{ color: "var(--text-dim)" }}
@@ -589,7 +557,6 @@ function LoopSection({
             </div>
           ))}
 
-          {/* Add more */}
           <button
             onClick={onAddRow}
             className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[12px] transition-all min-h-[44px]"
@@ -645,7 +612,6 @@ function ConditionSection({
           : "var(--border-subtle)",
       }}
     >
-      {/* Toggle header */}
       <div
         className="flex items-center gap-3 px-4 py-3"
         style={{
@@ -688,7 +654,6 @@ function ConditionSection({
               : "This block will be hidden in the document"}
           </p>
         </div>
-        {/* Toggle buttons */}
         <div className="flex items-center gap-1.5 shrink-0">
           {[
             {
@@ -731,7 +696,6 @@ function ConditionSection({
         </div>
       </div>
 
-      {/* Inner fields — only when shown and fields exist */}
       {isShown && innerFields.length > 0 && (
         <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {innerFields.map((f) => (
@@ -745,7 +709,6 @@ function ConditionSection({
         </div>
       )}
 
-      {/* Hidden message */}
       {!isShown && (
         <div
           className="flex items-center gap-2 px-4 py-3"
@@ -825,12 +788,14 @@ function FieldsOverviewSidebar({
   conditionGroups,
   values,
   loopRows,
+  onClearAll,
 }: {
   trueSimpleFields: TemplateField[];
   loopFields: TemplateField[];
   conditionGroups: ConditionGroup[];
   values: Record<string, string>;
   loopRows: Record<string, Record<string, string>[]>;
+  onClearAll?: () => void;
 }) {
   const allItems: { label: string; filled: boolean; type?: string }[] = [
     ...trueSimpleFields.map((f) => ({
@@ -846,7 +811,7 @@ function FieldsOverviewSidebar({
       filled: (loopRows[f.name]?.length ?? 0) > 0,
       type: "loop",
     })),
-    ...conditionGroups.map(({ conditionField, innerFields }) => ({
+    ...conditionGroups.map(({ conditionField }) => ({
       label: conditionField.label,
       filled: true,
       type: "condition",
@@ -920,6 +885,32 @@ function FieldsOverviewSidebar({
           ))}
         </div>
       </div>
+
+      {onClearAll && (
+        <button
+          onClick={onClearAll}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-medium transition-all"
+          style={{
+            background: "var(--bg-muted)",
+            color: "var(--text-muted)",
+            border: "1px solid var(--border-subtle)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--danger-bg)";
+            e.currentTarget.style.color = "var(--danger)";
+            e.currentTarget.style.borderColor =
+              "color-mix(in srgb, var(--danger) 20%, transparent)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--bg-muted)";
+            e.currentTarget.style.color = "var(--text-muted)";
+            e.currentTarget.style.borderColor = "var(--border-subtle)";
+          }}
+        >
+          <Trash2Icon className="w-3 h-3" />
+          Clear all fields
+        </button>
+      )}
     </div>
   );
 }
@@ -940,18 +931,21 @@ function SingleForm({
   previewText?: string;
 }) {
   const saveGenerated = useMutation(api.templates.saveGeneratedDocument);
+  const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
+  const deleteStorageMut = useMutation(api.templates.deleteStorage);
+
   const [values, setValues] = useState<Record<string, string>>({});
   const [loopRows, setLoopRows] = useState<
     Record<string, Record<string, string>[]>
   >({});
   const [generating, setGenerating] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<"docx" | "pdf">("docx");
 
-  const { trueSimpleFields, loopFields, conditionGroups } = buildFieldHierarchy(
-    fields,
-    previewText ?? ""
+  const { trueSimpleFields, loopFields, conditionGroups } = useMemo(
+    () => buildFieldHierarchy(fields, previewText ?? ""),
+    [fields, previewText]
   );
 
-  // Helpers
   const addRow = (fieldName: string, subFields: TemplateField["subFields"]) => {
     const blank: Record<string, string> = {};
     (subFields ?? []).forEach((sf) => (blank[sf.name] = ""));
@@ -980,21 +974,41 @@ function SingleForm({
     });
   };
 
-  // Progress
-  const allFieldsForProgress = [
-    ...trueSimpleFields,
-    ...loopFields,
-    ...conditionGroups.map((g) => g.conditionField),
-  ];
-  const filledCount = [
-    ...trueSimpleFields.filter((f) =>
-      f.type === "condition" || f.type === "condition_inverse"
-        ? true
-        : !!values[f.name]?.trim()
-    ),
-    ...loopFields.filter((f) => (loopRows[f.name]?.length ?? 0) > 0),
-    ...conditionGroups, // always "filled" since toggle exists
-  ].length;
+  const clearAll = useCallback(() => {
+    if (
+      !window.confirm(
+        "Are you sure you want to clear all fields and rows? This cannot be undone."
+      )
+    )
+      return;
+    setValues({});
+    setLoopRows({});
+    toast.info("All fields cleared");
+  }, []);
+
+  const uploadTempDocx = useCallback(
+    async (
+      buffer: ArrayBuffer
+    ): Promise<{ storageId: string; fileUrl: string }> => {
+      const uploadUrl = await generateUploadUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        body: buffer,
+      });
+      if (!res.ok) throw new Error("Temporary upload failed");
+      const { storageId } = await res.json();
+      const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+      return {
+        storageId,
+        fileUrl: `${convexSiteUrl}/getFile?storageId=${storageId}`,
+      };
+    },
+    [generateUploadUrl]
+  );
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -1007,13 +1021,20 @@ function SingleForm({
       const res = await fetch(
         `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`
       );
-      if (!res.ok) throw new Error("Failed to fetch template");
+      if (!res.ok) {
+        if (res.status === 401)
+          throw new Error("Session expired. Please sign in again.");
+        if (res.status === 429)
+          throw new Error("Too many requests. Please wait a moment.");
+        if (res.status === 403)
+          throw new Error("Access denied to template file.");
+        throw new Error("Failed to fetch template");
+      }
       const buffer = await res.arrayBuffer();
       const processed = await preprocessTemplate(buffer);
 
       const data: Record<string, unknown> = {};
 
-      // Simple fields
       for (const f of trueSimpleFields) {
         data[f.name] =
           f.type === "condition" || f.type === "condition_inverse"
@@ -1021,7 +1042,6 @@ function SingleForm({
             : (values[f.name] ?? "");
       }
 
-      // Condition toggles and their inner fields
       for (const { conditionField, innerFields } of conditionGroups) {
         data[conditionField.name] =
           (values[conditionField.name] ?? "true") === "true";
@@ -1030,7 +1050,6 @@ function SingleForm({
         }
       }
 
-      // Loop rows
       for (const f of loopFields) {
         data[f.name] = loopRows[f.name] ?? [];
       }
@@ -1044,26 +1063,52 @@ function SingleForm({
       doc.render(data);
 
       const out = doc.getZip().generate({ type: "arraybuffer" });
-      const blob = new Blob([out], {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${templateName}_${Date.now()}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      if (outputFormat === "pdf") {
+        const { storageId, fileUrl: tempFileUrl } = await uploadTempDocx(out);
+        try {
+          const convertRes = await fetch("/api/onlyoffice-convert", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileUrl: tempFileUrl,
+              fileName: `${templateName}.docx`,
+            }),
+          });
+          if (!convertRes.ok) {
+            throw new Error(`Conversion failed: ${convertRes.status}`);
+          }
+          const pdfBuffer = await convertRes.arrayBuffer();
+          const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${templateName}_${Date.now()}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } finally {
+          await deleteStorageMut({ storageId }).catch(() => {});
+        }
+      } else {
+        const blob = new Blob([out], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${templateName}_${Date.now()}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
 
       await saveGenerated({
         templateId,
         title: `${templateName} — generated`,
         fieldValues: values,
-        format: "docx",
+        format: outputFormat,
         isBulk: false,
       });
       toast.success("Document downloaded successfully");
-      setValues({});
-      setLoopRows({});
     } catch (err: any) {
       console.error(err);
       const errMsg =
@@ -1076,7 +1121,6 @@ function SingleForm({
     }
   };
 
-  // Empty state
   if (
     trueSimpleFields.length === 0 &&
     loopFields.length === 0 &&
@@ -1139,8 +1183,7 @@ function SingleForm({
   return (
     <div className="flex gap-6 items-start">
       {/* ── Main content ── */}
-      <div className="flex-1 min-w-0 space-y-6 pb-24 lg:pb-6">
-        {/* Simple fields */}
+      <div className="flex-1 min-w-0 space-y-6 pb-36 lg:pb-6">
         {trueSimpleFields.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center gap-2">
@@ -1180,7 +1223,6 @@ function SingleForm({
           </section>
         )}
 
-        {/* Loop fields */}
         {loopFields.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center gap-2">
@@ -1212,7 +1254,6 @@ function SingleForm({
           </section>
         )}
 
-        {/* Condition groups */}
         {conditionGroups.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center gap-2">
@@ -1255,13 +1296,98 @@ function SingleForm({
           conditionGroups={conditionGroups}
           values={values}
           loopRows={loopRows}
+          onClearAll={clearAll}
         />
+
+        {/* Format selector */}
+        <div className="flex gap-2">
+          {(["docx", "pdf"] as const).map((fmt) => (
+            <button
+              key={fmt}
+              type="button"
+              onClick={() => setOutputFormat(fmt)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-medium transition-all"
+              style={{
+                background:
+                  outputFormat === fmt
+                    ? "var(--accent-strong-bg)"
+                    : "var(--bg-muted)",
+                color:
+                  outputFormat === fmt
+                    ? "var(--accent-pale)"
+                    : "var(--text-muted)",
+                border: `1px solid ${outputFormat === fmt ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              }}
+            >
+              <FileTextIcon className="w-3 h-3" />
+              {fmt.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
         <GenerateButton onClick={handleGenerate} loading={generating} />
       </div>
 
-      {/* ── Mobile floating generate ── */}
-      <div className="lg:hidden fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-6 left-4 right-4 z-40">
-        {" "}
+      {/* ── Mobile sticky bar ── */}
+      <div className="lg:hidden fixed bottom-[calc(52px+env(safe-area-inset-bottom)+10px)] md:bottom-6 left-4 right-4 z-40 flex flex-col gap-2">
+        {/* Row 1: format toggle + clear all */}
+        <div className="flex gap-2">
+          {/* Format toggle */}
+          <div
+            className="flex gap-1 p-1 rounded-xl flex-1"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-subtle)",
+              backdropFilter: "blur(16px)",
+            }}
+          >
+            {(["docx", "pdf"] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setOutputFormat(fmt)}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                style={{
+                  background:
+                    outputFormat === fmt
+                      ? "var(--accent-strong-bg)"
+                      : "transparent",
+                  color:
+                    outputFormat === fmt
+                      ? "var(--accent-pale)"
+                      : "var(--text-muted)",
+                }}
+              >
+                <FileTextIcon className="w-3 h-3" />
+                {fmt.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* Clear all */}
+          <button
+            onClick={clearAll}
+            className="flex items-center justify-center px-4 rounded-xl transition-all"
+            style={{
+              background: "var(--bg-card)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border-subtle)",
+              backdropFilter: "blur(16px)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--danger-bg)";
+              e.currentTarget.style.color = "var(--danger)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-card)";
+              e.currentTarget.style.color = "var(--text-muted)";
+            }}
+          >
+            <Trash2Icon className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Row 2: generate button */}
         <button
           onClick={handleGenerate}
           disabled={generating}
@@ -1283,7 +1409,7 @@ function SingleForm({
           ) : (
             <>
               <DownloadIcon className="w-4 h-4" />
-              Generate & Download
+              Generate & Download {outputFormat.toUpperCase()}
             </>
           )}
         </button>
@@ -1308,6 +1434,9 @@ function BulkForm({
   previewText?: string;
 }) {
   const saveGenerated = useMutation(api.templates.saveGeneratedDocument);
+  const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
+  const deleteStorageMut = useMutation(api.templates.deleteStorage);
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -1318,15 +1447,52 @@ function BulkForm({
   const [generating, setGenerating] = useState(false);
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<"docx" | "pdf">("docx");
   const xlsxRef = useRef<HTMLInputElement>(null);
 
-  // Only flat (non-loop, non-condition) fields are bulk-fillable
-  const { trueSimpleFields } = buildFieldHierarchy(fields, previewText ?? "");
+  const { trueSimpleFields } = useMemo(
+    () => buildFieldHierarchy(fields, previewText ?? ""),
+    [fields, previewText]
+  );
   const bulkFields = trueSimpleFields.filter(
     (f) => f.type !== "condition" && f.type !== "condition_inverse"
   );
   const fieldNames = bulkFields.map((f) => f.name);
   const unmapped = fieldNames.filter((n) => !headers.includes(n));
+
+  const filenamePatternError = useMemo(() => {
+    if (filenamePattern.length > 200) return "Pattern too long (max 200 chars)";
+    if (/[<>:"|?*\x00-\x1f]/.test(filenamePattern))
+      return "Pattern contains invalid characters";
+    if (filenamePattern.includes("..")) return "Pattern cannot contain '..'";
+    if (filenamePattern.includes("/") || filenamePattern.includes("\\"))
+      return "Pattern cannot contain path separators";
+    return null;
+  }, [filenamePattern]);
+
+  const uploadTempDocx = useCallback(
+    async (
+      buffer: ArrayBuffer
+    ): Promise<{ storageId: string; fileUrl: string }> => {
+      const uploadUrl = await generateUploadUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        body: buffer,
+      });
+      if (!res.ok) throw new Error("Temporary upload failed");
+      const { storageId } = await res.json();
+      const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+      return {
+        storageId,
+        fileUrl: `${convexSiteUrl}/getFile?storageId=${storageId}`,
+      };
+    },
+    [generateUploadUrl]
+  );
 
   const downloadExcelTemplate = async () => {
     try {
@@ -1335,12 +1501,12 @@ function BulkForm({
         bulkFields.map((f) => f.name),
         bulkFields.map((f) =>
           f.type === "date"
-            ? "12 Maret 2026"
+            ? "'12 March 2026"
             : f.type === "number"
               ? "1000"
               : f.type === "email"
-                ? "contoh@email.com"
-                : `contoh_${f.name}`
+                ? "example@email.com"
+                : `example_${f.name}`
         ),
       ]);
       const wb = XLSX.utils.book_new();
@@ -1391,6 +1557,11 @@ function BulkForm({
   };
 
   const handleBulkGenerate = async () => {
+    if (filenamePatternError) {
+      toast.error(`Fix filename pattern: ${filenamePatternError}`);
+      return;
+    }
+
     setGenerating(true);
     setProgress(0);
     setBulkErrors([]);
@@ -1406,10 +1577,20 @@ function BulkForm({
       const res = await fetch(
         `/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`
       );
-      if (!res.ok)
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Session expired. Please sign in again.");
+        }
+        if (res.status === 429) {
+          throw new Error("Too many requests. Please wait a moment.");
+        }
+        if (res.status === 403) {
+          throw new Error("Access denied to template file.");
+        }
         throw new Error(
           "Failed to fetch template file. Check your connection."
         );
+      }
       const templateBuffer = await res.arrayBuffer();
       const processedBuffer = await preprocessTemplate(templateBuffer);
       const outputZip = new JSZip();
@@ -1435,15 +1616,54 @@ function BulkForm({
           });
           doc.render(data);
 
-          const out = doc.getZip().generate({ type: "arraybuffer" });
+          let out = doc.getZip().generate({ type: "arraybuffer" });
           let filename = filenamePattern
             .replace(/{{row_number}}/g, String(i + 1).padStart(3, "0"))
             .replace(/{{(\w+)}}/g, (_, key) => String(row[key] ?? ""))
-            .replace(/[<>:"/\\|?*]/g, "_")
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
             .trim();
-          if (!filename)
+
+          // SECURITY: Zip-slip / path traversal guard
+          if (
+            filename.includes("..") ||
+            filename.includes("/") ||
+            filename.includes("\\") ||
+            !filename
+          ) {
             filename = `document_${String(i + 1).padStart(3, "0")}`;
+          }
+
           if (!filename.endsWith(".docx")) filename += ".docx";
+
+          if (outputFormat === "pdf") {
+            try {
+              const { storageId, fileUrl: tempFileUrl } =
+                await uploadTempDocx(out);
+              try {
+                const convertRes = await fetch("/api/onlyoffice-convert", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    fileUrl: tempFileUrl,
+                    fileName: filename,
+                  }),
+                });
+                if (!convertRes.ok) {
+                  throw new Error(`Conversion failed: ${convertRes.status}`);
+                }
+                out = await convertRes.arrayBuffer();
+                filename = filename.replace(/\.docx$/i, "") + ".pdf";
+              } finally {
+                await deleteStorageMut({ storageId }).catch(() => {});
+              }
+            } catch (convertErr: any) {
+              errors.push(
+                `Row ${i + 1}: PDF conversion failed — ${convertErr.message}`
+              );
+              continue;
+            }
+          }
+
           outputZip.file(filename, out);
         } catch (err: any) {
           const msg =
@@ -1472,13 +1692,16 @@ function BulkForm({
         templateId,
         title: `${templateName} — bulk (${rows.length} rows)`,
         fieldValues: {},
-        format: "docx",
+        format: outputFormat,
         isBulk: true,
         bulkCount: rows.length,
       });
 
       const ok = rows.length - errors.length;
-      if (ok > 0) toast.success(`Generated ${ok} of ${rows.length} documents`);
+      if (ok > 0)
+        toast.success(
+          `Generated ${ok} of ${rows.length} documents as ${outputFormat.toUpperCase()}`
+        );
       if (!errors.length) setStep(1);
     } catch (err: any) {
       toast.error(err?.message ?? "Bulk generation failed.");
@@ -1487,12 +1710,11 @@ function BulkForm({
     }
   };
 
-  // ── Step 1: Download ─────────────────────────────────────────────────────
+  // ── Step 1: Download template ─────────────────────────────────────────────
 
   if (step === 1) {
     return (
       <div className="w-full space-y-6">
-        {/* Intro */}
         <div
           className="flex items-start gap-3 p-4 rounded-2xl"
           style={{
@@ -1519,12 +1741,9 @@ function BulkForm({
               it here. We&apos;ll generate all documents and package them into a
               single ZIP file.
             </p>
-
             <div
               className="mt-3 pt-2 flex items-start gap-2 text-[11px] border-t"
-              style={{
-                borderColor: "var(--accent-border)",
-              }}
+              style={{ borderColor: "var(--accent-border)" }}
             >
               <InfoIcon
                 className="w-3 h-3 mt-0.5 shrink-0"
@@ -1540,7 +1759,6 @@ function BulkForm({
           </div>
         </div>
 
-        {/* Steps overview */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             {
@@ -1607,7 +1825,6 @@ function BulkForm({
           ))}
         </div>
 
-        {/* Column preview */}
         <div>
           <p
             className="text-[11px] font-semibold uppercase tracking-wider mb-2"
@@ -1624,7 +1841,7 @@ function BulkForm({
                 <tr
                   style={{
                     background: "var(--bg-muted)",
-                    borderBottom: `1px solid var(--border-subtle)`,
+                    borderBottom: "1px solid var(--border-subtle)",
                   }}
                 >
                   {bulkFields.map((f) => (
@@ -1633,7 +1850,7 @@ function BulkForm({
                       className="px-3 py-2 text-left font-mono font-semibold whitespace-nowrap"
                       style={{
                         color: "var(--accent-light)",
-                        borderRight: `1px solid var(--border-subtle)`,
+                        borderRight: "1px solid var(--border-subtle)",
                       }}
                     >
                       {f.name}
@@ -1648,7 +1865,7 @@ function BulkForm({
                     style={{
                       borderBottom:
                         rowIdx === 0
-                          ? `1px solid var(--border-subtle)`
+                          ? "1px solid var(--border-subtle)"
                           : "none",
                     }}
                   >
@@ -1658,16 +1875,16 @@ function BulkForm({
                         className="px-3 py-2 whitespace-nowrap"
                         style={{
                           color: "var(--text-dim)",
-                          borderRight: `1px solid var(--border-subtle)`,
+                          borderRight: "1px solid var(--border-subtle)",
                         }}
                       >
                         {f.type === "date"
-                          ? `12 Maret ${2025 + rowIdx}`
+                          ? "12 March 2026"
                           : f.type === "number"
                             ? `${(rowIdx + 1) * 1000}`
                             : f.type === "email"
-                              ? `user${rowIdx + 1}@mail.com`
-                              : `contoh_${rowIdx + 1}`}
+                              ? `user${rowIdx + 1}@example.com`
+                              : `example_${f.name}`}
                       </td>
                     ))}
                   </tr>
@@ -1675,11 +1892,17 @@ function BulkForm({
               </tbody>
             </table>
           </div>
+          <p
+            className="text-[10px] mt-1.5"
+            style={{ color: "var(--text-dim)" }}
+          >
+            Tip: The downloaded template prefixes date cells with an apostrophe
+            (&apos;) so Excel treats them as plain text and won&apos;t
+            auto-format them.
+          </p>
         </div>
 
-        {/* Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Download template card */}
           <button
             onClick={downloadExcelTemplate}
             className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl transition-all text-center"
@@ -1715,7 +1938,6 @@ function BulkForm({
             </div>
           </button>
 
-          {/* Upload drop zone */}
           <div
             className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all text-center"
             style={{
@@ -1780,8 +2002,7 @@ function BulkForm({
 
   if (step === 2) {
     return (
-      <div className="w-full space-y-5 px-4 md:px-6">
-        {/* Status bar */}
+      <div className="w-full space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h3
@@ -1826,7 +2047,6 @@ function BulkForm({
           </div>
         </div>
 
-        {/* Unmapped warning */}
         {unmapped.length > 0 && (
           <div
             className="flex items-start gap-2.5 p-3.5 rounded-xl"
@@ -1868,17 +2088,16 @@ function BulkForm({
           </div>
         )}
 
-        {/* Data preview */}
         <div
           className="rounded-xl overflow-auto"
-          style={{ border: `1px solid var(--border-subtle)`, maxHeight: 280 }}
+          style={{ border: "1px solid var(--border-subtle)", maxHeight: 280 }}
         >
           <table className="w-full text-[12px] min-w-max">
             <thead>
               <tr
                 style={{
                   background: "var(--bg-muted)",
-                  borderBottom: `1px solid var(--border-subtle)`,
+                  borderBottom: "1px solid var(--border-subtle)",
                 }}
               >
                 <th
@@ -1922,7 +2141,7 @@ function BulkForm({
               {rows.slice(0, 8).map((row, i) => (
                 <tr
                   key={i}
-                  style={{ borderBottom: `1px solid var(--border-subtle)` }}
+                  style={{ borderBottom: "1px solid var(--border-subtle)" }}
                 >
                   <td
                     className="px-3 py-2"
@@ -1963,7 +2182,7 @@ function BulkForm({
             style={{
               background: "var(--bg-muted)",
               color: "var(--text-muted)",
-              border: `1px solid var(--border-subtle)`,
+              border: "1px solid var(--border-subtle)",
             }}
           >
             ← Change file
@@ -1993,7 +2212,7 @@ function BulkForm({
   // ── Step 3: Generate ─────────────────────────────────────────────────────
 
   return (
-    <div className="w-full space-y-5 px-4 md:px-6">
+    <div className="w-full space-y-6">
       <div>
         <h3
           className="text-[14px] font-semibold"
@@ -2017,16 +2236,21 @@ function BulkForm({
           className="w-full rounded-xl px-3 py-2.5 text-[13px] font-mono outline-none"
           style={{
             background: "var(--bg-muted)",
-            border: `1px solid var(--border-subtle)`,
+            border: `1px solid ${filenamePatternError ? "var(--danger)" : "var(--border-subtle)"}`,
             color: "var(--text)",
           }}
           onFocus={(e) =>
-            (e.currentTarget.style.border = `1px solid var(--accent-border)`)
+            (e.currentTarget.style.border = `1px solid ${filenamePatternError ? "var(--danger)" : "var(--accent-border)"}`)
           }
           onBlur={(e) =>
-            (e.currentTarget.style.border = `1px solid var(--border-subtle)`)
+            (e.currentTarget.style.border = `1px solid ${filenamePatternError ? "var(--danger)" : "var(--border-subtle)"}`)
           }
         />
+        {filenamePatternError && (
+          <p className="text-[11px]" style={{ color: "var(--danger)" }}>
+            {filenamePatternError}
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-1.5">
           {[
@@ -2059,7 +2283,7 @@ function BulkForm({
             className="rounded-xl p-3"
             style={{
               background: "var(--bg-muted)",
-              border: `1px solid var(--border-subtle)`,
+              border: "1px solid var(--border-subtle)",
             }}
           >
             <p
@@ -2079,6 +2303,46 @@ function BulkForm({
             </code>
           </div>
         )}
+      </div>
+
+      {/* Output format selector */}
+      <div className="space-y-2.5">
+        <label
+          className="text-[12px] font-medium"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          Output format
+        </label>
+        <div className="flex gap-2">
+          {(["docx", "pdf"] as const).map((fmt) => (
+            <button
+              key={fmt}
+              type="button"
+              onClick={() => setOutputFormat(fmt)}
+              className="flex-1 mt-2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-medium transition-all"
+              style={{
+                background:
+                  outputFormat === fmt
+                    ? "var(--accent-strong-bg)"
+                    : "var(--bg-muted)",
+                color:
+                  outputFormat === fmt
+                    ? "var(--accent-pale)"
+                    : "var(--text-muted)",
+                border: `1px solid ${outputFormat === fmt ? "var(--accent-border)" : "var(--border-subtle)"}`,
+              }}
+            >
+              <FileTextIcon className="w-3.5 h-3.5" />
+              {fmt.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        {/* {outputFormat === "pdf" && (
+          <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
+            PDFs are generated via OnlyOffice. Temporary files are deleted
+            automatically after conversion.
+          </p>
+        )} */}
       </div>
 
       {/* Summary */}
@@ -2113,7 +2377,7 @@ function BulkForm({
           className="rounded-xl p-4 space-y-2.5"
           style={{
             background: "var(--bg-muted)",
-            border: `1px solid var(--border-subtle)`,
+            border: "1px solid var(--border-subtle)",
           }}
         >
           <div className="flex justify-between text-[12px]">
@@ -2183,14 +2447,14 @@ function BulkForm({
           style={{
             background: "var(--bg-muted)",
             color: "var(--text-muted)",
-            border: `1px solid var(--border-subtle)`,
+            border: "1px solid var(--border-subtle)",
           }}
         >
           ← Back
         </button>
         <button
           onClick={handleBulkGenerate}
-          disabled={generating}
+          disabled={generating || !!filenamePatternError}
           className="flex-1 flex items-center justify-center gap-2 text-[13px] font-semibold py-2.5 rounded-xl transition-all"
           style={{
             background: generating
@@ -2198,9 +2462,10 @@ function BulkForm({
               : "var(--accent-strong-bg)",
             color: generating ? "var(--text-muted)" : "var(--accent-pale)",
             border: `1px solid ${generating ? "var(--accent-border)" : "var(--accent-border)"}`,
+            opacity: filenamePatternError ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
-            if (!generating)
+            if (!generating && !filenamePatternError)
               e.currentTarget.style.background = "var(--accent-mid)";
           }}
           onMouseLeave={(e) => {
@@ -2218,8 +2483,8 @@ function BulkForm({
           ) : (
             <>
               <DownloadIcon className="w-4 h-4" />
-              Generate {rows.length} document{rows.length !== 1 ? "s" : ""} as
-              ZIP
+              Generate {rows.length} document{rows.length !== 1 ? "s" : ""} as{" "}
+              {outputFormat.toUpperCase()} ZIP
             </>
           )}
         </button>
@@ -2241,12 +2506,28 @@ export default function TemplateFillPage() {
     isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
 
+  // ── Always call useMemo before any conditional returns ──────────────
+  const { trueSimpleFields, loopFields, conditionGroups } = useMemo(() => {
+    if (!template) {
+      // Not loaded yet or not found – return empty placeholders
+      return {
+        trueSimpleFields: [] as TemplateField[],
+        loopFields: [] as TemplateField[],
+        conditionGroups: [] as ConditionGroup[],
+      };
+    }
+    const fields = template.fields as TemplateField[];
+    const previewText = (template as any).previewText as string | undefined;
+    return buildFieldHierarchy(fields, previewText ?? "");
+  }, [template]);
+
+  // ── Loading state ─────────────────────────────────────────────────
   if (template === undefined) {
     return (
       <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
         <div
           className="px-4 sm:px-6 py-5 animate-pulse"
-          style={{ borderBottom: `1px solid var(--border-subtle)` }}
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
         >
           <div
             className="h-3 rounded w-40 mb-3"
@@ -2272,6 +2553,7 @@ export default function TemplateFillPage() {
     );
   }
 
+  // ── Not found state ────────────────────────────────────────────────
   if (template === null) {
     return (
       <div
@@ -2282,7 +2564,7 @@ export default function TemplateFillPage() {
           className="w-14 h-14 rounded-2xl flex items-center justify-center"
           style={{
             background: "var(--bg-muted)",
-            border: `1px solid var(--border-subtle)`,
+            border: "1px solid var(--border-subtle)",
           }}
         >
           <AlertCircleIcon
@@ -2311,7 +2593,7 @@ export default function TemplateFillPage() {
           style={{
             background: "var(--bg-input)",
             color: "var(--text-secondary)",
-            border: `1px solid var(--border-subtle)`,
+            border: "1px solid var(--border-subtle)",
           }}
         >
           ← Back to Templates
@@ -2320,15 +2602,11 @@ export default function TemplateFillPage() {
     );
   }
 
+  // ── Template loaded – proceed normally ────────────────────────────
   const fields = template.fields as TemplateField[];
   const previewText = (template as any).previewText as string | undefined;
   const tmplTags = (template as any).tags as string[] | undefined;
 
-  // Pre-compute hierarchy for header stats
-  const { trueSimpleFields, loopFields, conditionGroups } = buildFieldHierarchy(
-    fields,
-    previewText ?? ""
-  );
   const totalSections =
     trueSimpleFields.length + loopFields.length + conditionGroups.length;
 
@@ -2337,7 +2615,7 @@ export default function TemplateFillPage() {
       {/* ── Header ── */}
       <div
         className="flex flex-col justify-between shrink-0 px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 sm:pb-5"
-        style={{ borderBottom: `1px solid var(--border-subtle)` }}
+        style={{ borderBottom: "1px solid var(--border-subtle)" }}
       >
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -2406,7 +2684,6 @@ export default function TemplateFillPage() {
                 </p>
               )}
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {/* Field breakdown badges */}
                 {trueSimpleFields.length > 0 && (
                   <span
                     className="text-[10px] font-medium px-1.5 py-0.5 rounded-md"
@@ -2469,7 +2746,7 @@ export default function TemplateFillPage() {
             style={{
               background: "var(--bg-muted)",
               color: "var(--text-muted)",
-              border: `1px solid var(--border-subtle)`,
+              border: "1px solid var(--border-subtle)",
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.color = "var(--text-secondary)")
@@ -2491,7 +2768,7 @@ export default function TemplateFillPage() {
             className="mb-6"
             style={{
               background: "var(--bg-muted)",
-              border: `1px solid var(--border-subtle)`,
+              border: "1px solid var(--border-subtle)",
             }}
           >
             <TabsTrigger value="single" className="text-[12px]">
