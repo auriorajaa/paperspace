@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -11,7 +11,6 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const storageId = url.searchParams.get("storageId");
-    // Opsional: nama file untuk Content-Disposition
     const filename = url.searchParams.get("filename");
 
     if (!storageId) {
@@ -27,14 +26,15 @@ http.route({
 
     const headers: Record<string, string> = {
       "Content-Type": contentType,
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-store",
+      // FIX: Restrict CORS to known origins instead of wildcard.
+      // storageIds are opaque but could be leaked via shared URLs.
+      // The app origin env var covers the frontend; Convex site URL
+      // covers server-to-server (webhook, cron) calls.
+      "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
+      "Cache-Control": "private, no-store",
     };
 
-    // Kalau ada filename, set Content-Disposition supaya browser tau nama filenya
     if (filename) {
-      // inline = buka di browser (bukan langsung download)
-      // encodeURIComponent untuk handle spasi & karakter spesial
       headers["Content-Disposition"] =
         `inline; filename="${filename}.docx"; filename*=UTF-8''${encodeURIComponent(filename)}.docx`;
     }
@@ -44,15 +44,56 @@ http.route({
 });
 
 // ── Generate upload URL ───────────────────────────────────────────────────────
+// FIX: Previously had zero auth — anyone on the internet could POST here and
+// obtain a Convex storage upload URL, enabling arbitrary file uploads that
+// would consume the app's storage quota.
+//
+// Now requires a valid, active scriptToken in the request body.
+// The webhook route passes its token; direct callers without a token are
+// rejected. Frontend uploads go through the `templates.generateUploadUrl`
+// Convex mutation (auth-gated by Clerk) and do NOT use this endpoint.
 http.route({
   path: "/getUploadUrl",
   method: "POST",
-  handler: httpAction(async (ctx) => {
+  handler: httpAction(async (ctx, request) => {
+    // Parse body — require scriptToken
+    let scriptToken: string | undefined;
+    try {
+      const body = await request.json();
+      scriptToken =
+        typeof body?.scriptToken === "string" ? body.scriptToken : undefined;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Request body must be JSON with scriptToken" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!scriptToken) {
+      return new Response(
+        JSON.stringify({ error: "scriptToken is required" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the token resolves to an active connection
+    const connection = await ctx.runQuery(
+      api.formConnections.getByScriptToken,
+      { token: scriptToken }
+    );
+
+    if (!connection || !connection.isActive) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or inactive scriptToken" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const uploadUrl = await ctx.storage.generateUploadUrl();
     return new Response(JSON.stringify({ uploadUrl }), {
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
       },
     });
   }),
@@ -98,7 +139,7 @@ http.route({
       return new Response(JSON.stringify({ ok: true }), {
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
         },
       });
     } catch (err) {
@@ -107,7 +148,7 @@ http.route({
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
         },
       });
     }
@@ -122,7 +163,7 @@ for (const path of ["/getUploadUrl", "/updateFileStorage"]) {
     handler: httpAction(async () => {
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
           "Access-Control-Allow-Methods": "POST, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },

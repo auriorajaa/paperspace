@@ -299,11 +299,13 @@ function MappingSelect({
 
 function AccountBadge({
   email,
+  clerkEmail,
   expiresAt,
   onDisconnect,
   onReconnect,
 }: {
   email: string;
+  clerkEmail?: string | null;
   expiresAt?: number;
   onDisconnect: () => void;
   onReconnect: () => void;
@@ -312,6 +314,8 @@ function AccountBadge({
   const deactivateAll = useMutation(api.formConnections.deactivateAllForOwner);
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  const emailMismatch = clerkEmail && email !== clerkEmail;
 
   const tokenExpiresIn = expiresAt ? expiresAt - Date.now() : null;
   const tokenExpiringSoon =
@@ -403,6 +407,11 @@ function AccountBadge({
           access in Google Account settings.
         </p>
 
+        {emailMismatch && (
+          <WarningBanner
+            message={`You are logged in as ${clerkEmail}, but the connected Google account is ${email}. This is okay if you intentionally use two different accounts.`}
+          />
+        )}
         {tokenExpired && (
           <ErrorBanner
             message="Your Google connection has expired. Please disconnect and reconnect to resume auto-sync."
@@ -2054,6 +2063,7 @@ export default function ConnectFormPage() {
           <div className="max-w-xl space-y-5">
             <AccountBadge
               email={googleAccount.email}
+              clerkEmail={googleAccount.clerkEmail}
               expiresAt={googleAccount.expiresAt}
               onDisconnect={() => {}}
               onReconnect={handleConnectGoogle}

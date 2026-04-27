@@ -1,4 +1,9 @@
 // app/api/google/forms/[formId]/questions/route.ts
+//
+// FIX: ConvexHttpClient was previously module-level and mutated via setAuth()
+// inside the handler. Under concurrent requests on a warm serverless instance,
+// user A's token could overwrite user B's token before B's query fires.
+// Fix: create a fresh client per request.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -6,8 +11,6 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 
 export const dynamic = "force-dynamic";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 async function refreshAccessToken(refreshToken: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -35,8 +38,11 @@ export async function GET(
 
   const { formId } = await context.params;
 
-  // SECURITY FIX: Forward the Clerk JWT to Convex so the query can verify the
-  // caller's identity server-side, instead of trusting a caller-supplied ownerId.
+  // FIX: Create a fresh ConvexHttpClient per request instead of reusing a
+  // module-level singleton. The singleton was mutated via setAuth() inside the
+  // handler, which is not safe under concurrent serverless invocations — user
+  // A's Clerk token could still be set when user B's query fires.
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const clerkToken = await getToken({ template: "convex" });
   if (clerkToken) convex.setAuth(clerkToken);
 
@@ -87,7 +93,6 @@ export async function GET(
 
     accessToken = refreshed.access_token;
 
-    // Persist the refreshed token (auth-gated — no ownerId param needed)
     await convex.mutation(api.googleAccounts.updateToken, {
       accessToken: refreshed.access_token,
       expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
@@ -111,15 +116,11 @@ export async function GET(
     );
   }
 
-  // FIXED: Previous version returned 500 for all non-OK responses, so the
-  // client-side 401/403/404 handlers in template-connect-client.tsx were
-  // never triggered. Now we mirror the actual Google status code.
   if (!formRes.ok) {
     const bodyText = await formRes.text().catch(() => "");
     console.error("[google/forms/questions]", formRes.status, bodyText);
 
     if (formRes.status === 401) {
-      // Likely the access token we just used is already stale/revoked
       return NextResponse.json(
         {
           error:
@@ -153,7 +154,6 @@ export async function GET(
       );
     }
 
-    // Catch-all for unexpected Google-side errors (5xx, etc.)
     return NextResponse.json(
       {
         error:

@@ -1,4 +1,8 @@
 // app/api/form-webhook/[token]/route.ts
+//
+// CHANGES vs previous version:
+//   - Pass scriptToken in body when calling /getUploadUrl so the now-auth-gated
+//     endpoint can verify the caller without a Clerk session.
 
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
@@ -9,7 +13,47 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export const dynamic = "force-dynamic";
 
-// ── Filename sanitizer — guaranteed non-empty ─────────────────────────────────
+// ── Rate limiter ──────────────────────────────────────────────────────────────
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW = 60_000;
+
+function checkRateLimit(token: string): {
+  allowed: boolean;
+  retryAfter: number;
+} {
+  const now = Date.now();
+
+  if (Math.random() < 0.02) {
+    for (const [k, e] of rateLimitMap.entries()) {
+      if (now > e.resetAt) rateLimitMap.delete(k);
+    }
+  }
+
+  const entry = rateLimitMap.get(token);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(token, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+    };
+  }
+
+  entry.count++;
+  return { allowed: true, retryAfter: 0 };
+}
+
+// ── Filename sanitizer ────────────────────────────────────────────────────────
 
 function buildFilename(
   pattern: string,
@@ -22,9 +66,10 @@ function buildFilename(
     .replace(/[<>:"/\\|?*]/g, "_")
     .trim();
 
-  // FIXED: fallback if the pattern resolves to empty / only underscores
   return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
 }
+
+// ── POST ──────────────────────────────────────────────────────────────────────
 
 export async function POST(
   req: NextRequest,
@@ -32,6 +77,22 @@ export async function POST(
 ) {
   try {
     const { token } = await context.params;
+
+    const rl = checkRateLimit(token);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rl.retryAfter),
+            "X-RateLimit-Limit": String(RATE_LIMIT_MAX),
+            "X-RateLimit-Window": String(RATE_LIMIT_WINDOW / 1000),
+          },
+        }
+      );
+    }
+
     const body = (await req.json()) as {
       respondentEmail?: string;
       answers?: Record<string, string>;
@@ -49,9 +110,12 @@ export async function POST(
       );
     }
 
-    const template = await convex.query(api.templates.getById, {
-      id: connection.templateId,
-    });
+    const template = await convex.query(
+      api.templates.getTemplateByScriptToken,
+      {
+        scriptToken: token,
+      }
+    );
     if (!template) {
       return NextResponse.json(
         { error: "Template not found" },
@@ -69,19 +133,16 @@ export async function POST(
 
     const submittedAt = Date.now();
     const rowNumber = String(submittedAt).slice(-6);
-
-    // FIXED: use buildFilename() for a guaranteed non-empty valid name
     const filename = buildFilename(
       connection.filenamePattern,
       rowNumber,
       fieldValues
     );
 
-    // SECURITY FIX: createSubmission no longer takes ownerId as a param —
-    // it derives it from the connection on the Convex side.
     const submissionId = await convex.mutation(
       api.formConnections.createSubmission,
       {
+        scriptToken: token,
         connectionId: connection._id,
         respondentEmail: body.respondentEmail,
         fieldValues,
@@ -91,17 +152,11 @@ export async function POST(
       }
     );
 
-    // FIXED: fire-and-forget is wrapped with a hard timeout so the background
-    // task can't run forever after the HTTP response is sent (which causes
-    // silent failures on Vercel/Edge runtimes that terminate background work).
-    //
-    // If generation doesn't finish within 55 s, we mark the submission as
-    // "error" so the user can see it failed and retry manually instead of
-    // leaving it stuck on "pending" indefinitely.
     const TIMEOUT_MS = 55_000;
 
     const generationPromise = generateDocument({
       submissionId: submissionId as Id<"formSubmissions">,
+      scriptToken: token,
       template,
       fieldValues,
       filename,
@@ -114,25 +169,9 @@ export async function POST(
       )
     );
 
-    // We await here (with a timeout) rather than truly fire-and-forget so the
-    // runtime doesn't kill the in-flight upload. We still respond to the
-    // webhook caller quickly via the early return above; the await is purely
-    // to keep the process alive long enough for generation to complete.
-    Promise.race([generationPromise, timeoutPromise]).catch(async (err) => {
+    Promise.race([generationPromise, timeoutPromise]).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[form-webhook] Generation error or timeout:", message);
-      try {
-        await convex.mutation(api.formConnections.updateSubmission, {
-          id: submissionId as Id<"formSubmissions">,
-          status: "error",
-          errorMessage: message,
-        });
-      } catch (updateErr) {
-        console.error(
-          "[form-webhook] Failed to update submission status:",
-          updateErr
-        );
-      }
     });
 
     return NextResponse.json({ ok: true, submissionId });
@@ -142,13 +181,17 @@ export async function POST(
   }
 }
 
+// ── Generate document ─────────────────────────────────────────────────────────
+
 async function generateDocument({
   submissionId,
+  scriptToken,
   template,
   fieldValues,
   filename,
 }: {
   submissionId: Id<"formSubmissions">;
+  scriptToken: string;
   template: {
     storageId: string;
     fields: Array<{ name: string; type: string }>;
@@ -157,13 +200,12 @@ async function generateDocument({
   filename: string;
 }) {
   const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
   try {
     const { default: PizZip } = await import("pizzip");
     const { default: Docxtemplater } = await import("docxtemplater");
     const { preprocessTemplate } = await import("@/lib/template-preprocessor");
 
-    // Use CONVEX_SITE_URL (server-only) consistently; fall back to the
-    // public variant so local dev still works when only one is set.
     const convexSiteUrl =
       process.env.CONVEX_SITE_URL ?? process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
 
@@ -200,12 +242,12 @@ async function generateDocument({
       .generate({ type: "arraybuffer" });
     const outUint8 = new Uint8Array(outBuffer);
 
-    // Use the same base URL consistently
-    const convexSiteUrl2 =
-      process.env.CONVEX_SITE_URL ?? process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
-
-    const uploadUrlRes = await fetch(`${convexSiteUrl2}/getUploadUrl`, {
+    // FIX: pass scriptToken in body so /getUploadUrl can verify the caller
+    // at the HTTP layer (previously the endpoint had zero auth).
+    const uploadUrlRes = await fetch(`${convexSiteUrl}/getUploadUrl`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scriptToken }),
     });
     if (!uploadUrlRes.ok) throw new Error("Failed to get upload URL");
     const { uploadUrl } = (await uploadUrlRes.json()) as { uploadUrl: string };
@@ -219,10 +261,12 @@ async function generateDocument({
       body: outUint8,
     });
     if (!uploadRes.ok) throw new Error("Upload failed");
-    const { storageId } = (await uploadRes.json()) as { storageId: string };
-    const fileUrl = `${convexSiteUrl2}/getFile?storageId=${storageId}`;
 
-    await client.mutation(api.formConnections.updateSubmission, {
+    const { storageId } = (await uploadRes.json()) as { storageId: string };
+    const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
+
+    await client.mutation(api.formConnections.updateSubmissionForWebhook, {
+      scriptToken,
       id: submissionId,
       storageId,
       fileUrl,
@@ -230,12 +274,12 @@ async function generateDocument({
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    await client.mutation(api.formConnections.updateSubmission, {
+    await client.mutation(api.formConnections.updateSubmissionForWebhook, {
+      scriptToken,
       id: submissionId,
       status: "error",
       errorMessage: message,
     });
-    // Re-throw so the Promise.race timeout handler in the route can log it
     throw err;
   }
 }

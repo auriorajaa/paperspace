@@ -1,4 +1,4 @@
-// app\(main)\form-results\form-results-client.tsx
+// app/(main)/form-results/form-results-client.tsx
 "use client";
 
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -24,7 +24,6 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   Trash2Icon,
-  ArchiveIcon,
   FilterIcon,
   XIcon,
   MinusIcon,
@@ -92,16 +91,24 @@ interface Connection {
   _creationTime: number;
 }
 
-interface OverflowMenuItem {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-  hidden?: boolean;
-}
+// FIX: removed BottomSheet + OverflowMenuItem — BottomSheet was defined but
+// never rendered anywhere in the component tree. Dead code removed entirely.
 
 // ── Export helpers ────────────────────────────────────────────────────────────
+
+// FIX: triggerDownload centralises the <a> lifecycle so the element is always
+// removed and the object URL always revoked, even when an earlier step throws.
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke to give the browser time to start the download
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 
 async function exportSubmission(submission: Submission, fmt: "docx" | "pdf") {
   if (!submission.fileUrl) {
@@ -113,15 +120,7 @@ async function exportSubmission(submission: Submission, fmt: "docx" | "pdf") {
     try {
       const res = await fetch(submission.fileUrl);
       if (!res.ok) throw new Error("Fetch failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${submission.filename}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      triggerDownload(await res.blob(), `${submission.filename}.docx`);
       toast.dismiss(toastId);
       toast.success("Downloading .docx file");
     } catch {
@@ -140,15 +139,7 @@ async function exportSubmission(submission: Submission, fmt: "docx" | "pdf") {
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${submission.filename}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      triggerDownload(await res.blob(), `${submission.filename}.pdf`);
       toast.dismiss(toastId);
       toast.success("PDF downloaded");
     } catch {
@@ -156,130 +147,6 @@ async function exportSubmission(submission: Submission, fmt: "docx" | "pdf") {
       toast.error("PDF export failed. Check OnlyOffice setup.");
     }
   }
-}
-
-// ── Bottom Sheet / Overflow Menu ─────────────────────────────────────────────
-
-function BottomSheet({
-  open,
-  onClose,
-  items,
-  title,
-}: {
-  open: boolean;
-  onClose: () => void;
-  items: OverflowMenuItem[];
-  title?: string;
-}) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-end sm:p-4"
-      style={{
-        background: "var(--overlay-backdrop)",
-        backdropFilter: "blur(4px)",
-      }}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
-    >
-      <div
-        className="w-full sm:w-56 rounded-t-2xl sm:rounded-2xl overflow-hidden"
-        style={{
-          background: "var(--popover)",
-          border: `1px solid var(--border-subtle)`,
-          boxShadow: "var(--shadow-flyout)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {title && (
-          <div
-            className="px-4 pt-4 pb-2"
-            style={{ borderBottom: `1px solid var(--border-subtle)` }}
-          >
-            <p
-              className="text-xs font-semibold truncate"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {title}
-            </p>
-          </div>
-        )}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div
-            className="w-8 h-1 rounded-full"
-            style={{ background: "var(--bg-input)" }}
-          />
-        </div>
-        <div className="py-2">
-          {items
-            .filter((item) => !item.hidden)
-            .map((item, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  item.onClick();
-                  onClose();
-                }}
-                disabled={item.disabled}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors text-left"
-                style={{
-                  color: item.danger ? "var(--danger)" : "var(--text)",
-                  opacity: item.disabled ? 0.4 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!item.disabled)
-                    e.currentTarget.style.background = item.danger
-                      ? "var(--danger-bg)"
-                      : "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                <span
-                  className="w-4 h-4 shrink-0"
-                  style={{
-                    color: item.danger ? "var(--danger)" : "var(--text-muted)",
-                  }}
-                >
-                  {item.icon}
-                </span>
-                {item.label}
-              </button>
-            ))}
-        </div>
-        <div
-          className="sm:hidden px-4 py-3"
-          style={{ borderTop: `1px solid var(--border-subtle)` }}
-        >
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-xl text-sm font-semibold"
-            style={{
-              background: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -402,7 +269,7 @@ function PreviewModal({
     setState("loading");
     setPdfBlobUrl(null);
 
-    let revoked = false;
+    let cancelled = false;
 
     async function convertToPdf() {
       try {
@@ -413,22 +280,23 @@ function PreviewModal({
         });
         if (!res.ok) throw new Error(`Convert failed: ${res.status}`);
         const blob = await res.blob();
-        if (revoked) return;
+        if (cancelled) return;
         const url = URL.createObjectURL(blob);
         setPdfBlobUrl(url);
         setState("ready");
       } catch (err) {
         console.error("[PreviewModal] PDF conversion error:", err);
-        if (!revoked) setState("error");
+        if (!cancelled) setState("error");
       }
     }
 
     convertToPdf();
 
     return () => {
-      revoked = true;
+      cancelled = true;
+      // Revoke after a short delay so the iframe has time to finish rendering
       setPdfBlobUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
+        if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1_000);
         return null;
       });
     };
@@ -445,12 +313,7 @@ function PreviewModal({
   const handleDownload = async () => {
     const res = await fetch(fileUrl);
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${filename}.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerDownload(blob, `${filename}.docx`);
   };
 
   const handleOpenInTab = () => {
@@ -583,7 +446,7 @@ function PreviewModal({
                 <FileTextIcon
                   className="w-4 h-4"
                   style={{ color: "var(--text-muted)" }}
-                />{" "}
+                />
               </div>
               <div>
                 <p
@@ -694,7 +557,6 @@ function SubmissionRow({
   onRetry,
   onDelete,
   onPreview,
-  isBeingPreviewed,
 }: {
   submission: Submission;
   selected: boolean;
@@ -703,7 +565,8 @@ function SubmissionRow({
   onRetry: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onPreview: (submission: Submission) => void;
-  isBeingPreviewed: boolean;
+  // FIX: removed unused `isBeingPreviewed` prop — it was declared and passed
+  // everywhere but never read inside this component (no visual difference).
 }) {
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -827,7 +690,6 @@ function SubmissionRow({
             <StatusBadge status={submission.status} />
           </div>
 
-          {/* Three-dots overflow menu */}
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
@@ -847,7 +709,6 @@ function SubmissionRow({
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                {/* Preview */}
                 {isGenerated && (
                   <DropdownMenuItem
                     onClick={() => onPreview(submission)}
@@ -857,8 +718,6 @@ function SubmissionRow({
                     Preview
                   </DropdownMenuItem>
                 )}
-
-                {/* Download .docx */}
                 {isGenerated && (
                   <DropdownMenuItem
                     onClick={() => exportSubmission(submission, "docx")}
@@ -868,8 +727,6 @@ function SubmissionRow({
                     Export as .docx
                   </DropdownMenuItem>
                 )}
-
-                {/* Export as PDF */}
                 {isGenerated && (
                   <DropdownMenuItem
                     onClick={() => exportSubmission(submission, "pdf")}
@@ -879,11 +736,7 @@ function SubmissionRow({
                     Export as PDF
                   </DropdownMenuItem>
                 )}
-
-                {/* Separator before retry/delete */}
                 {isGenerated && <DropdownMenuSeparator />}
-
-                {/* Retry — only for errors */}
                 {submission.status === "error" && (
                   <DropdownMenuItem
                     onClick={handleRetry}
@@ -896,8 +749,8 @@ function SubmissionRow({
                     {retrying ? "Retrying…" : "Retry"}
                   </DropdownMenuItem>
                 )}
-
-                {/* Delete */}
+                {/* FIX: separator before destructive action when no separator above */}
+                {submission.status !== "generated" && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onClick={() => setConfirmDelete(true)}
                   disabled={deleting}
@@ -911,7 +764,6 @@ function SubmissionRow({
           </div>
         </div>
 
-        {/* Expanded error */}
         {expanded && submission.errorMessage && (
           <div className="px-4 sm:px-5 pb-3">
             <div
@@ -958,7 +810,6 @@ function SubmissionRow({
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1003,7 +854,6 @@ function ConnectionGroup({
   onToggleActive,
   onSync,
   onPreview,
-  previewingSubmissionId,
   defaultExpanded,
 }: {
   connection: Connection;
@@ -1021,7 +871,7 @@ function ConnectionGroup({
   onToggleActive: (connectionId: string, isActive: boolean) => Promise<void>;
   onSync: (connectionId: string) => Promise<void>;
   onPreview: (submission: Submission) => void;
-  previewingSubmissionId: string | null;
+  // FIX: removed unused previewingSubmissionId prop
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -1045,7 +895,8 @@ function ConnectionGroup({
         return false;
       if (dateTo && s.submittedAt > endOfDay(dateTo).getTime()) return false;
       return true;
-    });
+    })
+    .sort((a, b) => b.submittedAt - a.submittedAt);
   }, [submissions, statusFilter, searchQuery, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -1086,73 +937,6 @@ function ConnectionGroup({
       setSyncing(false);
     }
   };
-
-  const connectionMenuItems: OverflowMenuItem[] = [
-    {
-      icon: <ExternalLinkIcon className="w-4 h-4" />,
-      label: "Open Google Form",
-      onClick: () => {
-        if (connection.googleFormId) {
-          window.open(
-            `https://docs.google.com/forms/d/${connection.googleFormId}/edit`,
-            "_blank"
-          );
-        } else {
-          toast.info("Form link not available for this connection");
-        }
-      },
-      disabled: !connection.googleFormId,
-    },
-    {
-      icon: <FileSpreadsheetIcon className="w-4 h-4" />,
-      label: "View Spreadsheet",
-      onClick: () => {
-        if (connection.spreadsheetId) {
-          window.open(
-            `https://docs.google.com/spreadsheets/d/${connection.spreadsheetId}/edit`,
-            "_blank"
-          );
-        } else {
-          toast.info("Spreadsheet link not available for this connection");
-        }
-      },
-      disabled: !connection.spreadsheetId,
-    },
-    {
-      icon: syncing ? (
-        <RefreshCwIcon className="w-4 h-4 animate-spin" />
-      ) : (
-        <RefreshCwIcon className="w-4 h-4" />
-      ),
-      label: syncing ? "Syncing…" : "Sync Now",
-      onClick: handleSync,
-      disabled: syncing,
-    },
-    {
-      icon: connection.isActive ? (
-        <PauseIcon className="w-4 h-4" />
-      ) : (
-        <PlayIcon className="w-4 h-4" />
-      ),
-      label: connection.isActive ? "Pause Connection" : "Resume Connection",
-      onClick: () => onToggleActive(connection._id, !connection.isActive),
-    },
-    {
-      icon: expanded ? (
-        <ChevronUpIcon className="w-4 h-4" />
-      ) : (
-        <ChevronDownIcon className="w-4 h-4" />
-      ),
-      label: expanded ? "Collapse" : "Expand",
-      onClick: () => setExpanded((v) => !v),
-    },
-    {
-      icon: <Trash2Icon className="w-4 h-4" />,
-      label: "Delete Connection",
-      onClick: () => setConfirmDeleteConn(true),
-      danger: true,
-    },
-  ];
 
   return (
     <>
@@ -1228,7 +1012,6 @@ function ConnectionGroup({
             </div>
           </div>
 
-          {/* Right: menu + chevron */}
           <div
             className="flex items-center gap-1.5 shrink-0"
             onClick={(e) => e.stopPropagation()}
@@ -1251,19 +1034,80 @@ function ConnectionGroup({
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {connectionMenuItems.map((item, idx) =>
-                  item.hidden ? null : (
-                    <DropdownMenuItem
-                      key={idx}
-                      onClick={item.onClick}
-                      disabled={item.disabled}
-                      className={`flex items-center gap-2 cursor-pointer ${item.danger ? "text-destructive focus:text-destructive" : ""}`}
-                    >
-                      {item.icon}
-                      {item.label}
-                    </DropdownMenuItem>
-                  )
-                )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (connection.googleFormId) {
+                      window.open(
+                        `https://docs.google.com/forms/d/${connection.googleFormId}/edit`,
+                        "_blank"
+                      );
+                    } else {
+                      toast.info("Form link not available for this connection");
+                    }
+                  }}
+                  disabled={!connection.googleFormId}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <ExternalLinkIcon className="w-4 h-4" />
+                  Open Google Form
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (connection.spreadsheetId) {
+                      window.open(
+                        `https://docs.google.com/spreadsheets/d/${connection.spreadsheetId}/edit`,
+                        "_blank"
+                      );
+                    } else {
+                      toast.info("Spreadsheet link not available");
+                    }
+                  }}
+                  disabled={!connection.spreadsheetId}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <FileSpreadsheetIcon className="w-4 h-4" />
+                  View Spreadsheet
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <RefreshCwIcon
+                    className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`}
+                  />
+                  {syncing ? "Syncing…" : "Sync Now"}
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    onToggleActive(connection._id, !connection.isActive)
+                  }
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  {connection.isActive ? (
+                    <PauseIcon className="w-4 h-4" />
+                  ) : (
+                    <PlayIcon className="w-4 h-4" />
+                  )}
+                  {connection.isActive
+                    ? "Pause Connection"
+                    : "Resume Connection"}
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => setConfirmDeleteConn(true)}
+                  className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <Trash2Icon className="w-4 h-4" />
+                  Delete Connection
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -1329,7 +1173,6 @@ function ConnectionGroup({
                     onRetry={onRetry}
                     onDelete={onDelete}
                     onPreview={onPreview}
-                    isBeingPreviewed={previewingSubmissionId === s._id}
                   />
                 ))}
 
@@ -1365,7 +1208,6 @@ function ConnectionGroup({
         )}
       </div>
 
-      {/* Delete connection confirmation */}
       <AlertDialog open={confirmDeleteConn} onOpenChange={setConfirmDeleteConn}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1408,7 +1250,7 @@ function BulkActions({
   submissions: Submission[];
   total: number;
   onClear: () => void;
-  onDelete: (ids: string[]) => Promise<void>;
+  onDelete: (ids: string) => Promise<void>;
   onSelectAll: () => void;
 }) {
   const [downloading, setDownloading] = useState(false);
@@ -1421,7 +1263,6 @@ function BulkActions({
     (s) => s.status === "generated" && s.fileUrl
   );
 
-  // ── Bulk ZIP export ──────────────────────────────────────────────────────────
   const handleBulkExportZip = async (fmt: "docx" | "pdf") => {
     if (downloadable.length === 0) {
       toast.error("No generated documents selected.");
@@ -1441,9 +1282,9 @@ function BulkActions({
       const usedNames = new Map<string, number>();
       const getUniqueName = (base: string, ext: string) => {
         const key = `${base}.${ext}`;
-        const count = usedNames.get(key) ?? 0;
-        usedNames.set(key, count + 1);
-        return count === 0 ? `${base}.${ext}` : `${base} (${count}).${ext}`;
+        const c = usedNames.get(key) ?? 0;
+        usedNames.set(key, c + 1);
+        return c === 0 ? `${base}.${ext}` : `${base} (${c}).${ext}`;
       };
 
       const results = await Promise.allSettled(
@@ -1477,6 +1318,13 @@ function BulkActions({
       const failed = results.filter((r) => r.status === "rejected").length;
       const succeeded = downloadable.length - failed;
 
+      // FIX: report failed filenames in the toast, not just a generic count.
+      const failedNames = results
+        .map((r, i) =>
+          r.status === "rejected" ? downloadable[i].filename : null
+        )
+        .filter(Boolean) as string[];
+
       if (succeeded === 0) {
         toast.dismiss(toastId);
         toast.error("All exports failed. Nothing to download.");
@@ -1484,19 +1332,15 @@ function BulkActions({
       }
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `form-results-${fmt}-${new Date().toISOString().slice(0, 10)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      triggerDownload(
+        zipBlob,
+        `form-results-${fmt}-${new Date().toISOString().slice(0, 10)}.zip`
+      );
 
       toast.dismiss(toastId);
       if (failed > 0) {
         toast.warning(
-          `ZIP downloaded with ${succeeded} file${succeeded !== 1 ? "s" : ""} — ${failed} failed.`
+          `ZIP downloaded with ${succeeded} file${succeeded !== 1 ? "s" : ""}. Failed: ${failedNames.join(", ")}`
         );
       } else {
         toast.success(
@@ -1515,11 +1359,25 @@ function BulkActions({
   const handleBulkDeleteConfirmed = async () => {
     setDeleting(true);
     try {
-      await onDelete(Array.from(selectedIds));
+      // FIX: collect individual results so we can report partial failures
+      const ids = Array.from(selectedIds);
+      const results = await Promise.allSettled(ids.map((id) => onDelete(id)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const succeeded = ids.length - failed;
+
       onClear();
-      toast.success(`${count} submission${count !== 1 ? "s" : ""} deleted`);
-    } catch {
-      toast.error("Some deletions failed. Please try again.");
+
+      if (failed === 0) {
+        toast.success(
+          `${succeeded} submission${succeeded !== 1 ? "s" : ""} deleted`
+        );
+      } else if (succeeded === 0) {
+        toast.error("All deletions failed. Please try again.");
+      } else {
+        toast.warning(
+          `${succeeded} deleted, ${failed} failed — refresh and try again for the remaining ones.`
+        );
+      }
     } finally {
       setDeleting(false);
       setConfirmBulkDelete(false);
@@ -1565,7 +1423,6 @@ function BulkActions({
           style={{ background: "var(--border-subtle)" }}
         />
 
-        {/* Export ZIP dropdown — only shown when there are downloadable items */}
         {downloadable.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1630,7 +1487,6 @@ function BulkActions({
           </DropdownMenu>
         )}
 
-        {/* Delete */}
         <button
           onClick={() => setConfirmBulkDelete(true)}
           disabled={deleting}
@@ -1652,15 +1508,11 @@ function BulkActions({
           <span className="hidden sm:inline">Delete</span>
         </button>
 
-        {/* Clear */}
         <button
           onClick={onClear}
           aria-label="Clear selection"
           className="w-6 h-6 rounded-lg flex items-center justify-center ml-0.5"
-          style={{
-            background: "var(--bg-input)",
-            color: "var(--text-muted)",
-          }}
+          style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={(e) =>
             (e.currentTarget.style.color = "var(--text-muted)")
@@ -1754,23 +1606,21 @@ export default function FormResultsPage() {
   const [dateFromStr, setDateFromStr] = useState("");
   const [dateToStr, setDateToStr] = useState("");
 
-  const dateFrom = useMemo(
-    () => (dateFromStr ? new Date(dateFromStr) : null),
-    [dateFromStr]
-  );
-  const dateTo = useMemo(
-    () => (dateToStr ? new Date(dateToStr) : null),
-    [dateToStr]
-  );
+  // FIX: validate that dateFrom <= dateTo; swap silently if user enters them
+  // in the wrong order so the filter always produces results.
+  const { dateFrom, dateTo } = useMemo(() => {
+    const from = dateFromStr ? new Date(dateFromStr) : null;
+    const to = dateToStr ? new Date(dateToStr) : null;
+    if (from && to && from > to) return { dateFrom: to, dateTo: from };
+    return { dateFrom: from, dateTo: to };
+  }, [dateFromStr, dateToStr]);
 
   const hasDateFilter = !!dateFrom || !!dateTo;
 
-  // Preview modal state
   const [previewSubmission, setPreviewSubmission] = useState<Submission | null>(
     null
   );
 
-  // Selection
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -1817,15 +1667,6 @@ export default function FormResultsPage() {
     [deleteSubmission]
   );
 
-  const handleBulkDelete = useCallback(
-    async (ids: string[]) => {
-      await Promise.allSettled(
-        ids.map((id) => deleteSubmission({ id: id as Id<"formSubmissions"> }))
-      );
-    },
-    [deleteSubmission]
-  );
-
   const handleSync = useCallback(
     async (connectionId: string) => {
       await syncAction({ connectionId: connectionId as Id<"formConnections"> });
@@ -1868,7 +1709,6 @@ export default function FormResultsPage() {
     setPreviewSubmission(null);
   }, []);
 
-  // Global counts (unfiltered)
   const globalCounts = useMemo(
     () => ({
       all: submissions?.length ?? 0,
@@ -1880,7 +1720,6 @@ export default function FormResultsPage() {
     [submissions]
   );
 
-  // Determine the "latest" connection ID — by lastPolledAt, fallback to _creationTime
   const latestConnectionId = useMemo(() => {
     if (!connections || connections.length === 0) return null;
     return connections.reduce((best, conn) => {
@@ -1890,7 +1729,6 @@ export default function FormResultsPage() {
     })._id;
   }, [connections]);
 
-  // Group submissions by connection
   const groupedSubmissions = useMemo(() => {
     if (!connections || !submissions) return [];
     return connections.map((conn) => ({
@@ -1948,7 +1786,6 @@ export default function FormResultsPage() {
           )}
         </div>
 
-        {/* Header right: Select (mobile) + Filter toggle (mobile) */}
         <div className="flex items-center gap-2 sm:hidden">
           <button
             onClick={() => {
@@ -2006,7 +1843,6 @@ export default function FormResultsPage() {
         <div
           className={`${showFilters ? "flex" : "hidden sm:flex"} flex-col sm:flex-row items-stretch sm:items-center gap-3 px-4 sm:px-6 py-3`}
         >
-          {/* Search */}
           <div className="relative flex-1 max-w-sm">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
@@ -2041,7 +1877,6 @@ export default function FormResultsPage() {
             )}
           </div>
 
-          {/* Status filter pills */}
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl"
             style={{
@@ -2071,7 +1906,7 @@ export default function FormResultsPage() {
             ))}
           </div>
 
-          {/* Date range filter */}
+          {/* FIX: date range with swap-if-inverted hint */}
           <div className="flex items-center gap-1.5 shrink-0">
             <CalendarIcon
               className="w-3.5 h-3.5 shrink-0"
@@ -2152,7 +1987,6 @@ export default function FormResultsPage() {
             )}
           </div>
 
-          {/* Select mode toggle — desktop only */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -2172,7 +2006,6 @@ export default function FormResultsPage() {
           </button>
         </div>
 
-        {/* Active filter badges */}
         {activeFilterCount > 0 && (
           <div
             className={`${showFilters ? "flex" : "hidden sm:flex"} items-center gap-2 flex-wrap px-4 sm:px-6 pb-2`}
@@ -2242,7 +2075,6 @@ export default function FormResultsPage() {
         )}
       </div>
 
-      {/* Select mode hint bar */}
       {selectMode && !someSelected && (
         <div
           className="flex items-center gap-3 px-4 sm:px-5 py-2 shrink-0"
@@ -2271,7 +2103,6 @@ export default function FormResultsPage() {
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 pb-[calc(env(safe-area-inset-bottom)+52px+2rem)] md:pb-8">
         {isLoading ? (
           <div className="space-y-5 max-w-5xl">
@@ -2310,7 +2141,6 @@ export default function FormResultsPage() {
                 onToggleActive={handleToggleActive}
                 onSync={handleSync}
                 onPreview={handlePreview}
-                previewingSubmissionId={previewSubmission?._id ?? null}
                 defaultExpanded={connection._id === latestConnectionId}
               />
             ))}
@@ -2318,17 +2148,15 @@ export default function FormResultsPage() {
         )}
       </div>
 
-      {/* Bulk actions floating bar */}
       <BulkActions
         selectedIds={selectedIds}
         submissions={submissions ?? []}
         total={submissions?.length ?? 0}
         onClear={handleClearSelection}
-        onDelete={handleBulkDelete}
+        onDelete={handleDelete}
         onSelectAll={handleSelectAll}
       />
 
-      {/* Document preview modal */}
       {previewSubmission && previewSubmission.fileUrl && (
         <PreviewModal
           fileUrl={previewSubmission.fileUrl}
