@@ -4,7 +4,14 @@ import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
-// ── Get file from storage ─────────────────────────────────────────────────────
+function getCorsHeaders(): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-internal-secret",
+  };
+}
+
 http.route({
   path: "/getFile",
   method: "GET",
@@ -23,13 +30,8 @@ http.route({
     }
 
     const contentType = blob.type || "application/octet-stream";
-
     const headers: Record<string, string> = {
       "Content-Type": contentType,
-      // FIX: Restrict CORS to known origins instead of wildcard.
-      // storageIds are opaque but could be leaked via shared URLs.
-      // The app origin env var covers the frontend; Convex site URL
-      // covers server-to-server (webhook, cron) calls.
       "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
       "Cache-Control": "private, no-store",
     };
@@ -43,40 +45,40 @@ http.route({
   }),
 });
 
-// ── Generate upload URL ───────────────────────────────────────────────────────
-// FIX: Previously had zero auth — anyone on the internet could POST here and
-// obtain a Convex storage upload URL, enabling arbitrary file uploads that
-// would consume the app's storage quota.
-//
-// Now requires a valid, active scriptToken in the request body.
-// The webhook route passes its token; direct callers without a token are
-// rejected. Frontend uploads go through the `templates.generateUploadUrl`
-// Convex mutation (auth-gated by Clerk) and do NOT use this endpoint.
 http.route({
   path: "/getUploadUrl",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    // Parse body — require scriptToken
+    const internalSecret = request.headers.get("x-internal-secret");
+    if (internalSecret && internalSecret === process.env.INTERNAL_SECRET) {
+      const uploadUrl = await ctx.storage.generateUploadUrl();
+      return new Response(JSON.stringify({ uploadUrl }), {
+        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
+      });
+    }
+
     let scriptToken: string | undefined;
     try {
-      const body = await request.json();
+      const body = await request.clone().json();
       scriptToken =
         typeof body?.scriptToken === "string" ? body.scriptToken : undefined;
     } catch {
       return new Response(
         JSON.stringify({ error: "Request body must be JSON with scriptToken" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders() },
+        }
       );
     }
 
     if (!scriptToken) {
-      return new Response(
-        JSON.stringify({ error: "scriptToken is required" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing authentication" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
+      });
     }
 
-    // Verify the token resolves to an active connection
     const connection = await ctx.runQuery(
       api.formConnections.getByScriptToken,
       { token: scriptToken }
@@ -85,25 +87,35 @@ http.route({
     if (!connection || !connection.isActive) {
       return new Response(
         JSON.stringify({ error: "Invalid or inactive scriptToken" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders() },
+        }
       );
     }
 
     const uploadUrl = await ctx.storage.generateUploadUrl();
     return new Response(JSON.stringify({ uploadUrl }), {
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
-      },
+      headers: { "Content-Type": "application/json", ...getCorsHeaders() },
     });
   }),
 });
 
-// ── Update file storage after ONLYOFFICE save ─────────────────────────────────
 http.route({
   path: "/updateFileStorage",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const internalSecret = request.headers.get("x-internal-secret");
+    const hasInternalAuth =
+      internalSecret && internalSecret === process.env.INTERNAL_SECRET;
+
+    if (!hasInternalAuth) {
+      return new Response(JSON.stringify({ error: "Missing authentication" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
+      });
+    }
+
     try {
       const { documentId, templateId, storageId, fileUrl } =
         await request.json();
@@ -111,7 +123,13 @@ http.route({
       if (!storageId || !fileUrl) {
         return new Response(
           JSON.stringify({ error: "Missing storageId or fileUrl" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              ...getCorsHeaders(),
+            },
+          }
         );
       }
 
@@ -132,42 +150,35 @@ http.route({
       } else {
         return new Response(
           JSON.stringify({ error: "Missing documentId or templateId" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              ...getCorsHeaders(),
+            },
+          }
         );
       }
 
       return new Response(JSON.stringify({ ok: true }), {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
-        },
+        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
       });
     } catch (err) {
       console.error("[updateFileStorage]", err);
       return new Response(JSON.stringify({ error: String(err) }), {
         status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
-        },
+        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
       });
     }
   }),
 });
 
-// ── CORS preflight ────────────────────────────────────────────────────────────
 for (const path of ["/getUploadUrl", "/updateFileStorage"]) {
   http.route({
     path,
     method: "OPTIONS",
     handler: httpAction(async () => {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      });
+      return new Response(null, { headers: getCorsHeaders() });
     }),
   });
 }

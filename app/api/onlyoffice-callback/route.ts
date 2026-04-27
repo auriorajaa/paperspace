@@ -1,26 +1,39 @@
 // app/api/onlyoffice-callback/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { status, url, key } = body;
+    const { status, url, token } = body;
 
-    // console.log("[onlyoffice-callback] status:", status, "key:", key);
+    const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
+    if (jwtSecret) {
+      try {
+        const payload = token || body.token;
+        if (!payload) {
+          console.error("[onlyoffice-callback] missing token");
+          return NextResponse.json(
+            { error: 1, message: "Unauthorized" },
+            { status: 401 }
+          );
+        }
+        jwt.verify(payload, jwtSecret, { algorithms: ["HS256"] });
+      } catch (jwtErr) {
+        console.error("[onlyoffice-callback] invalid token:", jwtErr);
+        return NextResponse.json(
+          { error: 1, message: "Unauthorized" },
+          { status: 401 }
+        );
+      }
+    }
 
     if ((status === 2 || status === 6) && url) {
       const documentId = req.nextUrl.searchParams.get("documentId");
       const templateId = req.nextUrl.searchParams.get("templateId");
       const storageId = req.nextUrl.searchParams.get("storageId");
 
-      // console.log("[onlyoffice-callback] saving for", {
-      //   documentId,
-      //   templateId,
-      //   storageId,
-      // });
-
       try {
-        // 1. Download edited file from ONLYOFFICE
         const fileRes = await fetch(url, { redirect: "follow" });
         if (!fileRes.ok) {
           console.error(
@@ -30,11 +43,6 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
         const fileBuffer = await fileRes.arrayBuffer();
-        // console.log(
-        //   "[onlyoffice-callback] downloaded",
-        //   fileBuffer.byteLength,
-        //   "bytes"
-        // );
 
         const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
         if (!convexSiteUrl) {
@@ -44,9 +52,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
 
-        // 2. Get upload URL from Convex
+        const internalSecret = process.env.INTERNAL_SECRET;
+
         const uploadUrlRes = await fetch(`${convexSiteUrl}/getUploadUrl`, {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(internalSecret ? { "x-internal-secret": internalSecret } : {}),
+          },
         });
         if (!uploadUrlRes.ok) {
           console.error(
@@ -56,9 +69,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
         const { uploadUrl } = await uploadUrlRes.json();
-        // console.log("[onlyoffice-callback] got upload URL");
 
-        // 3. Upload file to Convex storage
         const uploadRes = await fetch(uploadUrl, {
           method: "POST",
           headers: {
@@ -77,10 +88,6 @@ export async function POST(req: NextRequest) {
 
         const uploadResult = await uploadRes.json();
         const savedStorageId = uploadResult.storageId;
-        // console.log(
-        //   "[onlyoffice-callback] uploaded storageId:",
-        //   savedStorageId
-        // );
 
         if (!savedStorageId) {
           console.error(
@@ -90,11 +97,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 0 });
         }
 
-        // 4. Update DB record
         const newFileUrl = `${convexSiteUrl}/getFile?storageId=${savedStorageId}`;
         const updateRes = await fetch(`${convexSiteUrl}/updateFileStorage`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(internalSecret ? { "x-internal-secret": internalSecret } : {}),
+          },
           body: JSON.stringify({
             documentId,
             templateId,
@@ -109,10 +118,6 @@ export async function POST(req: NextRequest) {
             "[onlyoffice-callback] updateFileStorage failed:",
             errText
           );
-        } else {
-          // console.log(
-          //   "[onlyoffice-callback] ✓ saved successfully:"
-          // );
         }
       } catch (saveErr) {
         console.error("[onlyoffice-callback] save error:", saveErr);

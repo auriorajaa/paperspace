@@ -1,19 +1,84 @@
 // app\api\onlyoffice-convert\route.ts
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import { auth } from "@clerk/nextjs/server";
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  if (entry.count >= 10) return true;
+  entry.count++;
+  return false;
+}
+
+function isAllowedFileUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    const allowed = (process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "").replace(
+      /\/$/,
+      ""
+    );
+    if (allowed && !urlStr.startsWith(allowed)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getClientIp(req: NextRequest): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp;
+
+  return "unknown";
+}
 
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  const ip = getClientIp(req);
+  if (isRateLimited(ip)) {
+    return new NextResponse("Rate limited", { status: 429 });
+  }
+
   try {
-    const { fileUrl, fileName } = await req.json();
-    if (!fileUrl || !fileName) {
+    const body = await req.json();
+    const { fileUrl, fileName } = body;
+
+    if (
+      !fileUrl ||
+      !fileName ||
+      typeof fileUrl !== "string" ||
+      typeof fileName !== "string"
+    ) {
       return new NextResponse("Missing fileUrl or fileName", { status: 400 });
     }
 
-    // Use proxied URL so OnlyOffice can access the file
-    const appUrl =
+    if (fileName.length > 200) {
+      return new NextResponse("fileName too long", { status: 400 });
+    }
+
+    if (!isAllowedFileUrl(fileUrl)) {
+      return new NextResponse("Invalid fileUrl", { status: 403 });
+    }
+
+    const appUrl = (
       process.env.NEXT_PUBLIC_APP_URL ||
-      `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-    const proxiedUrl = `${appUrl.replace(/\/$/, "")}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
+      `${req.nextUrl.protocol}//${req.nextUrl.host}`
+    ).replace(/\/$/, "");
+    // const proxiedUrl = `${appUrl}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
 
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
     if (!ooServerUrl) {
@@ -22,12 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     const convertUrl = `${ooServerUrl.replace(/\/$/, "")}/ConvertService.ashx`;
-
     const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
-
-    // Generate a unique key per conversion to prevent OnlyOffice from
-    // returning a cached result from a previous (or concurrent) conversion.
-    // Without this, parallel conversions may all resolve to the same cached PDF.
     const uniqueKey = `convert-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     const payload = {
@@ -35,7 +95,7 @@ export async function POST(req: NextRequest) {
       filetype: "docx",
       outputtype: "pdf",
       key: uniqueKey,
-      url: proxiedUrl,
+      url: fileUrl,
     };
 
     const requestBody: any = { ...payload };
@@ -43,24 +103,14 @@ export async function POST(req: NextRequest) {
       requestBody.token = jwt.sign(payload, jwtSecret, { algorithm: "HS256" });
     }
 
-    console.log("[onlyoffice-convert] sending to:", convertUrl);
-    console.log("[onlyoffice-convert] proxiedUrl:", proxiedUrl);
-    console.log("[onlyoffice-convert] key:", uniqueKey);
-
     const convertRes = await fetch(convertUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
     });
 
-    console.log("[onlyoffice-convert] response status:", convertRes.status);
     const contentType = convertRes.headers.get("content-type") || "";
     let responseText = await convertRes.text();
-
-    console.log(
-      "[onlyoffice-convert] response preview:",
-      responseText.slice(0, 500)
-    );
 
     if (!convertRes.ok) {
       console.error(
@@ -69,15 +119,12 @@ export async function POST(req: NextRequest) {
       );
       return new NextResponse(
         `Conversion failed: ${convertRes.status} - ${responseText.slice(0, 200)}`,
-        {
-          status: convertRes.status,
-        }
+        { status: convertRes.status }
       );
     }
 
     let pdfUrl: string | null = null;
 
-    // Parse XML response (OnlyOffice returns XML for conversion)
     if (contentType.includes("xml")) {
       const match = responseText.match(/<FileUrl>(.*?)<\/FileUrl>/i);
       if (match && match[1]) {
@@ -88,7 +135,6 @@ export async function POST(req: NextRequest) {
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'");
       } else {
-        // Try to extract error message
         const errorMatch =
           responseText.match(/<Message>(.*?)<\/Message>/i) ||
           responseText.match(/<Error>(.*?)<\/Error>/i);
@@ -99,7 +145,6 @@ export async function POST(req: NextRequest) {
         return new NextResponse(errorMsg, { status: 500 });
       }
     } else {
-      // Fallback: try JSON
       try {
         const convertData = JSON.parse(responseText);
         pdfUrl = convertData.fileUrl || convertData.url;
@@ -121,7 +166,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Fetch the resulting PDF
     const pdfRes = await fetch(pdfUrl);
     if (!pdfRes.ok) {
       console.error("[onlyoffice-convert] PDF download failed:", pdfRes.status);
@@ -131,7 +175,9 @@ export async function POST(req: NextRequest) {
     }
 
     const pdfBuffer = await pdfRes.arrayBuffer();
-    const safeName = fileName.replace(/\.docx$/i, "");
+    const safeName = fileName
+      .replace(/\.docx$/i, "")
+      .replace(/[<>:"/\\|?*]/g, "_");
 
     return new NextResponse(pdfBuffer, {
       status: 200,

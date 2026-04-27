@@ -65,9 +65,6 @@ export const getById = query({
     const template = await ctx.db.get(args.id);
     if (!template) return null;
 
-    // FIX: ownership check was missing — any authenticated user could read
-    // any template if they knew (or guessed) the ID.
-    // Also allow access if the template belongs to the user's organization.
     const orgId = (identity as any).organization_id as string | undefined;
     const isOwner = template.ownerId === identity.subject;
     const isOrgMember =
@@ -84,6 +81,17 @@ export const getGeneratedCount = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return 0;
+
+    // SECURITY: Verify the user actually owns or belongs to the org of this template
+    const template = await ctx.db.get(args.templateId);
+    if (!template) return 0;
+
+    const orgId = (identity as any).organization_id as string | undefined;
+    const isOwner = template.ownerId === identity.subject;
+    const isOrgMember =
+      !!orgId && !!template.organizationId && template.organizationId === orgId;
+
+    if (!isOwner && !isOrgMember) return 0;
 
     const docs = await ctx.db
       .query("generatedDocuments")
@@ -198,6 +206,19 @@ export const saveGeneratedDocument = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
+    // SECURITY: Verify user actually owns this template before saving generated doc
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new ConvexError("Template not found");
+
+    const orgId = (identity as any).organization_id as string | undefined;
+    const isOwner = template.ownerId === identity.subject;
+    const isOrgMember =
+      !!orgId && !!template.organizationId && template.organizationId === orgId;
+
+    if (!isOwner && !isOrgMember) {
+      throw new ConvexError("You don't have access to this template");
+    }
+
     return ctx.db.insert("generatedDocuments", {
       templateId: args.templateId,
       ownerId: identity.subject,
@@ -211,6 +232,20 @@ export const saveGeneratedDocument = mutation({
   },
 });
 
+export const deleteStorage = mutation({
+  args: { storageId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+    try {
+      await ctx.storage.delete(args.storageId as any);
+    } catch (e) {
+      console.error("Storage delete failed", e);
+      throw new ConvexError("Failed to delete storage");
+    }
+  },
+});
+
 export const getByIdInternal = internalQuery({
   args: { id: v.id("templates") },
   handler: async (ctx, args) => {
@@ -218,13 +253,6 @@ export const getByIdInternal = internalQuery({
   },
 });
 
-/**
- * For webhook — use scriptToken as authorization,
- * not Clerk session. Safe because scriptToken is secret.
- *
- * Replace getById on webhook path that always return null before
- * bevause no auth on ConvexHttpClient webhook.
- */
 export const getTemplateByScriptToken = query({
   args: { scriptToken: v.string() },
   handler: async (ctx, args) => {
@@ -240,7 +268,6 @@ export const getTemplateByScriptToken = query({
     const template = await ctx.db.get(connection.templateId);
     if (!template) return null;
 
-    // Return only field that needed by webhook — dont expose other field
     return {
       storageId: template.storageId,
       fields: template.fields,
