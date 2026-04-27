@@ -40,9 +40,12 @@ async function getValidToken(
     return { token: account.accessToken };
   }
 
-  // FIXED: wrap the network call so a transient fetch failure (DNS, timeout)
-  // is caught and surfaced as an error instead of an uncaught exception that
-  // bypasses the stampPolledAt() call in the caller.
+  // FIX: wrap network call so transient failures don't bypass stampPolledAt.
+  // NOTE: Multiple connections for the same owner polled concurrently will all
+  // attempt a refresh simultaneously (last-write-wins in DB). This is safe —
+  // all resulting tokens are valid — but wastes a few Google API calls.
+  // A proper fix requires a distributed mutex; acceptable for now given
+  // Google's generous token quota.
   let refreshed: { access_token?: string; expires_in?: number; error?: string };
   try {
     refreshed = await refreshGoogleToken(account.refreshToken);
@@ -76,6 +79,10 @@ async function getValidToken(
 }
 
 // ── Preprocessor: stitch {{placeholders}} split across Word XML runs ──────────
+// NOTE: This logic is intentionally duplicated from lib/template-preprocessor.ts
+// because that file uses JSZip (async) while Convex actions require PizZip
+// (sync). They cannot share code across the runtime boundary. If the stitching
+// algorithm changes, update BOTH files.
 
 function stitchParagraph(para: string): string {
   const nodes: { tStart: number; tEnd: number; text: string }[] = [];
@@ -124,13 +131,8 @@ function preprocessDocxBuffer(buf: ArrayBuffer, PizZip: any): ArrayBuffer {
   return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
 }
 
-// ── Filename sanitizer — guaranteed to never return an empty string ───────────
+// ── Filename sanitizer ────────────────────────────────────────────────────────
 
-/**
- * FIXED: Previous implementation could yield an empty string (or only
- * underscores) if filenamePattern contained only special characters or all
- * template tokens resolved to "". We now guarantee a non-empty, valid filename.
- */
 function buildFilename(
   pattern: string,
   rowNumber: string,
@@ -142,7 +144,6 @@ function buildFilename(
     .replace(/[<>:"/\\|?*]/g, "_")
     .trim();
 
-  // Fallback: if everything resolved to empty / whitespace / only underscores
   return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
 }
 
@@ -253,6 +254,74 @@ async function generateDocxFromTemplate(
   });
 }
 
+// ── Fetch all responses with pagination ───────────────────────────────────────
+// FIX: previous version did a single fetch with no pageSize, which would
+// return Google's default page (up to 5000 responses!) and could easily
+// time out. Now fetches in pages of PAGE_SIZE and stops after
+// MAX_RESPONSES_PER_POLL to keep each poll action well within Convex's
+// execution time limit. Responses from subsequent pages will be picked up
+// in the next cron cycle.
+
+const RESPONSES_PAGE_SIZE = 50;
+const MAX_RESPONSES_PER_POLL = 200;
+
+async function fetchFormResponses(
+  googleFormId: string,
+  accessToken: string,
+  lastPolledAt: number | undefined
+): Promise<{ responses: any[]; truncated: boolean }> {
+  const baseUrl = new URL(
+    `https://forms.googleapis.com/v1/forms/${googleFormId}/responses`
+  );
+  baseUrl.searchParams.set("pageSize", String(RESPONSES_PAGE_SIZE));
+
+  if (lastPolledAt) {
+    baseUrl.searchParams.set(
+      "filter",
+      `timestamp >= ${new Date(lastPolledAt).toISOString()}`
+    );
+  }
+
+  const allResponses: any[] = [];
+  let pageToken: string | undefined;
+  let truncated = false;
+
+  do {
+    const pageUrl = new URL(baseUrl.toString());
+    if (pageToken) pageUrl.searchParams.set("pageToken", pageToken);
+
+    let res: Response;
+    try {
+      res = await fetch(pageUrl.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch (fetchErr) {
+      console.error("[fetchFormResponses] Network error:", fetchErr);
+      break;
+    }
+
+    if (!res.ok) {
+      console.error(
+        "[fetchFormResponses] API error:",
+        res.status,
+        await res.text().catch(() => "")
+      );
+      break;
+    }
+
+    const data = await res.json();
+    allResponses.push(...(data.responses ?? []));
+    pageToken = data.nextPageToken;
+
+    if (allResponses.length >= MAX_RESPONSES_PER_POLL) {
+      truncated = true;
+      break;
+    }
+  } while (pageToken);
+
+  return { responses: allResponses, truncated };
+}
+
 // ── Process a single connection ───────────────────────────────────────────────
 
 export const pollConnection = internalAction({
@@ -270,9 +339,6 @@ export const pollConnection = internalAction({
         lastPolledAt: Date.now(),
       });
 
-    // FIXED: token fetch is now wrapped in try/catch in getValidToken itself.
-    // If getValidToken throws unexpectedly (shouldn't happen now), we still
-    // stamp lastPolledAt to avoid infinite retries on the same window.
     let tokenResult: { token: string | null; error?: string };
     try {
       tokenResult = await getValidToken(ctx, connection.ownerId);
@@ -294,43 +360,31 @@ export const pollConnection = internalAction({
       return;
     }
 
-    const url = new URL(
-      `https://forms.googleapis.com/v1/forms/${connection.googleFormId}/responses`
-    );
-    if (connection.lastPolledAt) {
-      url.searchParams.set(
-        "filter",
-        `timestamp >= ${new Date(connection.lastPolledAt).toISOString()}`
-      );
-    }
-
-    let responsesRes: Response;
+    // FIX: use paginated fetch instead of a single unbounded request
+    let responses: any[];
+    let truncated: boolean;
     try {
-      responsesRes = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      ({ responses, truncated } = await fetchFormResponses(
+        connection.googleFormId,
+        accessToken,
+        connection.lastPolledAt
+      ));
     } catch (fetchErr) {
       console.error(
-        "[pollConnection] Network error fetching form responses:",
+        "[pollConnection] Unexpected error fetching responses:",
         fetchErr
       );
-      // Don't stamp — transient network error, let the next cron cycle retry.
-      // We intentionally don't stamp here because no responses were processed.
+      // Don't stamp — transient error, let next cycle retry.
       return;
     }
 
-    if (!responsesRes.ok) {
-      console.error(
-        "[pollConnection] Forms API error:",
-        responsesRes.status,
-        await responsesRes.text().catch(() => "(body unreadable)")
+    if (truncated) {
+      console.warn(
+        `[pollConnection] Connection ${args.connectionId} hit MAX_RESPONSES_PER_POLL (${MAX_RESPONSES_PER_POLL}). ` +
+          "Remaining responses will be fetched in the next cron cycle."
       );
-      // Stamp to avoid re-fetching the same window forever on persistent errors.
-      await stampPolledAt();
-      return;
     }
 
-    const { responses = [] } = await responsesRes.json();
     if (responses.length === 0) {
       await stampPolledAt();
       return;
@@ -380,7 +434,6 @@ export const pollConnection = internalAction({
         fieldValues[mapping.templateFieldName] = value;
       }
 
-      // FIXED: use buildFilename() to guarantee a non-empty valid string
       const rowNumber = String(submittedAt).slice(-6);
       const filename = buildFilename(
         connection.filenamePattern,
@@ -429,12 +482,15 @@ export const pollConnection = internalAction({
 });
 
 // ── Poll all active Google connections (called by cron) ───────────────────────
+// FIX: was sequential (one-by-one), which could time out with many connections.
+// Now processes in parallel batches of POLL_CONCURRENCY, giving a good balance
+// between throughput and not overwhelming the Convex scheduler.
+
+const POLL_CONCURRENCY = 5;
 
 export const pollAll = internalAction({
   args: {},
   handler: async (ctx) => {
-    // FIXED: wrap the initial query so a DB failure doesn't silently kill the
-    // whole cron without any log output.
     let connections: any[];
     try {
       connections = await ctx.runQuery(
@@ -447,19 +503,28 @@ export const pollAll = internalAction({
 
     if (connections.length === 0) return;
 
-    for (const conn of connections) {
-      try {
-        await ctx.runAction(internal.processFormResponses.pollConnection, {
-          connectionId: conn._id,
-        });
-      } catch (err) {
-        console.error(`[pollAll] Error polling connection ${conn._id}:`, err);
-      }
+    // Process in parallel batches to stay within Convex action time budget.
+    for (let i = 0; i < connections.length; i += POLL_CONCURRENCY) {
+      const chunk = connections.slice(i, i + POLL_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (conn: any) => {
+          try {
+            await ctx.runAction(internal.processFormResponses.pollConnection, {
+              connectionId: conn._id,
+            });
+          } catch (err) {
+            console.error(
+              `[pollAll] Error polling connection ${conn._id}:`,
+              err
+            );
+          }
+        })
+      );
     }
   },
 });
 
-// ── Public action: "Sync Now" button (works even when paused) ─────────────────
+// ── Public action: "Sync Now" button ─────────────────────────────────────────
 
 export const syncConnection = action({
   args: { connectionId: v.id("formConnections") },

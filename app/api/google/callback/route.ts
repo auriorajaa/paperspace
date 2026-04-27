@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // ── Decode state ──────────────────────────────────────────────────────────
   let templateId = "";
   let userIdFromState = "";
   try {
@@ -38,22 +37,16 @@ export async function GET(req: NextRequest) {
     ? `${APP_URL}/templates/${templateId}/connect`
     : `${APP_URL}/templates`;
 
-  // ── Verify Clerk session ──────────────────────────────────────────────────
-  // The user was authenticated before clicking "Connect with Google", so their
-  // Clerk session cookie is still valid at the time of this callback.
-  const { userId: clerkUserId, getToken } = await auth();
+  const { userId: clerkUserId, getToken, sessionClaims } = await auth();
 
-  // Extra safety: make sure the Clerk session matches the userId we encoded
-  // in the OAuth state, preventing session fixation attacks.
   if (!clerkUserId || clerkUserId !== userIdFromState) {
     console.error(
-      "[google/callback] Clerk userId mismatch — session may have changed",
+      "[google/callback] Clerk userId mismatch — possible session fixation attempt",
       { clerkUserId, userIdFromState }
     );
     return NextResponse.redirect(`${redirectBase}?error=oauth_state_invalid`);
   }
 
-  // ── Exchange code for tokens ───────────────────────────────────────────────
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -73,7 +66,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${redirectBase}?error=token_exchange_failed`);
   }
 
-  // ── Get user email from Google ────────────────────────────────────────────
   const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
@@ -86,10 +78,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${redirectBase}?error=token_exchange_failed`);
   }
 
-  // ── Save to Convex ────────────────────────────────────────────────────────
-  // SECURITY FIX: Forward the Clerk JWT so the `upsert` mutation can derive
-  // ownerId from the verified identity instead of trusting a caller-supplied
-  // ownerId param. This also means the mutation can now enforce auth itself.
+  // ── ADDED: Audit log if Google email is different than Clerk email ───────────
+  // This is legitimate (user can have 2 different email), but we log
+  // to see if there's trail to investigate.
+  const clerkEmail = sessionClaims?.email as string | undefined;
+  const emailMismatch = clerkEmail && userInfo.email !== clerkEmail;
+
+  if (emailMismatch) {
+    console.warn(
+      "[google/callback] Google email differs from Clerk email — this is allowed but logged for audit",
+      {
+        clerkUserId,
+        clerkEmail,
+        googleEmail: userInfo.email,
+        templateId: templateId || "(none)",
+      }
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const clerkToken = await getToken({ template: "convex" });
   if (clerkToken) convex.setAuth(clerkToken);
@@ -99,6 +106,8 @@ export async function GET(req: NextRequest) {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? "",
     expiresAt: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+    // ADDED: saved clerk email info for UI
+    clerkEmail: clerkEmail ?? null,
   });
 
   return NextResponse.redirect(`${redirectBase}?connected=1`);

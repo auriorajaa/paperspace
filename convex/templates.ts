@@ -218,6 +218,36 @@ export const getByIdInternal = internalQuery({
   },
 });
 
+/**
+ * For webhook — use scriptToken as authorization,
+ * not Clerk session. Safe because scriptToken is secret.
+ *
+ * Replace getById on webhook path that always return null before
+ * bevause no auth on ConvexHttpClient webhook.
+ */
+export const getTemplateByScriptToken = query({
+  args: { scriptToken: v.string() },
+  handler: async (ctx, args) => {
+    const connection = await ctx.db
+      .query("formConnections")
+      .withIndex("by_script_token", (q) =>
+        q.eq("scriptToken", args.scriptToken)
+      )
+      .first();
+
+    if (!connection || !connection.isActive) return null;
+
+    const template = await ctx.db.get(connection.templateId);
+    if (!template) return null;
+
+    // Return only field that needed by webhook — dont expose other field
+    return {
+      storageId: template.storageId,
+      fields: template.fields,
+    };
+  },
+});
+
 export const updateFileStorageInternal = internalMutation({
   args: {
     id: v.id("templates"),

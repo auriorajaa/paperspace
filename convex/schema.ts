@@ -72,10 +72,10 @@ export default defineSchema({
               type: v.string(),
               required: v.boolean(),
               placeholder: v.string(),
-            }),
-          ),
+            })
+          )
         ),
-      }),
+      })
     ),
   })
     .index("by_owner_id", ["ownerId"])
@@ -98,6 +98,7 @@ export default defineSchema({
   googleAccounts: defineTable({
     ownerId: v.string(),
     email: v.string(),
+    clerkEmail: v.optional(v.string()),
     accessToken: v.string(),
     refreshToken: v.string(),
     expiresAt: v.number(), // ms timestamp
@@ -114,7 +115,7 @@ export default defineSchema({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
-      }),
+      })
     ),
     scriptToken: v.string(),
     filenamePattern: v.string(),

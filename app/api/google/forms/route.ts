@@ -4,6 +4,11 @@
 // (forms.body.readonly scope).
 //
 // Usage: GET /api/google/forms?formId=<google_form_id>
+//
+// FIX: ConvexHttpClient was previously module-level and mutated via setAuth()
+// inside the handler. Under concurrent requests on a warm serverless instance,
+// user A's token could overwrite user B's token before B's query fires.
+// Fix: create a fresh client per request.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -11,8 +16,6 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 
 export const dynamic = "force-dynamic";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 async function refreshAccessToken(refreshToken: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -47,7 +50,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // SECURITY FIX: Thread Clerk JWT so getMyFullAccount can verify identity
+  // FIX: Create a fresh ConvexHttpClient per request instead of reusing a
+  // module-level singleton. The singleton was mutated via setAuth() inside the
+  // handler, which is not safe under concurrent serverless invocations — user
+  // A's Clerk token could still be set when user B's query fires.
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const clerkToken = await getToken({ template: "convex" });
   if (clerkToken) convex.setAuth(clerkToken);
 

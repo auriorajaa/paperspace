@@ -8,13 +8,15 @@ import {
 } from "./_generated/server";
 import { ConvexError } from "convex/values";
 
+// FIX: crypto.getRandomValues() — cryptographically secure, not predictable
+// like Math.random() which must never be used for security-sensitive secrets.
 function generateToken(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let token = "fwh_";
-  for (let i = 0; i < 48; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return token;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `fwh_${hex}`;
 }
 
 // ── Public queries ────────────────────────────────────────────────────────────
@@ -45,17 +47,11 @@ export const getById = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
     const conn = await ctx.db.get(args.id);
-    // SECURITY: only return connection if the caller owns it
     if (!conn || conn.ownerId !== identity.subject) return null;
     return conn;
   },
 });
 
-/**
- * SECURITY FIX: Previous version queried only by templateId without filtering
- * by ownerId, so members of a shared template could see all connections from
- * other users (including their scriptTokens).
- */
 export const getByTemplateId = query({
   args: { templateId: v.id("templates") },
   handler: async (ctx, args) => {
@@ -84,7 +80,6 @@ export const getSubmissions = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    // Verify the connection belongs to the caller before returning submissions
     const conn = await ctx.db.get(args.connectionId);
     if (!conn || conn.ownerId !== identity.subject) return [];
     return ctx.db
@@ -188,7 +183,6 @@ export const remove = mutation({
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
 
-    // Cascade-delete all submissions belonging to this connection.
     const submissions = await ctx.db
       .query("formSubmissions")
       .withIndex("by_connection_id", (q) => q.eq("connectionId", args.id))
@@ -236,58 +230,112 @@ export const deleteSubmission = mutation({
     if (sub.storageId) {
       try {
         await ctx.storage.delete(sub.storageId as any);
-      } catch {
-        // non-critical
-      }
+      } catch {}
     }
     await ctx.db.delete(args.id);
   },
 });
 
 /**
- * SECURITY FIX: Previous version accepted `ownerId` as a plain arg with no
- * auth check, allowing anyone to create submissions attributed to any user.
+ * Public webhook mutation — authenticated via scriptToken at the Convex layer.
  *
- * Now derives ownerId from the connection record (which is already auth-gated)
- * so the caller cannot spoof ownership. Called only from the webhook route
- * which validates the scriptToken first.
+ * SECURITY: requires scriptToken so any caller that bypasses the Next.js API
+ * layer and hits Convex directly still can't create submissions without a
+ * valid, active token.
+ *
+ * FIX (this version): added optional `responseId` so the webhook path can
+ * store it for deduplication, matching what createSubmissionInternal does.
+ * Previously the public mutation silently dropped responseId, meaning
+ * webhook-triggered submissions had weaker dedup (timestamp-only).
+ *
+ * Spam guard: rejects if the connection already has ≥ SPAM_LIMIT pending
+ * submissions, preventing replay attacks from queuing runaway generation jobs.
  */
+const SUBMISSION_SPAM_LIMIT = 50;
+
 export const createSubmission = mutation({
   args: {
+    scriptToken: v.string(),
     connectionId: v.id("formConnections"),
-    // ownerId intentionally removed — derived from the connection below
     respondentEmail: v.optional(v.string()),
     fieldValues: v.any(),
     filename: v.string(),
     status: v.string(),
     submittedAt: v.number(),
+    // FIX: added — was missing from public mutation, present only on internal.
+    // Without this, webhook submissions couldn't store the Google responseId
+    // and dedup fell back to timestamp-only (weaker, misses same-second submits).
+    responseId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Derive templateId and ownerId from the connection itself.
-    // This guarantees the submission is owned by whoever owns the connection,
-    // regardless of what the webhook caller sends.
-    const connection = await ctx.db.get(args.connectionId);
-    if (!connection) throw new ConvexError("Connection not found");
+    // ── 1. Resolve connection via scriptToken ─────────────────────────────────
+    const connection = await ctx.db
+      .query("formConnections")
+      .withIndex("by_script_token", (q) =>
+        q.eq("scriptToken", args.scriptToken)
+      )
+      .first();
 
+    if (!connection || !connection.isActive) {
+      throw new ConvexError("Invalid or inactive token");
+    }
+
+    // ── 2. Confirm connectionId matches the token's connection ────────────────
+    if (connection._id !== args.connectionId) {
+      throw new ConvexError("Token does not match the provided connection");
+    }
+
+    // ── 3. Spam guard ─────────────────────────────────────────────────────────
+    const pendingCount = await ctx.db
+      .query("formSubmissions")
+      .withIndex("by_connection_id", (q) =>
+        q.eq("connectionId", connection._id)
+      )
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .collect()
+      .then((rows) => rows.length);
+
+    if (pendingCount >= SUBMISSION_SPAM_LIMIT) {
+      throw new ConvexError(
+        "Too many pending submissions. Please wait for existing ones to complete."
+      );
+    }
+
+    // ── 4. Dedup check against responseId before inserting ───────────────────
+    // Mirrors the dedup logic in pollConnection so webhook and cron paths are
+    // both protected against duplicate submissions.
+    if (args.responseId) {
+      const existing = await ctx.db
+        .query("formSubmissions")
+        .withIndex("by_connection_and_response", (q) =>
+          q
+            .eq("connectionId", connection._id)
+            .eq("responseId", args.responseId!)
+        )
+        .first();
+      if (existing) {
+        // Return the existing id so the webhook can still respond with a valid
+        // submissionId without crashing. The generation step will simply be a
+        // no-op (the submission is already generated or in progress).
+        return existing._id;
+      }
+    }
+
+    // ── 5. Insert — ownerId derived from connection, never caller-supplied ────
     return ctx.db.insert("formSubmissions", {
-      connectionId: args.connectionId,
+      connectionId: connection._id,
       templateId: connection.templateId,
-      ownerId: connection.ownerId, // derived, not caller-supplied
+      ownerId: connection.ownerId,
       respondentEmail: args.respondentEmail,
       fieldValues: args.fieldValues,
       filename: args.filename,
       status: args.status,
       submittedAt: args.submittedAt,
+      responseId: args.responseId,
     });
   },
 });
 
-/**
- * SECURITY FIX: Previous version had no auth check at all.
- * Now verifies the submission belongs to the authenticated user.
- * Called from the webhook's generateDocument function which doesn't have
- * a user session; that path must use updateSubmissionInternal instead.
- */
 export const updateSubmission = mutation({
   args: {
     id: v.id("formSubmissions"),
@@ -297,6 +345,8 @@ export const updateSubmission = mutation({
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
     const sub = await ctx.db.get(args.id);
     if (!sub) throw new ConvexError("Submission not found");
     const { id, ...rest } = args;
@@ -308,7 +358,7 @@ export const updateSubmission = mutation({
   },
 });
 
-// ── Internal queries/mutations (for crons + actions) ─────────────────────────
+// ── Internal queries/mutations ────────────────────────────────────────────────
 
 export const getAllGoogleConnectionsInternal = internalQuery({
   args: {},
@@ -422,5 +472,38 @@ export const resetSubmissionInternal = internalMutation({
       storageId: undefined,
       fileUrl: undefined,
     });
+  },
+});
+
+export const updateSubmissionForWebhook = mutation({
+  args: {
+    scriptToken: v.string(),
+    id: v.id("formSubmissions"),
+    storageId: v.optional(v.string()),
+    fileUrl: v.optional(v.string()),
+    status: v.string(),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const connection = await ctx.db
+      .query("formConnections")
+      .withIndex("by_script_token", (q) =>
+        q.eq("scriptToken", args.scriptToken)
+      )
+      .first();
+    if (!connection) throw new ConvexError("Invalid token");
+
+    const sub = await ctx.db.get(args.id);
+    if (!sub) throw new ConvexError("Submission not found");
+
+    if (sub.connectionId !== connection._id)
+      throw new ConvexError("Submission does not belong to this connection");
+
+    const { id, scriptToken, ...rest } = args;
+    const patch: Record<string, unknown> = {};
+    Object.entries(rest).forEach(([k, v]) => {
+      if (v !== undefined) patch[k] = v;
+    });
+    await ctx.db.patch(id, patch);
   },
 });

@@ -23,6 +23,7 @@ export const getMyAccount = query({
     return {
       _id: account._id,
       email: account.email,
+      clerkEmail: account.clerkEmail ?? null,
       expiresAt: account.expiresAt,
     };
   },
@@ -66,6 +67,7 @@ export const upsert = mutation({
     accessToken: v.string(),
     refreshToken: v.string(),
     expiresAt: v.number(),
+    clerkEmail: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -77,6 +79,12 @@ export const upsert = mutation({
       .withIndex("by_owner_id", (q) => q.eq("ownerId", ownerId))
       .first();
 
+    // ADDED: save clerkEmail if existed, null if not
+    const clerkEmailPatch =
+      args.clerkEmail !== undefined
+        ? { clerkEmail: args.clerkEmail ?? undefined }
+        : {};
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         email: args.email,
@@ -85,11 +93,19 @@ export const upsert = mutation({
         // sends it on first consent; omit update if empty to keep the old one)
         ...(args.refreshToken ? { refreshToken: args.refreshToken } : {}),
         expiresAt: args.expiresAt,
+        ...clerkEmailPatch,
       });
       return existing._id;
     }
 
-    return ctx.db.insert("googleAccounts", { ownerId, ...args });
+    return ctx.db.insert("googleAccounts", {
+      ownerId,
+      email: args.email,
+      accessToken: args.accessToken,
+      refreshToken: args.refreshToken,
+      expiresAt: args.expiresAt,
+      ...clerkEmailPatch, // ADDED
+    });
   },
 });
 
