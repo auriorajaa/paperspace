@@ -569,28 +569,7 @@ function GoogleFormWizard({
     let cancelled = false;
 
     const detectShield = async () => {
-      const ua = navigator.userAgent;
-      const isFirefox = ua.includes("Firefox");
-
-      // Deteksi Brave
-      let isBrave = false;
-      try {
-        isBrave =
-          (navigator as any).brave != null &&
-          typeof (navigator as any).brave.isBrave === "function"
-            ? await (navigator as any).brave.isBrave()
-            : false;
-      } catch {
-        // abaikan
-      }
-
-      // Chrome, Edge, dsb. → langsung tersedia
-      if (!isFirefox && !isBrave) {
-        if (!cancelled) setPickerState("available");
-        return;
-      }
-
-      // Coba muat script Google API secara aktual, seperti yang dilakukan picker nanti
+      // Muat script Google API secara nyata – blokir oleh shield akan menyebabkan error
       const loadScript = () =>
         new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
@@ -607,7 +586,7 @@ function GoogleFormWizard({
             cleanup();
             if (script.parentNode) script.parentNode.removeChild(script);
             reject(new Error("timeout"));
-          }, 4000); // lebih longgar dari timeout picker
+          }, 4000); // cukup waktu, lebih longgar dari timeout picker
 
           script.onload = () => {
             cleanup();
@@ -624,12 +603,19 @@ function GoogleFormWizard({
 
       try {
         await loadScript();
-        // Sukses → shield MATI, picker bisa dipakai
+        // Berhasil → shield mati atau browser tanpa proteksi ekstra
         if (!cancelled) setPickerState("available");
       } catch {
-        // Gagal (blocked/timeout) → shield HIDUP → tampilkan flow manual
-        if (!cancelled) {
-          setPickerState(isFirefox ? "firefox_shield" : "brave_shield");
+        // Gagal → script diblokir → shield menyala
+        if (cancelled) return;
+
+        const ua = navigator.userAgent;
+        // Tentukan tipe shield berdasarkan user-agent (pesan akan disesuaikan)
+        if (ua.includes("Firefox")) {
+          setPickerState("firefox_shield");
+        } else {
+          // Semua browser lain (Brave, dll.) dianggap "brave_shield"
+          setPickerState("brave_shield");
         }
       }
     };
