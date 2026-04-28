@@ -565,7 +565,6 @@ function GoogleFormWizard({
         setBrowserKind("firefox");
         return;
       }
-      // Deteksi Brave: cek user‑agent dulu, lalu fallback API
       if (ua.includes("Brave")) {
         setBrowserKind("brave");
         return;
@@ -681,7 +680,7 @@ function GoogleFormWizard({
     await handleLoadFormById(formId);
   }, [formInput, handleLoadFormById]);
 
-  // ── Google Drive Picker (dengan error handling profesional) ──────────────
+  // ── Google Drive Picker (dengan scroll fix + error handling profesional) ──
   const openPicker = useCallback(async () => {
     setPickerLoading(true);
     setFormInputError("");
@@ -731,7 +730,12 @@ function GoogleFormWizard({
         })
         .build();
 
-      picker.setVisible(true);
+      // 🚀 PENTING: scroll ke atas agar dialog muncul di tengah viewport
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      // Delay kecil untuk memastikan rendering selesai
+      setTimeout(() => {
+        picker.setVisible(true);
+      }, 100);
     } catch (err: unknown) {
       const isBlocked =
         err instanceof Error &&
@@ -741,7 +745,6 @@ function GoogleFormWizard({
           String(err).includes("NetworkError"));
 
       if (isBlocked) {
-        // Pesan profesional yang menjelaskan situasi dan solusi
         setFormInputError(
           "It looks like your browser's tracking protection prevented the Google Drive Picker from opening. You can disable the shield for this site and try again, or simply paste the form URL below."
         );
@@ -812,7 +815,6 @@ function GoogleFormWizard({
 
   const mappedCount = Object.values(mappings).filter(Boolean).length;
 
-  // Apakah browser dikenal punya proteksi ekstra (hanya untuk info, bukan blokir)
   const isPrivacyBrowser = browserKind === "firefox" || browserKind === "brave";
 
   const STEPS = [
@@ -828,7 +830,7 @@ function GoogleFormWizard({
       {/* ── Step 1 ────────────────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          {/* Info banner untuk Firefox/Brave – hanya peringatan, bukan pemblokiran */}
+          {/* Info banner untuk Firefox/Brave */}
           {isPrivacyBrowser && (
             <div
               className="rounded-xl p-3 flex items-start gap-3"
@@ -862,7 +864,7 @@ function GoogleFormWizard({
             </div>
           )}
 
-          {/* ── UI Utama (semua browser) ── */}
+          {/* UI Utama */}
           <div className="space-y-4">
             <div>
               <h3
@@ -876,7 +878,7 @@ function GoogleFormWizard({
               </p>
             </div>
 
-            {/* Primary: Drive Picker button */}
+            {/* Drive Picker button */}
             <button
               onClick={openPicker}
               disabled={
@@ -1058,7 +1060,7 @@ function GoogleFormWizard({
               )}
             </div>
 
-            {/* Panduan universal: cara dapatkan form URL */}
+            {/* How-to guide */}
             <div
               className="rounded-xl p-3 space-y-2"
               style={{
@@ -1079,10 +1081,6 @@ function GoogleFormWizard({
                   {
                     n: "3",
                     text: 'Click the ✏️ edit button — the URL should contain "/edit"',
-                  },
-                  {
-                    n: "4",
-                    text: "Copy the full URL from the address bar and paste it above",
                   },
                 ].map(({ n, text }) => (
                   <div key={n} className="flex items-start gap-2.5">
