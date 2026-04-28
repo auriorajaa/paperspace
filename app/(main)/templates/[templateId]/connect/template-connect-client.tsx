@@ -553,78 +553,35 @@ function GoogleFormWizard({
   const [filenameError, setFilenameError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // ── Picker state ──────────────────────────────────────────────────────────
-  // "detecting"        → sedang cek browser + shield (UA check + optional network test)
-  // "available"        → picker bisa dipakai (Chrome/Edge, atau Firefox/Brave dengan shield OFF)
-  // "firefox_shield"   → Firefox dengan Tracking Protection ON
-  // "brave_shield"     → Brave dengan Brave Shield ON
-  type PickerState =
-    | "detecting"
-    | "available"
-    | "firefox_shield"
-    | "brave_shield";
-  const [pickerState, setPickerState] = useState<PickerState>("detecting");
+  // ── Browser detection + picker fallback ───────────────────────────────────
+  const [browserKind, setBrowserKind] = useState<
+    "detecting" | "supported" | "firefox" | "brave"
+  >("detecting");
+  const [pickerFailed, setPickerFailed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const detectShield = async () => {
-      // Muat script Google API secara nyata – blokir oleh shield akan menyebabkan error
-      const loadScript = () =>
-        new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = "https://apis.google.com/js/api.js";
-          script.async = true;
-
-          const cleanup = () => {
-            clearTimeout(timeoutId);
-            script.onload = null;
-            script.onerror = null;
-          };
-
-          const timeoutId = setTimeout(() => {
-            cleanup();
-            if (script.parentNode) script.parentNode.removeChild(script);
-            reject(new Error("timeout"));
-          }, 4000); // cukup waktu, lebih longgar dari timeout picker
-
-          script.onload = () => {
-            cleanup();
-            resolve();
-          };
-          script.onerror = () => {
-            cleanup();
-            if (script.parentNode) script.parentNode.removeChild(script);
-            reject(new Error("blocked"));
-          };
-
-          document.head.appendChild(script);
-        });
-
-      try {
-        await loadScript();
-        // Berhasil → shield mati atau browser tanpa proteksi ekstra
-        if (!cancelled) setPickerState("available");
-      } catch {
-        // Gagal → script diblokir → shield menyala
-        if (cancelled) return;
-
-        const ua = navigator.userAgent;
-        // Tentukan tipe shield berdasarkan user-agent (pesan akan disesuaikan)
-        if (ua.includes("Firefox")) {
-          setPickerState("firefox_shield");
-        } else {
-          // Semua browser lain (Brave, dll.) dianggap "brave_shield"
-          setPickerState("brave_shield");
-        }
+    const detect = async () => {
+      const ua = navigator.userAgent;
+      if (ua.includes("Firefox")) {
+        setBrowserKind("firefox");
+        return;
       }
+      if (ua.includes("Brave")) {
+        setBrowserKind("brave");
+        return;
+      }
+      try {
+        if ((navigator as any).brave?.isBrave) {
+          const isBrave = await (navigator as any).brave.isBrave();
+          if (isBrave) {
+            setBrowserKind("brave");
+            return;
+          }
+        }
+      } catch {}
+      setBrowserKind("supported");
     };
-
-    detectShield();
-
-    return () => {
-      cancelled = true;
-    };
+    detect();
   }, []);
 
   const ILLEGAL_CHARS = /[<>:"/\\|?*]/;
@@ -643,9 +600,7 @@ function GoogleFormWizard({
         let data: { error?: string; code?: string } = {};
         try {
           data = await res.json();
-        } catch {
-          /* not JSON */
-        }
+        } catch {}
 
         if (res.status === 401) {
           const isRevoked = data.code === "token_revoked";
@@ -726,7 +681,7 @@ function GoogleFormWizard({
     await handleLoadFormById(formId);
   }, [formInput, handleLoadFormById]);
 
-  // ── Google Drive Picker ───────────────────────────────────────────────────
+  // ── Google Drive Picker (dengan fallback otomatis) ────────────────────────
   const openPicker = useCallback(async () => {
     setPickerLoading(true);
     setFormInputError("");
@@ -741,6 +696,7 @@ function GoogleFormWizard({
       }
       const { accessToken } = await tokenRes.json();
 
+      // Muat gapi
       await new Promise<void>((resolve, reject) => {
         if ((window as any).gapi) {
           resolve();
@@ -749,7 +705,7 @@ function GoogleFormWizard({
         const script = document.createElement("script");
         script.src = "https://apis.google.com/js/api.js";
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error("gapi_blocked"));
+        script.onerror = () => reject(new Error("gapi_load_failed"));
         document.body.appendChild(script);
       });
 
@@ -780,17 +736,21 @@ function GoogleFormWizard({
     } catch (err: unknown) {
       const isBlocked =
         err instanceof Error &&
-        (err.name === "AbortError" ||
-          err.message === "gapi_blocked" ||
-          err.message.includes("Failed to fetch") ||
-          err.message.includes("NetworkError") ||
-          err.message.includes("Load failed"));
+        (err.message === "gapi_load_failed" ||
+          err.name === "AbortError" ||
+          String(err).includes("Failed to fetch") ||
+          String(err).includes("NetworkError"));
 
-      setFormInputError(
-        isBlocked
-          ? "Google Drive Picker is blocked by your browser's tracking protection. Paste the form URL below instead — it works exactly the same."
-          : "Failed to open Google Drive Picker. Please paste the Form URL manually below."
-      );
+      if (isBlocked) {
+        // Jangan tampilkan error mentah — langsung alihkan ke mode manual
+        setPickerFailed(true);
+        // Hapus error sebelumnya (jika ada)
+        setFormInputError("");
+      } else {
+        setFormInputError(
+          "Failed to open Google Drive Picker. Please paste the Form URL manually below."
+        );
+      }
       console.error("[openPicker]", err);
     } finally {
       setPickerLoading(false);
@@ -853,9 +813,9 @@ function GoogleFormWizard({
 
   const mappedCount = Object.values(mappings).filter(Boolean).length;
 
-  // Helper: apakah shield Firefox/Brave aktif
-  const isShieldOn =
-    pickerState === "firefox_shield" || pickerState === "brave_shield";
+  // Tampilkan UI manual-only jika: browser memang dikenal bermasalah (sbg info awal) ATAU picker sudah pernah gagal
+  const showManualOnly =
+    browserKind === "firefox" || browserKind === "brave" || pickerFailed;
 
   const STEPS = [
     { n: 1, label: "Select form" },
@@ -870,8 +830,8 @@ function GoogleFormWizard({
       {/* ── Step 1 ────────────────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          {isShieldOn ? (
-            /* ── Firefox/Brave dengan Shield ON → flow manual + langkah-langkah ── */
+          {showManualOnly ? (
+            /* ── Hanya input URL + panduan (muncul jika picker gagal atau dikenal bermasalah) ── */
             <div className="space-y-4">
               <div
                 className="rounded-2xl p-4 space-y-4"
@@ -886,22 +846,30 @@ function GoogleFormWizard({
                     className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
                     style={{ background: "var(--bg-input)" }}
                   >
-                    {pickerState === "brave_shield" ? "🦁" : "🦊"}
+                    {pickerFailed
+                      ? "🔒"
+                      : browserKind === "brave"
+                        ? "🦁"
+                        : "🦊"}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
                       className="text-sm font-semibold"
                       style={{ color: "var(--text)" }}
                     >
-                      Paste your Google Form URL
+                      {pickerFailed
+                        ? "Drive Picker blocked — paste your URL below"
+                        : "Paste your Google Form URL"}
                     </p>
                     <p
                       className="text-xs mt-0.5 leading-relaxed"
                       style={{ color: "var(--text-dim)" }}
                     >
-                      {pickerState === "brave_shield"
-                        ? "Brave Shields is blocking the Drive Picker popup — paste the URL directly below, works just as well."
-                        : "Firefox's tracking protection is blocking the Drive Picker popup — paste the URL directly below, works just as well."}
+                      {pickerFailed
+                        ? "Your browser’s security settings prevented us from opening Google Drive. No worries — just paste the form URL directly, it works exactly the same."
+                        : browserKind === "brave"
+                          ? "Brave Shields blocks the Drive Picker popup — paste the URL directly below, works just as well."
+                          : "Firefox's tracking protection blocks the Drive Picker popup — paste the URL directly below, works just as well."}
                     </p>
                   </div>
                 </div>
@@ -957,16 +925,12 @@ function GoogleFormWizard({
                             : "var(--accent-pale)",
                         border: "1px solid var(--accent-border)",
                       }}
-                      onMouseEnter={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
+                      onMouseEnter={(e) => {
                         if (!formLoading && formInput.trim())
                           e.currentTarget.style.background =
                             "var(--accent-mid)";
                       }}
-                      onMouseLeave={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
+                      onMouseLeave={(e) => {
                         if (!formLoading && formInput.trim())
                           e.currentTarget.style.background =
                             "var(--accent-strong-bg)";
@@ -997,7 +961,7 @@ function GoogleFormWizard({
                   )}
                 </div>
 
-                {/* Step-by-step guide */}
+                {/* Panduan 4 langkah */}
                 <div
                   className="rounded-xl p-3 space-y-2"
                   style={{
@@ -1053,10 +1017,10 @@ function GoogleFormWizard({
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-[12px] font-medium transition-colors w-fit"
                   style={{ color: "var(--accent-light)" }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) =>
+                  onMouseEnter={(e) =>
                     (e.currentTarget.style.color = "var(--accent-pale)")
                   }
-                  onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) =>
+                  onMouseLeave={(e) =>
                     (e.currentTarget.style.color = "var(--accent-light)")
                   }
                 >
@@ -1075,7 +1039,7 @@ function GoogleFormWizard({
               </InfoBox>
             </div>
           ) : (
-            /* ── Chrome/Edge/lainnya, atau Firefox/Brave dengan shield OFF ── */
+            /* ── Default: tombol Drive Picker + divider + manual ── */
             <div className="space-y-4">
               <div>
                 <h3
@@ -1094,7 +1058,7 @@ function GoogleFormWizard({
               <button
                 onClick={openPicker}
                 disabled={
-                  pickerLoading || formLoading || pickerState === "detecting"
+                  pickerLoading || formLoading || browserKind === "detecting"
                 }
                 className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold px-4 py-3 rounded-xl min-h-[48px] transition-all duration-150"
                 style={{
@@ -1107,22 +1071,13 @@ function GoogleFormWizard({
                       ? "var(--text-dim)"
                       : "var(--accent-pale)",
                   border: "1px solid var(--accent-border)",
-                  opacity: pickerState === "detecting" ? 0.6 : 1,
                 }}
-                onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  if (
-                    !pickerLoading &&
-                    !formLoading &&
-                    pickerState === "available"
-                  )
+                onMouseEnter={(e) => {
+                  if (!pickerLoading && !formLoading)
                     e.currentTarget.style.background = "var(--accent-mid)";
                 }}
-                onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  if (
-                    !pickerLoading &&
-                    !formLoading &&
-                    pickerState === "available"
-                  )
+                onMouseLeave={(e) => {
+                  if (!pickerLoading && !formLoading)
                     e.currentTarget.style.background =
                       "var(--accent-strong-bg)";
                 }}
@@ -1134,14 +1089,6 @@ function GoogleFormWizard({
                       style={{ borderColor: "var(--accent-light)" }}
                     />
                     Opening Drive…
-                  </>
-                ) : pickerState === "detecting" ? (
-                  <>
-                    <div
-                      className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                      style={{ borderColor: "var(--accent-light)" }}
-                    />
-                    Checking…
                   </>
                 ) : (
                   <>
@@ -1179,6 +1126,13 @@ function GoogleFormWizard({
                   </>
                 )}
               </button>
+
+              <p
+                className="text-[10px] text-center"
+                style={{ color: "var(--text-dim)" }}
+              >
+                Works best on Chrome &amp; Edge
+              </p>
 
               {/* Divider */}
               <div className="flex items-center gap-3">
@@ -1248,11 +1202,11 @@ function GoogleFormWizard({
                           : "var(--accent-pale)",
                       border: "1px solid var(--accent-border)",
                     }}
-                    onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    onMouseEnter={(e) => {
                       if (!formLoading && formInput.trim())
                         e.currentTarget.style.background = "var(--accent-mid)";
                     }}
-                    onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    onMouseLeave={(e) => {
                       if (!formLoading && formInput.trim())
                         e.currentTarget.style.background =
                           "var(--accent-strong-bg)";
