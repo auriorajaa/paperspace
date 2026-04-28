@@ -531,6 +531,7 @@ function GoogleFormWizard({
   const [formInput, setFormInput] = useState("");
   const [formInputError, setFormInputError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
   const [selectedForm, setSelectedForm] = useState<{
     id: string;
     name: string;
@@ -558,20 +559,10 @@ function GoogleFormWizard({
     (f) => !NON_MAPPABLE_TYPES.includes(f.type)
   );
 
-  // ── Step 1: load form ─────────────────────────────────────────────────────
-  const handleLoadForm = useCallback(async () => {
-    const formId = extractFormId(formInput);
-    if (!formId) {
-      setFormInputError(
-        "Couldn't recognise a valid Form ID. Paste the full Google Forms URL " +
-          "(e.g. https://docs.google.com/forms/d/…/edit) or just the ID part."
-      );
-      return;
-    }
-
+  // ── Core load logic (accepts formId directly) ─────────────────────────────
+  const handleLoadFormById = useCallback(async (formId: string) => {
     setFormInputError("");
     setFormLoading(true);
-
     try {
       const res = await fetch(`/api/google/forms/${formId}/questions`);
 
@@ -580,7 +571,7 @@ function GoogleFormWizard({
         try {
           data = await res.json();
         } catch {
-          // Response body wasn't JSON — use status-based fallback
+          // not JSON
         }
 
         if (res.status === 401) {
@@ -595,7 +586,7 @@ function GoogleFormWizard({
           setFormInputError(
             data.error ??
               "You don't have permission to access this form. Make sure you're signed in " +
-                "with the Google account that owns the form, and that access hasn't been restricted."
+                "with the Google account that owns the form."
           );
         } else if (res.status === 404) {
           setFormInputError(
@@ -621,7 +612,6 @@ function GoogleFormWizard({
       }
 
       const data = await res.json();
-
       const formName: string = data.formTitle ?? "Untitled Form";
       setSelectedForm({ id: formId, name: formName });
 
@@ -630,17 +620,13 @@ function GoogleFormWizard({
       setQuestionIdMap(data.questionIdMap ?? {});
       if (data.spreadsheetId) setLinkedSpreadsheetId(data.spreadsheetId);
 
-      // FIXED: If the form has no mappable questions, show an error and stay
-      // on Step 1 instead of silently advancing to Step 2 where the user
-      // would hit a dead-end mapping screen with nothing to select.
       if (qs.length === 0) {
         setFormInputError(
           "This form has no questions that can be mapped. Make sure your form has at " +
             "least one question before connecting it."
         );
-        // Reset selected form so the user knows nothing was committed
         setSelectedForm(null);
-        return; // ← stay on Step 1
+        return;
       }
 
       setStep(2);
@@ -651,11 +637,88 @@ function GoogleFormWizard({
           ? "You appear to be offline. Check your internet connection and try again."
           : "Could not reach Google Forms. Check your internet connection and try again."
       );
-      console.error("[handleLoadForm]", err);
+      console.error("[handleLoadFormById]", err);
     } finally {
       setFormLoading(false);
     }
-  }, [formInput]);
+  }, []);
+
+  // ── Wrapper for manual input ──────────────────────────────────────────────
+  const handleLoadForm = useCallback(async () => {
+    const formId = extractFormId(formInput);
+    if (!formId) {
+      setFormInputError(
+        "Couldn't recognise a valid Form ID. Paste the full Google Forms URL " +
+          "(e.g. https://docs.google.com/forms/d/…/edit) or just the ID part."
+      );
+      return;
+    }
+    await handleLoadFormById(formId);
+  }, [formInput, handleLoadFormById]);
+
+  // ── Google Drive Picker ───────────────────────────────────────────────────
+  const openPicker = useCallback(async () => {
+    setPickerLoading(true);
+    setFormInputError("");
+    try {
+      const tokenRes = await fetch("/api/google/picker-token");
+      if (!tokenRes.ok) {
+        const data = await tokenRes.json().catch(() => ({}));
+        setFormInputError(
+          data.error ?? "Failed to get Google token. Please try again."
+        );
+        return;
+      }
+      const { accessToken } = await tokenRes.json();
+
+      // Load gapi script if not already present
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).gapi) {
+          resolve();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://apis.google.com/js/api.js";
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error("Failed to load Google API script"));
+        document.body.appendChild(script);
+      });
+
+      // Load picker module
+      await new Promise<void>((resolve) =>
+        (window as any).gapi.load("picker", () => resolve())
+      );
+
+      const google = (window as any).google;
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(
+          new google.picker.DocsView()
+            .setMimeTypes("application/vnd.google-apps.form")
+            .setMode(google.picker.DocsViewMode.LIST)
+        )
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(process.env.NEXT_PUBLIC_GOOGLE_API_KEY!)
+        .setCallback((data: any) => {
+          if (data.action === google.picker.Action.PICKED) {
+            const doc = data.docs[0];
+            setFormInput(doc.id);
+            handleLoadFormById(doc.id);
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    } catch (err) {
+      setFormInputError(
+        "Failed to open Google Drive Picker. Please try again or paste the Form ID manually."
+      );
+      console.error("[openPicker]", err);
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [handleLoadFormById]);
 
   // ── Step 3: create connection ─────────────────────────────────────────────
   const handleCreate = async () => {
@@ -723,7 +786,7 @@ function GoogleFormWizard({
     <div className="space-y-5">
       <StepIndicator step={step} steps={STEPS} />
 
-      {/* ── Step 1: Form URL / ID ─────────────────────────────────────────── */}
+      {/* ── Step 1: Form picker / URL ─────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div>
@@ -731,21 +794,101 @@ function GoogleFormWizard({
               className="text-sm font-semibold mb-1"
               style={{ color: "var(--text)" }}
             >
-              Enter your Google Form
+              Select your Google Form
             </h3>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Paste the form URL or just the Form ID — we'll load its questions
-              automatically.
+              Pick directly from your Drive, or paste the form URL / ID below.
             </p>
           </div>
 
+          {/* Primary: Drive Picker button */}
+          <button
+            onClick={openPicker}
+            disabled={pickerLoading || formLoading}
+            className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold px-4 py-3 rounded-xl min-h-[48px] transition-all duration-150"
+            style={{
+              background:
+                pickerLoading || formLoading
+                  ? "var(--bg-input)"
+                  : "var(--accent-strong-bg)",
+              color:
+                pickerLoading || formLoading
+                  ? "var(--text-dim)"
+                  : "var(--accent-pale)",
+              border: "1px solid var(--accent-border)",
+            }}
+            onMouseEnter={(e) => {
+              if (!pickerLoading && !formLoading)
+                e.currentTarget.style.background = "var(--accent-mid)";
+            }}
+            onMouseLeave={(e) => {
+              if (!pickerLoading && !formLoading)
+                e.currentTarget.style.background = "var(--accent-strong-bg)";
+            }}
+          >
+            {pickerLoading ? (
+              <>
+                <div
+                  className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                  style={{ borderColor: "var(--accent-light)" }}
+                />
+                Opening Drive…
+              </>
+            ) : (
+              <>
+                {/* Google Drive icon */}
+                <svg
+                  className="w-4 h-4 shrink-0"
+                  viewBox="0 0 87.3 78"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
+                    fill="#0066da"
+                  />
+                  <path
+                    d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"
+                    fill="#00ac47"
+                  />
+                  <path
+                    d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
+                    fill="#ea4335"
+                  />
+                  <path
+                    d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"
+                    fill="#00832d"
+                  />
+                  <path
+                    d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"
+                    fill="#2684fc"
+                  />
+                  <path
+                    d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
+                    fill="#ffba00"
+                  />
+                </svg>
+                Choose from Google Drive
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex-1 h-px"
+              style={{ background: "var(--border-subtle)" }}
+            />
+            <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
+              or paste manually
+            </span>
+            <div
+              className="flex-1 h-px"
+              style={{ background: "var(--border-subtle)" }}
+            />
+          </div>
+
+          {/* Fallback: manual input */}
           <div className="space-y-2">
-            <label
-              className="text-[11px] font-medium"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              Form URL or ID
-            </label>
             <div className="flex gap-2">
               <input
                 value={formInput}
@@ -777,11 +920,11 @@ function GoogleFormWizard({
                       : "var(--border-subtle)"
                   }`)
                 }
-                disabled={formLoading}
+                disabled={formLoading || pickerLoading}
               />
               <button
                 onClick={handleLoadForm}
-                disabled={formLoading || !formInput.trim()}
+                disabled={formLoading || pickerLoading || !formInput.trim()}
                 className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] shrink-0 transition-all duration-150"
                 style={{
                   background:
@@ -830,31 +973,6 @@ function GoogleFormWizard({
           </div>
 
           <InfoBox>
-            <p
-              className="font-medium mb-1"
-              style={{ color: "var(--accent-light)" }}
-            >
-              Where to find your Form ID:
-            </p>
-            <ol className="space-y-1 list-decimal list-inside">
-              <li>Open your form in Google Forms</li>
-              <li>Copy the URL from the address bar</li>
-              <li>
-                Paste it above — the ID is the long string between{" "}
-                <code className="font-mono">/d/</code> and{" "}
-                <code className="font-mono">/edit</code>
-              </li>
-            </ol>
-            <p className="mt-2 font-mono text-[10px] break-all opacity-70">
-              docs.google.com/forms/d/
-              <span style={{ color: "var(--accent-light)" }}>
-                YOUR_FORM_ID_HERE
-              </span>
-              /edit
-            </p>
-          </InfoBox>
-
-          <InfoBox>
             <span style={{ color: "var(--accent-light)" }}>
               Access requirement:
             </span>{" "}
@@ -865,7 +983,7 @@ function GoogleFormWizard({
         </div>
       )}
 
-      {/* ── Step 2: Field mapping ─────────────────────────────────────────── */}
+      {/* ── Step 2: Field mapping (tidak berubah) ─────────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
           <div>
@@ -1090,7 +1208,7 @@ function GoogleFormWizard({
         </div>
       )}
 
-      {/* ── Step 3: Filename pattern ──────────────────────────────────────── */}
+      {/* ── Step 3: Filename pattern (tidak berubah) ──────────────────────── */}
       {step === 3 && (
         <div className="space-y-4">
           <div>
