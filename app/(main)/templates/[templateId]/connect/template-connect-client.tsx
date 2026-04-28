@@ -730,12 +730,7 @@ function GoogleFormWizard({
         })
         .build();
 
-      // 🚀 PENTING: scroll ke atas agar dialog muncul di tengah viewport
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-      // Delay kecil untuk memastikan rendering selesai
-      setTimeout(() => {
-        picker.setVisible(true);
-      }, 100);
+      picker.setVisible(true);
     } catch (err: unknown) {
       const isBlocked =
         err instanceof Error &&
