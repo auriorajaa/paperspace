@@ -553,31 +553,38 @@ function GoogleFormWizard({
   const [filenameError, setFilenameError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // ── Browser detection ─────────────────────────────────────────────────────
-  const [browserKind, setBrowserKind] = useState<
-    "detecting" | "supported" | "firefox" | "brave"
-  >("detecting");
+  // ── Picker availability (network-based, bukan UA sniffing) ────────────────
+  const [pickerAvailability, setPickerAvailability] = useState<
+    "checking" | "available" | "blocked"
+  >("checking");
 
   useEffect(() => {
-    const detect = async () => {
-      if (navigator.userAgent.includes("Firefox")) {
-        setBrowserKind("firefox");
-        return;
-      }
+    let cancelled = false;
+
+    const checkPickerAvailability = async () => {
       try {
-        const isBrave =
-          (navigator as any).brave != null &&
-          typeof (navigator as any).brave.isBrave === "function"
-            ? await (navigator as any).brave.isBrave()
-            : false;
-        if (isBrave) {
-          setBrowserKind("brave");
-          return;
-        }
-      } catch {}
-      setBrowserKind("supported");
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+
+        // apis.google.com masuk EasyPrivacy list → di-block Brave Shield / Firefox ETP
+        // Kalau ke-block → throw TypeError / AbortError → kita tangkap di bawah
+        await fetch("https://apis.google.com/js/api.js", {
+          method: "HEAD",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+        if (!cancelled) setPickerAvailability("available");
+      } catch {
+        if (!cancelled) setPickerAvailability("blocked");
+      }
     };
-    detect();
+
+    checkPickerAvailability();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const ILLEGAL_CHARS = /[<>:"/\\|?*]/;
@@ -694,6 +701,7 @@ function GoogleFormWizard({
       }
       const { accessToken } = await tokenRes.json();
 
+      // Load GAPI script — bisa throw kalau protection mem-block mid-session
       await new Promise<void>((resolve, reject) => {
         if ((window as any).gapi) {
           resolve();
@@ -702,8 +710,7 @@ function GoogleFormWizard({
         const script = document.createElement("script");
         script.src = "https://apis.google.com/js/api.js";
         script.onload = () => resolve();
-        script.onerror = () =>
-          reject(new Error("Failed to load Google API script"));
+        script.onerror = () => reject(new Error("gapi_blocked"));
         document.body.appendChild(script);
       });
 
@@ -727,13 +734,26 @@ function GoogleFormWizard({
             setFormInput(doc.id);
             handleLoadFormById(doc.id);
           }
+          // Cancel / error dari Google Picker → tidak perlu apa-apa,
+          // URL input sudah visible di bawah sebagai fallback
         })
         .build();
 
       picker.setVisible(true);
-    } catch (err) {
+    } catch (err: unknown) {
+      // Bedakan error "diblokir" vs error lainnya untuk pesan yang lebih helpful
+      const isBlocked =
+        err instanceof Error &&
+        (err.name === "AbortError" ||
+          err.message === "gapi_blocked" ||
+          err.message.includes("Failed to fetch") ||
+          err.message.includes("NetworkError") ||
+          err.message.includes("Load failed"));
+
       setFormInputError(
-        "Failed to open Google Drive Picker. Please paste the Form URL manually below."
+        isBlocked
+          ? "Google Drive Picker is blocked by your browser's tracking protection. Paste the form URL below instead — it works exactly the same."
+          : "Failed to open Google Drive Picker. Please paste the Form URL manually below."
       );
       console.error("[openPicker]", err);
     } finally {
@@ -796,8 +816,6 @@ function GoogleFormWizard({
   };
 
   const mappedCount = Object.values(mappings).filter(Boolean).length;
-  const isUnsupportedBrowser =
-    browserKind === "firefox" || browserKind === "brave";
 
   const STEPS = [
     { n: 1, label: "Select form" },
@@ -812,419 +830,249 @@ function GoogleFormWizard({
       {/* ── Step 1 ────────────────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          {isUnsupportedBrowser ? (
-            /* ── Firefox / Brave: polished direct-URL flow ── */
-            <div className="space-y-4">
-              <div
-                className="rounded-2xl p-4 space-y-4"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                }}
-              >
-                {/* Header */}
-                <div className="flex items-start gap-3">
+          <div>
+            <h3
+              className="text-sm font-semibold mb-1"
+              style={{ color: "var(--text)" }}
+            >
+              Select your Google Form
+            </h3>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {pickerAvailability === "available"
+                ? "Pick directly from your Drive, or paste the form URL below."
+                : "Paste the form URL or ID below to connect it."}
+            </p>
+          </div>
+
+          {/* ── Drive Picker button — hanya tampil kalau tidak blocked ─── */}
+          {pickerAvailability !== "blocked" && (
+            <button
+              onClick={openPicker}
+              disabled={
+                pickerLoading ||
+                formLoading ||
+                pickerAvailability === "checking"
+              }
+              className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold px-4 py-3 rounded-xl min-h-[48px] transition-all duration-150"
+              style={{
+                background:
+                  pickerLoading || formLoading
+                    ? "var(--bg-input)"
+                    : "var(--accent-strong-bg)",
+                color:
+                  pickerLoading || formLoading
+                    ? "var(--text-dim)"
+                    : "var(--accent-pale)",
+                border: "1px solid var(--accent-border)",
+                opacity: pickerAvailability === "checking" ? 0.6 : 1,
+              }}
+              onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                if (!pickerLoading && !formLoading && pickerAvailability === "available")
+                  e.currentTarget.style.background = "var(--accent-mid)";
+              }}
+              onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                if (!pickerLoading && !formLoading && pickerAvailability === "available")
+                  e.currentTarget.style.background = "var(--accent-strong-bg)";
+              }}
+            >
+              {pickerLoading ? (
+                <>
                   <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
-                    style={{ background: "var(--bg-input)" }}
+                    className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: "var(--accent-light)" }}
+                  />
+                  Opening Drive…
+                </>
+              ) : pickerAvailability === "checking" ? (
+                <>
+                  <div
+                    className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
+                    style={{ borderColor: "var(--accent-light)" }}
+                  />
+                  Checking…
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 87.3 78"
+                    xmlns="http://www.w3.org/2000/svg"
                   >
-                    {browserKind === "brave" ? "🦁" : "🦊"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text)" }}
-                    >
-                      Paste your Google Form URL
-                    </p>
-                    <p
-                      className="text-xs mt-0.5 leading-relaxed"
-                      style={{ color: "var(--text-dim)" }}
-                    >
-                      {browserKind === "brave"
-                        ? "Brave Shields blocks the Drive Picker popup — paste the URL directly below, works just as well."
-                        : "Firefox's tracking protection blocks the Drive Picker popup — paste the URL directly below, works just as well."}
-                    </p>
-                  </div>
-                </div>
-
-                {/* URL Input */}
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={formInput}
-                      onChange={(e) => {
-                        setFormInput(e.target.value);
-                        if (formInputError) setFormInputError("");
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !formLoading) handleLoadForm();
-                      }}
-                      placeholder="https://docs.google.com/forms/d/…/edit"
-                      className="flex-1 rounded-xl px-3 py-3 text-sm outline-none min-h-[44px]"
-                      style={{
-                        background: "var(--bg-muted)",
-                        border: `1.5px solid ${
-                          formInputError
-                            ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                            : "var(--border-subtle)"
-                        }`,
-                        color: "var(--text)",
-                      }}
-                      onFocus={(e) =>
-                        (e.currentTarget.style.border = `1.5px solid var(--accent-border)`)
-                      }
-                      onBlur={(e) =>
-                        (e.currentTarget.style.border = `1.5px solid ${
-                          formInputError
-                            ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                            : "var(--border-subtle)"
-                        }`)
-                      }
-                      disabled={formLoading}
-                      autoFocus
+                    <path
+                      d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
+                      fill="#0066da"
                     />
-                    <button
-                      onClick={handleLoadForm}
-                      disabled={formLoading || !formInput.trim()}
-                      className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] shrink-0 transition-all duration-150"
-                      style={{
-                        background:
-                          formLoading || !formInput.trim()
-                            ? "var(--bg-input)"
-                            : "var(--accent-strong-bg)",
-                        color:
-                          formLoading || !formInput.trim()
-                            ? "var(--text-dim)"
-                            : "var(--accent-pale)",
-                        border: "1px solid var(--accent-border)",
-                      }}
-                      onMouseEnter={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
-                        if (!formLoading && formInput.trim())
-                          e.currentTarget.style.background =
-                            "var(--accent-mid)";
-                      }}
-                      onMouseLeave={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
-                        if (!formLoading && formInput.trim())
-                          e.currentTarget.style.background =
-                            "var(--accent-strong-bg)";
-                      }}
-                    >
-                      {formLoading ? (
-                        <>
-                          <div
-                            className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                            style={{ borderColor: "var(--accent-light)" }}
-                          />
-                          <span className="hidden sm:inline">Loading…</span>
-                        </>
-                      ) : (
-                        <>
-                          <ArrowRightIcon className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Load</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {formInputError && (
-                    <ErrorBanner
-                      message={formInputError}
-                      onDismiss={() => setFormInputError("")}
+                    <path
+                      d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"
+                      fill="#00ac47"
                     />
-                  )}
-                </div>
+                    <path
+                      d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
+                      fill="#ea4335"
+                    />
+                    <path
+                      d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"
+                      fill="#00832d"
+                    />
+                    <path
+                      d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"
+                      fill="#2684fc"
+                    />
+                    <path
+                      d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
+                      fill="#ffba00"
+                    />
+                  </svg>
+                  Choose from Google Drive
+                </>
+              )}
+            </button>
+          )}
 
-                {/* Step-by-step guide */}
-                <div
-                  className="rounded-xl p-3 space-y-2"
-                  style={{
-                    background: "var(--bg-muted)",
-                    border: "1px solid var(--border-subtle)",
-                  }}
-                >
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wide"
-                    style={{ color: "var(--text-dim)" }}
-                  >
-                    How to find your form URL
-                  </p>
-                  <div className="space-y-2">
-                    {[
-                      { n: "1", text: "Go to forms.google.com" },
-                      { n: "2", text: "Open the form you want to connect" },
-                      {
-                        n: "3",
-                        text: 'Click the ✏️ edit button — the URL should contain "/edit"',
-                      },
-                      {
-                        n: "4",
-                        text: "Copy the full URL from the address bar and paste it above",
-                      },
-                    ].map(({ n, text }) => (
-                      <div key={n} className="flex items-start gap-2.5">
-                        <span
-                          className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5"
-                          style={{
-                            background: "var(--accent-bg)",
-                            color: "var(--accent-light)",
-                            border: "1px solid var(--accent-border)",
-                          }}
-                        >
-                          {n}
-                        </span>
-                        <p
-                          className="text-[11px] leading-relaxed"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Open Google Forms shortcut */}
-                <a
-                  href="https://forms.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-[12px] font-medium transition-colors w-fit"
-                  style={{ color: "var(--accent-light)" }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) =>
-                    (e.currentTarget.style.color = "var(--accent-pale)")
-                  }
-                  onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) =>
-                    (e.currentTarget.style.color = "var(--accent-light)")
-                  }
-                >
-                  <ExternalLinkIcon className="w-3 h-3" />
-                  Open Google Forms in a new tab
-                </a>
-              </div>
-
-              <InfoBox>
-                <span style={{ color: "var(--accent-light)" }}>
-                  Access requirement:
-                </span>{" "}
-                You must be the <strong>owner</strong> of the form. Forms shared
-                with you (view-only) may not be accessible due to Google API
-                restrictions.
-              </InfoBox>
-            </div>
-          ) : (
-            /* ── Chrome / Edge / other: Drive Picker + manual paste ── */
-            <div className="space-y-4">
+          {/* ── Soft notice kalau blocked — bukan error, hanya info ────── */}
+          {pickerAvailability === "blocked" && (
+            <div
+              className="rounded-xl p-3 flex items-start gap-3"
+              style={{
+                background: "var(--bg-muted)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              <span className="text-base shrink-0">🔒</span>
               <div>
-                <h3
-                  className="text-sm font-semibold mb-1"
+                <p
+                  className="text-xs font-semibold"
                   style={{ color: "var(--text)" }}
                 >
-                  Select your Google Form
-                </h3>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Pick directly from your Drive, or paste the form URL / ID
-                  below.
+                  Drive Picker unavailable
+                </p>
+                <p
+                  className="text-[11px] mt-0.5 leading-relaxed"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Your browser's tracking protection is blocking Google APIs.
+                  Paste the form URL below instead — it works exactly the same.
+                  Or disable tracking protection for this site and refresh.
                 </p>
               </div>
+            </div>
+          )}
 
-              {/* Primary: Drive Picker button */}
-              <button
-                onClick={openPicker}
-                disabled={
-                  pickerLoading || formLoading || browserKind === "detecting"
+          {/* ── Divider hanya kalau picker available ─────────────────── */}
+          {pickerAvailability === "available" && (
+            <div className="flex items-center gap-3">
+              <div
+                className="flex-1 h-px"
+                style={{ background: "var(--border-subtle)" }}
+              />
+              <span
+                className="text-[11px]"
+                style={{ color: "var(--text-dim)" }}
+              >
+                or paste manually
+              </span>
+              <div
+                className="flex-1 h-px"
+                style={{ background: "var(--border-subtle)" }}
+              />
+            </div>
+          )}
+
+          {/* ── URL Input — selalu visible untuk semua browser ─────────── */}
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                value={formInput}
+                onChange={(e) => {
+                  setFormInput(e.target.value);
+                  if (formInputError) setFormInputError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !formLoading) handleLoadForm();
+                }}
+                placeholder="https://docs.google.com/forms/d/…/edit"
+                className="flex-1 rounded-xl px-3 py-3 text-sm outline-none min-h-[44px]"
+                style={{
+                  background: "var(--bg-muted)",
+                  border: `1px solid ${
+                    formInputError
+                      ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                      : "var(--border-subtle)"
+                  }`,
+                  color: "var(--text)",
+                }}
+                onFocus={(e) =>
+                  (e.currentTarget.style.border = `1px solid var(--accent-border)`)
                 }
-                className="w-full flex items-center justify-center gap-2 text-[13px] font-semibold px-4 py-3 rounded-xl min-h-[48px] transition-all duration-150"
+                onBlur={(e) =>
+                  (e.currentTarget.style.border = `1px solid ${
+                    formInputError
+                      ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                      : "var(--border-subtle)"
+                  }`)
+                }
+                disabled={formLoading || pickerLoading}
+                // Auto-focus input kalau picker memang tidak tersedia
+                autoFocus={pickerAvailability === "blocked"}
+              />
+              <button
+                onClick={handleLoadForm}
+                disabled={formLoading || pickerLoading || !formInput.trim()}
+                className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] shrink-0 transition-all duration-150"
                 style={{
                   background:
-                    pickerLoading || formLoading
+                    formLoading || !formInput.trim()
                       ? "var(--bg-input)"
                       : "var(--accent-strong-bg)",
                   color:
-                    pickerLoading || formLoading
+                    formLoading || !formInput.trim()
                       ? "var(--text-dim)"
                       : "var(--accent-pale)",
                   border: "1px solid var(--accent-border)",
                 }}
                 onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  if (!pickerLoading && !formLoading)
+                  if (!formLoading && formInput.trim())
                     e.currentTarget.style.background = "var(--accent-mid)";
                 }}
                 onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  if (!pickerLoading && !formLoading)
+                  if (!formLoading && formInput.trim())
                     e.currentTarget.style.background =
                       "var(--accent-strong-bg)";
                 }}
               >
-                {pickerLoading ? (
+                {formLoading ? (
                   <>
                     <div
-                      className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                      className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
                       style={{ borderColor: "var(--accent-light)" }}
                     />
-                    Opening Drive…
+                    <span className="hidden sm:inline">Loading…</span>
                   </>
                 ) : (
                   <>
-                    <svg
-                      className="w-4 h-4 shrink-0"
-                      viewBox="0 0 87.3 78"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
-                        fill="#0066da"
-                      />
-                      <path
-                        d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"
-                        fill="#00ac47"
-                      />
-                      <path
-                        d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
-                        fill="#ea4335"
-                      />
-                      <path
-                        d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"
-                        fill="#00832d"
-                      />
-                      <path
-                        d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"
-                        fill="#2684fc"
-                      />
-                      <path
-                        d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
-                        fill="#ffba00"
-                      />
-                    </svg>
-                    Choose from Google Drive
+                    <ArrowRightIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Load</span>
                   </>
                 )}
               </button>
-
-              <p
-                className="text-[10px] text-center"
-                style={{ color: "var(--text-dim)" }}
-              >
-                Works best on Chrome &amp; Edge
-              </p>
-
-              {/* Divider */}
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex-1 h-px"
-                  style={{ background: "var(--border-subtle)" }}
-                />
-                <span
-                  className="text-[11px]"
-                  style={{ color: "var(--text-dim)" }}
-                >
-                  or paste manually
-                </span>
-                <div
-                  className="flex-1 h-px"
-                  style={{ background: "var(--border-subtle)" }}
-                />
-              </div>
-
-              {/* Manual input */}
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    value={formInput}
-                    onChange={(e) => {
-                      setFormInput(e.target.value);
-                      if (formInputError) setFormInputError("");
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !formLoading) handleLoadForm();
-                    }}
-                    placeholder="https://docs.google.com/forms/d/…/edit"
-                    className="flex-1 rounded-xl px-3 py-3 text-sm outline-none min-h-[44px]"
-                    style={{
-                      background: "var(--bg-muted)",
-                      border: `1px solid ${
-                        formInputError
-                          ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                          : "var(--border-subtle)"
-                      }`,
-                      color: "var(--text)",
-                    }}
-                    onFocus={(e) =>
-                      (e.currentTarget.style.border = `1px solid var(--accent-border)`)
-                    }
-                    onBlur={(e) =>
-                      (e.currentTarget.style.border = `1px solid ${
-                        formInputError
-                          ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                          : "var(--border-subtle)"
-                      }`)
-                    }
-                    disabled={formLoading || pickerLoading}
-                  />
-                  <button
-                    onClick={handleLoadForm}
-                    disabled={formLoading || pickerLoading || !formInput.trim()}
-                    className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] shrink-0 transition-all duration-150"
-                    style={{
-                      background:
-                        formLoading || !formInput.trim()
-                          ? "var(--bg-input)"
-                          : "var(--accent-strong-bg)",
-                      color:
-                        formLoading || !formInput.trim()
-                          ? "var(--text-dim)"
-                          : "var(--accent-pale)",
-                      border: "1px solid var(--accent-border)",
-                    }}
-                    onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      if (!formLoading && formInput.trim())
-                        e.currentTarget.style.background = "var(--accent-mid)";
-                    }}
-                    onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      if (!formLoading && formInput.trim())
-                        e.currentTarget.style.background =
-                          "var(--accent-strong-bg)";
-                    }}
-                  >
-                    {formLoading ? (
-                      <>
-                        <div
-                          className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin"
-                          style={{ borderColor: "var(--accent-light)" }}
-                        />
-                        <span className="hidden sm:inline">Loading…</span>
-                      </>
-                    ) : (
-                      <>
-                        <ArrowRightIcon className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Load</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {formInputError && (
-                  <ErrorBanner
-                    message={formInputError}
-                    onDismiss={() => setFormInputError("")}
-                  />
-                )}
-              </div>
-
-              <InfoBox>
-                <span style={{ color: "var(--accent-light)" }}>
-                  Access requirement:
-                </span>{" "}
-                You must be the <strong>owner</strong> of the form. Forms shared
-                with you (view-only) may not be accessible due to Google API
-                restrictions.
-              </InfoBox>
             </div>
-          )}
+
+            {formInputError && (
+              <ErrorBanner
+                message={formInputError}
+                onDismiss={() => setFormInputError("")}
+              />
+            )}
+          </div>
+
+          <InfoBox>
+            <span style={{ color: "var(--accent-light)" }}>
+              Access requirement:
+            </span>{" "}
+            You must be the <strong>owner</strong> of the form. Forms shared
+            with you (view-only) may not be accessible due to Google API
+            restrictions.
+          </InfoBox>
         </div>
       )}
 
