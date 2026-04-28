@@ -558,17 +558,21 @@ function GoogleFormWizard({
   // "available"        → picker bisa dipakai (Chrome/Edge, atau Firefox/Brave dengan shield OFF)
   // "firefox_shield"   → Firefox dengan Tracking Protection ON
   // "brave_shield"     → Brave dengan Brave Shield ON
-  type PickerState = "detecting" | "available" | "firefox_shield" | "brave_shield";
+  type PickerState =
+    | "detecting"
+    | "available"
+    | "firefox_shield"
+    | "brave_shield";
   const [pickerState, setPickerState] = useState<PickerState>("detecting");
 
   useEffect(() => {
     let cancelled = false;
 
-    const detect = async () => {
+    const detectShield = async () => {
       const ua = navigator.userAgent;
       const isFirefox = ua.includes("Firefox");
 
-      // Deteksi Brave via navigator.brave API
+      // Deteksi Brave
       let isBrave = false;
       try {
         isBrave =
@@ -577,37 +581,61 @@ function GoogleFormWizard({
             ? await (navigator as any).brave.isBrave()
             : false;
       } catch {
-        // ignore
+        // abaikan
       }
 
-      // Bukan Firefox / Brave → langsung available, tidak perlu network check
+      // Chrome, Edge, dsb. → langsung tersedia
       if (!isFirefox && !isBrave) {
         if (!cancelled) setPickerState("available");
         return;
       }
 
-      // Firefox / Brave terdeteksi → cek shield via network test ke apis.google.com.
-      // EasyPrivacy list (Firefox ETP) & Brave Shield sama-sama memblokir domain ini
-      // ketika protection aktif → fetch akan throw / abort.
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        await fetch("https://apis.google.com/js/api.js", {
-          method: "HEAD",
-          cache: "no-store",
-          signal: controller.signal,
+      // Coba muat script Google API secara aktual, seperti yang dilakukan picker nanti
+      const loadScript = () =>
+        new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://apis.google.com/js/api.js";
+          script.async = true;
+
+          const cleanup = () => {
+            clearTimeout(timeoutId);
+            script.onload = null;
+            script.onerror = null;
+          };
+
+          const timeoutId = setTimeout(() => {
+            cleanup();
+            if (script.parentNode) script.parentNode.removeChild(script);
+            reject(new Error("timeout"));
+          }, 4000); // lebih longgar dari timeout picker
+
+          script.onload = () => {
+            cleanup();
+            resolve();
+          };
+          script.onerror = () => {
+            cleanup();
+            if (script.parentNode) script.parentNode.removeChild(script);
+            reject(new Error("blocked"));
+          };
+
+          document.head.appendChild(script);
         });
-        clearTimeout(timeout);
-        // Fetch berhasil → shield OFF → picker aman untuk ditampilkan
+
+      try {
+        await loadScript();
+        // Sukses → shield MATI, picker bisa dipakai
         if (!cancelled) setPickerState("available");
       } catch {
-        // Fetch gagal → shield ON → tampilkan flow manual + langkah-langkah
-        if (!cancelled)
+        // Gagal (blocked/timeout) → shield HIDUP → tampilkan flow manual
+        if (!cancelled) {
           setPickerState(isFirefox ? "firefox_shield" : "brave_shield");
+        }
       }
     };
 
-    detect();
+    detectShield();
+
     return () => {
       cancelled = true;
     };
