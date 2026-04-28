@@ -695,6 +695,7 @@ function GoogleFormWizard({
       }
       const { accessToken } = await tokenRes.json();
 
+      // Muat gapi
       await new Promise<void>((resolve, reject) => {
         if ((window as any).gapi) {
           resolve();
@@ -712,9 +713,6 @@ function GoogleFormWizard({
       );
 
       const google = (window as any).google;
-
-      const savedScrollY = window.scrollY;
-
       const picker = new google.picker.PickerBuilder()
         .addView(
           new google.picker.DocsView()
@@ -724,16 +722,6 @@ function GoogleFormWizard({
         .setOAuthToken(accessToken)
         .setDeveloperKey(process.env.NEXT_PUBLIC_GOOGLE_API_KEY!)
         .setCallback((data: any) => {
-          if (
-            data.action === google.picker.Action.PICKED ||
-            data.action === google.picker.Action.CANCEL
-          ) {
-            window.scrollTo({
-              top: savedScrollY,
-              behavior: "instant" as ScrollBehavior,
-            });
-          }
-
           if (data.action === google.picker.Action.PICKED) {
             const doc = data.docs[0];
             setFormInput(doc.id);
@@ -742,10 +730,7 @@ function GoogleFormWizard({
         })
         .build();
 
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-      setTimeout(() => {
-        picker.setVisible(true);
-      }, 50);
+      picker.setVisible(true);
     } catch (err: unknown) {
       const isBlocked =
         err instanceof Error &&
