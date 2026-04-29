@@ -3,7 +3,7 @@
 
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { ComponentType } from "react";
 
 import { useTheme } from "@/contexts/ThemeContext";
@@ -78,11 +78,15 @@ function OnlyOfficeInner({
   const mountedRef = useRef(true);
   const { theme } = useTheme();
 
-  // ── Cache key: only rebuild config when the document identity changes ──────
-  // Changing userName/userAvatar should NOT cause the editor to reload —
-  // those are cosmetic and the cost (full editor teardown + re-init) is huge.
+  // ── FIX BUG 2: Cache key hanya berdasarkan identitas dokumen yang stabil ──
+  // HAPUS storageId dari configKey! StorageId berubah setiap save → trigger rebuild.
+  // Gunakan documentId/templateId + fileKey yang stabil.
+  // fileUrl juga dihapus karena bisa berubah saat storageId berubah (tapi URL pattern sama).
+  //
+  // Yang benar: hanya rebuild kalau dokumen benar-benar berbeda.
+  // ──────────────────────────────────────────────────────────────────────────
   const configKeyRef = useRef<string>("");
-  const configKey = `${fileUrl}::${fileKey}::${storageId ?? ""}::${documentId ?? ""}::${templateId ?? ""}`;
+  const configKey = `${fileKey}::${documentId ?? ""}::${templateId ?? ""}`;
 
   const uiTheme = theme === "light" ? "default-light" : "theme-contrast-dark";
 
@@ -102,14 +106,13 @@ function OnlyOfficeInner({
   }, []);
 
   useEffect(() => {
-    // Skip if the document identity hasn't changed (e.g. only userName updated)
+    // Skip if the document identity hasn't changed
     if (configKey === configKeyRef.current && editorData) return;
     configKeyRef.current = configKey;
 
     setEditorData(null);
     setConfigError(false);
 
-    // Abort controller so we can cancel in-flight requests on quick re-renders
     const controller = new AbortController();
 
     async function buildConfig() {
@@ -137,7 +140,7 @@ function OnlyOfficeInner({
         if (!mountedRef.current) return;
         setEditorData({ config, serverUrl });
       } catch (err: any) {
-        if (err?.name === "AbortError") return; // cancelled — not an error
+        if (err?.name === "AbortError") return;
         console.error("[ONLYOFFICE] Failed to build config:", err);
         if (!mountedRef.current) return;
         setConfigError(true);
@@ -149,13 +152,11 @@ function OnlyOfficeInner({
 
     return () => {
       controller.abort();
-      // Destroy previous editor instance on unmount / key change
       try {
         const win = window as any;
         win.DocEditor?.instances?.[editorId]?.destroyEditor();
       } catch (_) {}
     };
-    // Only react to document-identity changes, not cosmetic user fields
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configKey, editorId]);
 

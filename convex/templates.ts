@@ -152,6 +152,16 @@ export const update = mutation({
     if (template.ownerId !== identity.subject)
       throw new ConvexError("You don't have access to this template");
 
+    // FIX: Hapus file lama jika user upload file template baru.
+    // Sebelumnya file lama di storage tidak pernah dihapus saat template di-replace.
+    if (args.storageId && args.storageId !== template.storageId) {
+      try {
+        await ctx.storage.delete(template.storageId as any);
+      } catch (e) {
+        console.warn("[templates.update] Failed to delete old storage:", e);
+      }
+    }
+
     const { id, ...fields } = args;
     const patch: Record<string, unknown> = {};
     Object.entries(fields).forEach(([k, v]) => {
@@ -304,6 +314,18 @@ export const updateFileStorageInternal = internalMutation({
     fileUrl: v.string(),
   },
   handler: async (ctx, args) => {
+    // FIX: Sama seperti documents — hapus file lama sebelum update.
+    const template = await ctx.db.get(args.id);
+    if (template?.storageId && template.storageId !== args.storageId) {
+      try {
+        await ctx.storage.delete(template.storageId as any);
+      } catch (e) {
+        console.warn(
+          "[templates.updateFileStorageInternal] Failed to delete old storage:",
+          e
+        );
+      }
+    }
     await ctx.db.patch(args.id, {
       storageId: args.storageId,
       fileUrl: args.fileUrl,

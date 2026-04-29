@@ -462,6 +462,23 @@ export const updateSubmissionInternal = internalMutation({
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // FIX: Hapus file lama saat submission di-retry dan menghasilkan file baru.
+    // Sebelumnya file dari attempt sebelumnya (status "error") tidak pernah
+    // dihapus, terakumulasi setiap kali user retry submission yang gagal.
+    if (args.storageId) {
+      const sub = await ctx.db.get(args.id);
+      if (sub?.storageId && sub.storageId !== args.storageId) {
+        try {
+          await ctx.storage.delete(sub.storageId as any);
+        } catch (e) {
+          console.warn(
+            "[formConnections.updateSubmissionInternal] Failed to delete old storage:",
+            e
+          );
+        }
+      }
+    }
+
     const { id, ...rest } = args;
     const patch: Record<string, unknown> = {};
     Object.entries(rest).forEach(([k, v]) => {

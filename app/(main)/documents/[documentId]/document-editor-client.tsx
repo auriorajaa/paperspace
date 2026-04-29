@@ -1,4 +1,4 @@
-// app\(main)\documents\[documentId]\document-editor-client.tsx
+// app/(main)/documents/[documentId]/document-editor-client.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
 import { useUser, useOrganization, useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   ChevronLeftIcon,
   AlertCircleIcon,
@@ -79,7 +79,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
       className="flex flex-col h-full overflow-y-auto"
       style={{ background: "var(--bg)" }}
     >
-      {/* Visual banner */}
       <div
         className="relative flex flex-col items-center justify-center px-6 py-10 gap-5 text-center"
         style={{
@@ -87,9 +86,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           borderBottom: `1px solid var(--border-subtle)`,
         }}
       >
-        {/* Device trio */}
         <div className="flex items-end justify-center gap-2.5">
-          {/* Desktop — recommended */}
           <div
             className="flex flex-col items-center gap-2 px-4 py-3 rounded-2xl"
             style={{
@@ -120,7 +117,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
             </div>
           </div>
 
-          {/* Tablet — OK */}
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
@@ -140,7 +136,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
             </span>
           </div>
 
-          {/* Phone — not great */}
           <div
             className="flex flex-col items-center gap-2 px-3 py-3 rounded-2xl"
             style={{
@@ -162,7 +157,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           </div>
         </div>
 
-        {/* Heading */}
         <div className="space-y-1.5 max-w-[280px]">
           <p
             className="text-[15px] font-semibold leading-snug"
@@ -180,7 +174,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         </div>
       </div>
 
-      {/* Limitations list */}
       <div className="px-5 py-5 space-y-2">
         <p
           className="text-[10px] font-semibold uppercase tracking-wider mb-3"
@@ -213,9 +206,7 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
         ))}
       </div>
 
-      {/* CTAs */}
       <div className="px-5 pb-8 space-y-2.5">
-        {/* Copy link — primary CTA */}
         <button
           onClick={handleCopyLink}
           className="w-full flex items-center justify-center gap-2 text-[13px] font-medium px-4 py-3 rounded-xl transition-all"
@@ -238,7 +229,6 @@ function MobileRecommendation({ onContinue }: { onContinue: () => void }) {
           )}
         </button>
 
-        {/* Continue anyway — secondary */}
         <button
           onClick={onContinue}
           className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium px-4 py-2.5 rounded-xl"
@@ -315,7 +305,6 @@ function InlineTitle({
     }
   };
 
-  // ── Editing state ──────────────────────────────────────────────────────────
   if (editing) {
     return (
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -341,7 +330,6 @@ function InlineTitle({
             maxWidth: 280,
           }}
         />
-        {/* Confirm */}
         <button
           onClick={handleSave}
           disabled={saving}
@@ -364,7 +352,6 @@ function InlineTitle({
             />
           )}
         </button>
-        {/* Cancel */}
         <button
           onClick={() => {
             setValue(initialValue);
@@ -383,15 +370,11 @@ function InlineTitle({
     );
   }
 
-  // ── Display state ──────────────────────────────────────────────────────────
-  // The pencil icon is ALWAYS visible (not hidden behind hover) so touch users
-  // understand this is an editable field.
   return (
     <button
       onClick={() => setEditing(true)}
       className="flex items-center gap-2 px-2 py-1.5 rounded-lg min-w-0 max-w-[180px] sm:max-w-[320px] transition-colors"
       style={{
-        // Subtle but always-present border signals interactivity on touch
         background: "var(--bg-muted)",
         border: `1px solid var(--border-subtle)`,
       }}
@@ -411,7 +394,6 @@ function InlineTitle({
       ) : (
         <PencilIcon
           className="w-3 h-3 shrink-0"
-          // Always visible at 0.55 opacity — readable but not distracting
           style={{ color: "var(--accent-light)", opacity: 0.55 }}
         />
       )}
@@ -667,17 +649,6 @@ function EditorErrorPanel({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// ── REPLACE the resolve useEffect in document-editor-client.tsx ──────────────
-//
-// BEFORE: calling updateDocument() inside resolve() caused an extra Convex
-// re-render cycle: mutation fires → document.fileUrl changes → effect re-runs.
-// This added ~300-800 ms to every editor open.
-//
-// AFTER: setFileUrl immediately (fast path), fire-and-forget the DB patch in
-// the background. Use a ref so we only patch once per storageId to avoid
-// spamming mutations on re-renders.
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function DocumentEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -705,6 +676,14 @@ export default function DocumentEditorPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [storageError, setStorageError] = useState<string | null>(null);
 
+  // ── FIX BUG 3: Pre-compute stable fileKey agar tidak berubah saat storageId update ──
+  // Gunakan creationTime sebagai fallback yang stabil. Ini hanya berubah kalau
+  // dokumen benar-benar berbeda.
+  const stableFileKey = useMemo(() => {
+    if (!document) return "";
+    return `doc-${documentId}-${document._creationTime}`;
+  }, [documentId, document?._creationTime]);
+
   useEffect(() => {
     if (!document) return;
 
@@ -720,14 +699,11 @@ export default function DocumentEditorPage() {
       // ── Medium path: storageId exists, derive URL immediately ──────────────
       if (document.storageId) {
         const url = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? ""}/getFile?storageId=${document.storageId}`;
-        setFileUrl(url); // set immediately — don't wait for DB patch
+        setFileUrl(url);
 
-        // Fire-and-forget: persist fileUrl to DB so next load uses fast path.
-        // Only do this once per storageId to avoid mutation spam.
         if (savedFileUrlRef.current !== url) {
           savedFileUrlRef.current = url;
           updateDocument({ id: documentId, fileUrl: url }).catch(() => {
-            // Non-fatal: editor already has the URL, just log.
             console.warn("[resolve] Could not persist fileUrl to DB");
           });
         }
@@ -782,9 +758,6 @@ export default function DocumentEditorPage() {
     };
 
     resolve();
-    // Only re-run when the actual storage identifiers change, not on every
-    // document object reference change (avoids spurious re-runs on Convex
-    // subscription updates that don't affect the file).
   }, [document?.storageId, document?.fileUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRetry = () => {
@@ -798,9 +771,7 @@ export default function DocumentEditorPage() {
   if (document === undefined) {
     return (
       <div className="flex flex-col h-dvh" style={{ background: "var(--bg)" }}>
-        {/* Mobile-only spacer — only shows on screens < sm to clear the overlay top navbar */}
         <div className="h-12 sm:hidden shrink-0" />
-        {/* Skeleton header — always 44px */}
         <div
           className="flex items-center gap-3 px-4 h-11 shrink-0 animate-pulse"
           style={{
@@ -883,18 +854,8 @@ export default function DocumentEditorPage() {
       className="flex flex-col overflow-hidden h-dvh"
       style={{ background: "var(--bg)" }}
     >
-      {/*
-       * ── Mobile-only spacer ──────────────────────────────────────────────────
-       * On mobile (<sm), the app has an overlay top navbar (48px / h-12).
-       * This invisible spacer pushes the entire editor layout below it.
-       * On sm+ (tablet/desktop), the navbar is a sidebar — no spacer needed.
-       */}
       <div className="h-12 sm:hidden shrink-0" />
 
-      {/* ── Header ─────────────────────────────────────────────────────────────
-       * Always 44px (h-11) on every breakpoint.
-       * No padding-top — the spacer above handles the mobile offset.
-       */}
       <div
         className="flex items-center gap-2 px-3 sm:px-4 h-11 shrink-0"
         style={{
@@ -902,7 +863,6 @@ export default function DocumentEditorPage() {
           background: "var(--bg-sidebar)",
         }}
       >
-        {/* Back */}
         <Link
           href="/documents"
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0"
@@ -920,7 +880,6 @@ export default function DocumentEditorPage() {
 
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
 
-        {/* Inline rename — touch-friendly, pencil always visible */}
         <InlineTitle
           initialValue={document.title}
           onSave={async (title) => {
@@ -928,7 +887,6 @@ export default function DocumentEditorPage() {
           }}
         />
 
-        {/* Org badge — desktop/tablet only */}
         {document.organizationId && organization && (
           <span
             className="hidden sm:flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
@@ -943,7 +901,6 @@ export default function DocumentEditorPage() {
           </span>
         )}
 
-        {/* Status */}
         <div className="ml-auto flex items-center gap-3 shrink-0">
           <StatusPill ready={editorReady} error={editorError} />
         </div>
@@ -996,7 +953,6 @@ export default function DocumentEditorPage() {
             className="relative flex-1 w-full h-full"
             style={{ minHeight: 0 }}
           >
-            {/* Loading overlay — visible until OnlyOffice fires onDocumentReady */}
             {!editorReady && (
               <div
                 className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
@@ -1018,8 +974,12 @@ export default function DocumentEditorPage() {
               key={editorKey}
               fileUrl={fileUrl}
               fileName={document.title}
-              fileKey={`doc-${documentId}-${document.storageId?.slice(-8) ?? document._creationTime}`}
+              // ── FIX BUG 2 & 3: Gunakan stableFileKey yang tidak berubah saat storageId update ──
+              fileKey={stableFileKey}
               documentId={documentId}
+              // ── FIX BUG 2: Jangan pass storageId sebagai prop yang trigger re-render ──
+              // StorageId hanya dibutuhkan untuk callback, bukan untuk editor key.
+              // Kita tetap pass tapi tidak masuk configKey di OnlyOfficeInner.
               storageId={document.storageId}
               userId={user?.id}
               userName={user?.fullName ?? user?.firstName ?? undefined}
