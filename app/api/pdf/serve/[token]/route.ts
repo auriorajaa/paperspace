@@ -1,6 +1,6 @@
 // app/api/pdf/serve/[token]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getPdf } from "@/lib/pdf-temp-store";
+import { getPdf, deletePdf } from "@/lib/pdf-temp-store";
 
 export const runtime = "nodejs";
 
@@ -16,6 +16,13 @@ export async function GET(
       status: 404,
     });
   }
+
+  // FIX: Hapus blob setelah dibaca — blob ini hanya dibutuhkan sekali untuk
+  // di-serve ke browser. Tanpa ini, blob tetap ada sampai cleanup 1 jam
+  // kemudian. Fire-and-forget: tidak perlu await karena buffer sudah di tangan.
+  deletePdf(token).catch((e) =>
+    console.warn("[pdf/serve] Failed to delete blob after serving:", e)
+  );
 
   return new NextResponse(buffer as any, {
     status: 200,

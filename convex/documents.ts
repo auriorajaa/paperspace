@@ -387,6 +387,20 @@ export const updateFileStorageInternal = internalMutation({
     fileUrl: v.string(),
   },
   handler: async (ctx, args) => {
+    // FIX: Hapus file lama dari storage sebelum update DB.
+    // Sebelumnya setiap OnlyOffice save membuat file baru tapi file lama
+    // tidak pernah dihapus → storage menumpuk seiring waktu.
+    const doc = await ctx.db.get(args.id);
+    if (doc?.storageId && doc.storageId !== args.storageId) {
+      try {
+        await ctx.storage.delete(doc.storageId as any);
+      } catch (e) {
+        console.warn(
+          "[documents.updateFileStorageInternal] Failed to delete old storage:",
+          e
+        );
+      }
+    }
     await ctx.db.patch(args.id, {
       storageId: args.storageId,
       fileUrl: args.fileUrl,

@@ -20,10 +20,8 @@ function isRateLimited(ip: string): boolean {
 function getClientIp(req: NextRequest): string {
   const xff = req.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
-
   const realIp = req.headers.get("x-real-ip");
   if (realIp) return realIp;
-
   return "unknown";
 }
 
@@ -60,8 +58,6 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL ?? ""
     ).replace(/\/$/, "");
 
-    // const proxiedUrl = `${appUrl}/api/onlyoffice-file?url=${encodeURIComponent(fileUrl)}`;
-
     const params = new URLSearchParams();
     if (documentId) params.set("documentId", documentId);
     if (templateId) params.set("templateId", templateId);
@@ -97,8 +93,14 @@ export async function POST(req: NextRequest) {
           ...(userAvatar ? { image: userAvatar } : {}),
         },
         customization: {
+          // ── FIX BUG 1: Aktifkan force save ───────────────────────────────
           autosave: true,
-          forcesave: false,
+          forcesave: true, // ← WAS: false
+          // Interval force save dalam detik (60 = 1 menit)
+          // OnlyOffice akan push ke callback setiap 60 detik
+          // Minimum praktis: 30 detik, max terserah kamu
+          // Catatan: forcesaveinterval di-level root config, bukan customization
+          // ─────────────────────────────────────────────────────────────────
           compactHeader: true,
           compactToolbar: false,
           hideRightMenu: true,
