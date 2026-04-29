@@ -9,16 +9,24 @@ import CollectionDetailClient from "./collection-detail-client";
 export async function generateMetadata({
   params,
 }: {
-  params: { collectionId: string };
+  params: Promise<{ collectionId: string }>;
 }): Promise<Metadata> {
+  const { collectionId } = await params;
+
   return buildPageMetadata({
     title: "Collection",
     description: `Browse and manage documents in this collection on ${SITE_NAME}.`,
-    path: `/collections/${params.collectionId}`,
+    path: `/collections/${collectionId}`,
     noIndex: true,
   });
 }
 
-export default function CollectionDetailPage() {
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ collectionId: string }>;
+}) {
+  await params;
+
   return <CollectionDetailClient />;
 }

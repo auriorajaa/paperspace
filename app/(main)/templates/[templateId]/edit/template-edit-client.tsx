@@ -1741,12 +1741,14 @@ export default function TemplateEditPage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
-        if (!saving) scanAndSave();
+        // Selalu memanggil versi terkini dari scanAndSave via ref —
+        // tidak perlu re-register listener setiap kali `saving` berubah.
+        scanAndSaveRef.current();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [saving]);
+  }, []); // ← array kosong: hanya register sekali saat mount
 
   const scanAndSave = useCallback(
     async (redirectTo?: "fill") => {
@@ -1802,6 +1804,11 @@ export default function TemplateEditPage() {
     },
     [saving, template, templateId, updateTemplate, router]
   );
+
+  const scanAndSaveRef = useRef(scanAndSave);
+  useEffect(() => {
+    scanAndSaveRef.current = scanAndSave;
+  }, [scanAndSave]);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 

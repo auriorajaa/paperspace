@@ -9,16 +9,24 @@ import TemplateEditClient from "./template-edit-client";
 export async function generateMetadata({
   params,
 }: {
-  params: { templateId: string };
+  params: Promise<{ templateId: string }>;
 }): Promise<Metadata> {
+  const { templateId } = await params;
+
   return buildPageMetadata({
     title: "Edit Template",
     description: `Edit placeholder fields and settings for this template in ${SITE_NAME}.`,
-    path: `/templates/${params.templateId}/edit`,
+    path: `/templates/${templateId}/edit`,
     noIndex: true,
   });
 }
 
-export default function TemplateEditPage() {
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ templateId: string }>;
+}) {
+  await params;
+
   return <TemplateEditClient />;
 }
