@@ -16,6 +16,18 @@ http.route({
   path: "/getFile",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    // NOTE: This endpoint is intentionally unauthenticated.
+    //
+    // OnlyOffice fetches the document URL directly from its server — it cannot
+    // send a Clerk session token or an internal secret header. Adding an auth
+    // gate here breaks the editor (Convex throws "Missing 'iss' claim" when
+    // there is no token at all, rather than returning null).
+    //
+    // Security rationale: Convex storage IDs are cryptographically random
+    // UUIDs. Knowing a storageId is sufficient "proof" of access, equivalent
+    // to a pre-signed S3 URL. The IDs are never exposed publicly; they only
+    // appear inside authenticated API responses consumed by the client.
+
     const url = new URL(request.url);
     const storageId = url.searchParams.get("storageId");
     const filename = url.searchParams.get("filename");

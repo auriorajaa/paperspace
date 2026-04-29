@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { put, del } from "@vercel/blob";
 import { cleanupTempBlobs } from "@/lib/cleanup-temp-blobs";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,25 @@ function isValidDocx(buffer: Buffer): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  cleanupTempBlobs();
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  // Allow trusted server-to-server calls via the internal secret (e.g. the
+  // ONLYOFFICE callback path). Otherwise require a signed-in Clerk user.
+  const internalSecret = req.headers.get("x-internal-secret");
+  const hasInternalAuth =
+    internalSecret && internalSecret === process.env.INTERNAL_SECRET;
+
+  if (!hasInternalAuth) {
+    const { userId } = await auth();
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+  }
+
+  // Await cleanup so stale blobs are removed before we add new ones.
+  // Fire-and-forget is intentionally avoided here — a failed cleanup would
+  // silently accumulate blobs, so we at least log any error via the helper.
+  await cleanupTempBlobs();
+
   let blobUrl: string | null = null;
 
   try {

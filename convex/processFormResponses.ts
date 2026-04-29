@@ -40,12 +40,6 @@ async function getValidToken(
     return { token: account.accessToken };
   }
 
-  // FIX: wrap network call so transient failures don't bypass stampPolledAt.
-  // NOTE: Multiple connections for the same owner polled concurrently will all
-  // attempt a refresh simultaneously (last-write-wins in DB). This is safe —
-  // all resulting tokens are valid — but wastes a few Google API calls.
-  // A proper fix requires a distributed mutex; acceptable for now given
-  // Google's generous token quota.
   let refreshed: { access_token?: string; expires_in?: number; error?: string };
   try {
     refreshed = await refreshGoogleToken(account.refreshToken);
@@ -79,10 +73,6 @@ async function getValidToken(
 }
 
 // ── Preprocessor: stitch {{placeholders}} split across Word XML runs ──────────
-// NOTE: This logic is intentionally duplicated from lib/template-preprocessor.ts
-// because that file uses JSZip (async) while Convex actions require PizZip
-// (sync). They cannot share code across the runtime boundary. If the stitching
-// algorithm changes, update BOTH files.
 
 function stitchParagraph(para: string): string {
   const nodes: { tStart: number; tEnd: number; text: string }[] = [];
@@ -147,6 +137,18 @@ function buildFilename(
   return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
 }
 
+// ── Template-not-found sentinel ───────────────────────────────────────────────
+// A dedicated error class lets pollConnection distinguish "template deleted"
+// from every other generation failure and react differently (auto-deactivate
+// the connection instead of just marking the submission as error).
+
+class TemplateNotFoundError extends Error {
+  constructor() {
+    super("Template not found");
+    this.name = "TemplateNotFoundError";
+  }
+}
+
 // ── Core document generation logic ────────────────────────────────────────────
 
 async function generateDocxFromTemplate(
@@ -164,7 +166,8 @@ async function generateDocxFromTemplate(
   const template = await ctx.runQuery(internal.templates.getByIdInternal, {
     id: templateId,
   });
-  if (!template) throw new Error("Template not found");
+  // Use the sentinel so the caller can treat this case specially.
+  if (!template) throw new TemplateNotFoundError();
 
   const PizZip = (await import("pizzip")).default;
   const Docxtemplater = (await import("docxtemplater")).default;
@@ -255,12 +258,6 @@ async function generateDocxFromTemplate(
 }
 
 // ── Fetch all responses with pagination ───────────────────────────────────────
-// FIX: previous version did a single fetch with no pageSize, which would
-// return Google's default page (up to 5000 responses!) and could easily
-// time out. Now fetches in pages of PAGE_SIZE and stops after
-// MAX_RESPONSES_PER_POLL to keep each poll action well within Convex's
-// execution time limit. Responses from subsequent pages will be picked up
-// in the next cron cycle.
 
 const RESPONSES_PAGE_SIZE = 50;
 const MAX_RESPONSES_PER_POLL = 200;
@@ -333,6 +330,16 @@ export const pollConnection = internalAction({
     );
     if (!connection || !connection.isActive || !connection.googleFormId) return;
 
+    // Skip connections whose template was already deleted — the template.remove
+    // mutation marks these synchronously, but a racing cron cycle may have
+    // loaded the connection before the patch landed.
+    if (connection.templateDeleted) {
+      console.warn(
+        `[pollConnection] Skipping connection ${args.connectionId} — template has been deleted.`
+      );
+      return;
+    }
+
     const stampPolledAt = () =>
       ctx.runMutation(internal.formConnections.updateLastPolledInternal, {
         id: args.connectionId,
@@ -360,7 +367,6 @@ export const pollConnection = internalAction({
       return;
     }
 
-    // FIX: use paginated fetch instead of a single unbounded request
     let responses: any[];
     let truncated: boolean;
     try {
@@ -374,7 +380,6 @@ export const pollConnection = internalAction({
         "[pollConnection] Unexpected error fetching responses:",
         fetchErr
       );
-      // Don't stamp — transient error, let next cycle retry.
       return;
     }
 
@@ -464,6 +469,36 @@ export const pollConnection = internalAction({
           filename,
         });
       } catch (err: unknown) {
+        // ── Template deleted: deactivate connection & stop processing ─────────
+        // If the template was deleted between connection setup and this cron
+        // cycle, mark the connection so the UI can show a clear warning and
+        // stop attempting to generate further documents.
+        if (err instanceof TemplateNotFoundError) {
+          console.error(
+            `[pollConnection] Template ${connection.templateId} not found for connection ${args.connectionId}. ` +
+              "Deactivating connection and marking template as deleted."
+          );
+          await ctx.runMutation(
+            internal.formConnections.updateSubmissionInternal,
+            {
+              id: submissionId as Id<"formSubmissions">,
+              status: "error",
+              errorMessage:
+                "The template linked to this connection has been deleted. " +
+                "Previously generated documents are still available. " +
+                "To resume, please create a new connection using an active template.",
+            }
+          );
+          await ctx.runMutation(
+            internal.formConnections.markConnectionTemplateDeletedInternal,
+            { connectionId: connection._id }
+          );
+          // No point processing remaining responses for this connection.
+          await stampPolledAt();
+          return;
+        }
+
+        // ── All other errors: mark submission as error, continue loop ─────────
         const message = err instanceof Error ? err.message : String(err);
         console.error("[pollConnection] Generation error:", message);
         await ctx.runMutation(
@@ -482,9 +517,6 @@ export const pollConnection = internalAction({
 });
 
 // ── Poll all active Google connections (called by cron) ───────────────────────
-// FIX: was sequential (one-by-one), which could time out with many connections.
-// Now processes in parallel batches of POLL_CONCURRENCY, giving a good balance
-// between throughput and not overwhelming the Convex scheduler.
 
 const POLL_CONCURRENCY = 5;
 
@@ -503,7 +535,6 @@ export const pollAll = internalAction({
 
     if (connections.length === 0) return;
 
-    // Process in parallel batches to stay within Convex action time budget.
     for (let i = 0; i < connections.length; i += POLL_CONCURRENCY) {
       const chunk = connections.slice(i, i + POLL_CONCURRENCY);
       await Promise.all(
@@ -539,6 +570,14 @@ export const syncConnection = action({
       throw new Error("Connection not found");
     }
 
+    // Guard: block sync if template has been deleted
+    if (conn.templateDeleted) {
+      throw new Error(
+        "Cannot sync — the template linked to this connection has been deleted. " +
+          "Please create a new connection using an active template."
+      );
+    }
+
     await ctx.runAction(internal.processFormResponses.pollConnection, {
       connectionId: args.connectionId,
     });
@@ -564,6 +603,18 @@ export const retrySubmission = action({
       throw new Error("Only error submissions can be retried");
     }
 
+    // Guard: block retry if the parent connection's template is gone
+    const connection = await ctx.runQuery(
+      internal.formConnections.getByIdInternal,
+      { id: submission.connectionId }
+    );
+    if (connection?.templateDeleted) {
+      throw new Error(
+        "Cannot retry — the template linked to this connection has been deleted. " +
+          "Previously generated documents are still available for download."
+      );
+    }
+
     await ctx.runMutation(internal.formConnections.resetSubmissionInternal, {
       id: args.submissionId,
     });
@@ -576,6 +627,30 @@ export const retrySubmission = action({
         filename: submission.filename,
       });
     } catch (err: unknown) {
+      // If template was deleted between the guard check above and the generate
+      // call (race condition), auto-deactivate the connection here too.
+      if (err instanceof TemplateNotFoundError) {
+        if (connection) {
+          await ctx.runMutation(
+            internal.formConnections.markConnectionTemplateDeletedInternal,
+            { connectionId: connection._id }
+          );
+        }
+        const message =
+          "The template linked to this connection has been deleted. " +
+          "Previously generated documents are still available. " +
+          "To resume, please create a new connection using an active template.";
+        await ctx.runMutation(
+          internal.formConnections.updateSubmissionInternal,
+          {
+            id: args.submissionId,
+            status: "error",
+            errorMessage: message,
+          }
+        );
+        throw new Error(message);
+      }
+
       const message = err instanceof Error ? err.message : String(err);
       await ctx.runMutation(internal.formConnections.updateSubmissionInternal, {
         id: args.submissionId,

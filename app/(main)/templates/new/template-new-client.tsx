@@ -57,6 +57,10 @@ const MAX_PDF_PAGES = 50;
 const MAX_FILE_MB = 10;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 const SPLIT_TIMEOUT_MS = 30_000;
+const CONVERT_TIMEOUT_MS = 60_000;
+const MAX_NAME_LENGTH = 200;
+// Warn when this many pages are selected (conversion gets slow beyond here)
+const MANY_PAGES_THRESHOLD = 20;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fileSizeMB(bytes: number) {
@@ -207,7 +211,8 @@ function ThumbnailCard({
       type="button"
       onClick={onToggle}
       disabled={disabled}
-      className="relative rounded-xl overflow-hidden transition-all duration-150 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.97] disabled:pointer-events-none"
+      // FIX (#9): min-h ensures a large-enough tap target on small screens
+      className="relative rounded-xl overflow-hidden transition-all duration-150 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.97] disabled:pointer-events-none min-h-[80px]"
       style={{
         border: `2px solid ${selected ? "var(--accent-dash)" : "var(--border-subtle)"}`,
         background: selected ? "var(--accent-soft)" : "var(--bg-muted)",
@@ -376,8 +381,8 @@ function PageSelector({
         </div>
       )}
 
-      {/* Grid */}
-      <div className="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[420px] overflow-y-auto">
+      {/* FIX (#9): 2 cols on mobile → 3 on sm → 4 on md → 5 on lg */}
+      <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[420px] overflow-y-auto">
         {thumbnails.map((dataUrl, i) => (
           <ThumbnailCard
             key={i}
@@ -673,6 +678,19 @@ export default function TemplateNewPage() {
   // Critical error banner (upload/convert failures)
   const [criticalError, setCriticalError] = useState("");
 
+  // FIX (#7): ref to the error banner so we can scroll it into view
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+
+  // FIX (#7): auto-scroll to error banner whenever a critical error appears
+  useEffect(() => {
+    if (criticalError && errorBannerRef.current) {
+      errorBannerRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [criticalError]);
+
   // PDF state
   const [pdfThumbnails, setPdfThumbnails] = useState<(string | null)[]>([]);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
@@ -766,6 +784,11 @@ export default function TemplateNewPage() {
     setPdfError("");
     setStage("previewing");
 
+    // FIX (#4): hold a reference to the PDF document so we can destroy it
+    let pdf: Awaited<
+      ReturnType<Awaited<typeof import("pdfjs-dist")>["getDocument"]>["promise"]
+    > | null = null;
+
     try {
       const pdfjsLib = await import("pdfjs-dist");
       pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
@@ -773,7 +796,7 @@ export default function TemplateNewPage() {
 
       if (pdfLoadCancelRef.current) return;
 
-      const pdf = await pdfjsLib.getDocument({
+      pdf = await pdfjsLib.getDocument({
         data: new Uint8Array(arrayBuffer),
       }).promise;
 
@@ -840,6 +863,15 @@ export default function TemplateNewPage() {
       setFile(null);
       setFileKind(null);
     } finally {
+      // FIX (#4): always destroy the PDF document to release the Web Worker
+      // and free memory, regardless of success, cancellation, or error.
+      if (pdf) {
+        try {
+          pdf.destroy();
+        } catch {
+          // destroy() can throw if the worker already terminated — safe to ignore
+        }
+      }
       if (!pdfLoadCancelRef.current) {
         setLoadingThumbnails(false);
         setStage("");
@@ -924,18 +956,39 @@ export default function TemplateNewPage() {
     const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
 
     setStage("scanning");
-    const mammoth = await import("mammoth");
-    const buffer = await docxFile.arrayBuffer();
-    const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
-    const { detectPlaceholders } = await import("@/lib/placeholder-detector");
-    const fields = detectPlaceholders(textResult.value);
+
+    // FIX (#6): wrap mammoth in its own try/catch with a clear message
+    let extractedText = "";
+    try {
+      const mammoth = await import("mammoth");
+      const buffer = await docxFile.arrayBuffer();
+      const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
+      extractedText = textResult.value;
+    } catch {
+      throw new Error(
+        "Unable to read the document — it may be corrupted or use an unsupported format."
+      );
+    }
+
+    // FIX (#6): wrap placeholder detection in its own try/catch
+    let fields: ReturnType<
+      (typeof import("@/lib/placeholder-detector"))["detectPlaceholders"]
+    > = [];
+    try {
+      const { detectPlaceholders } = await import("@/lib/placeholder-detector");
+      fields = detectPlaceholders(extractedText);
+    } catch {
+      throw new Error(
+        "Could not scan for placeholders — the document structure may be unsupported."
+      );
+    }
 
     const templateId = await createTemplate({
       name: name.trim(),
       description: description.trim() || undefined,
       storageId,
       fileUrl,
-      previewText: textResult.value,
+      previewText: extractedText,
       tags: tags.length > 0 ? tags : undefined,
       organizationId: organization?.id,
       fields: fields.map((f) => ({
@@ -975,6 +1028,14 @@ export default function TemplateNewPage() {
     }
     if (!name.trim()) {
       setNameError("Template name is required.");
+      document.getElementById("template-name")?.focus();
+      return;
+    }
+    // FIX (#8): enforce max name length before save
+    if (name.trim().length > MAX_NAME_LENGTH) {
+      setNameError(
+        `Template name must be ${MAX_NAME_LENGTH} characters or fewer.`
+      );
       document.getElementById("template-name")?.focus();
       return;
     }
@@ -1061,16 +1122,31 @@ export default function TemplateNewPage() {
     const convertForm = new FormData();
     convertForm.append("file", splitFile);
 
+    // FIX (#5): AbortController with a 60-second timeout for the conversion step
+    const convertController = new AbortController();
+    const convertTimeoutId = setTimeout(
+      () => convertController.abort(),
+      CONVERT_TIMEOUT_MS
+    );
+
     let convertRes: Response;
     try {
       convertRes = await fetch("/api/convert/pdf-to-docx", {
         method: "POST",
         body: convertForm,
+        signal: convertController.signal,
       });
-    } catch {
+    } catch (err: unknown) {
+      if ((err as Error)?.name === "AbortError") {
+        throw new Error(
+          "Conversion timed out. Try selecting fewer pages or using a simpler PDF."
+        );
+      }
       throw new Error(
         "Network error during PDF conversion. Please check your connection."
       );
+    } finally {
+      clearTimeout(convertTimeoutId);
     }
 
     if (!convertRes.ok) {
@@ -1114,12 +1190,19 @@ export default function TemplateNewPage() {
   const canSave =
     !!file &&
     !!name.trim() &&
+    name.trim().length <= MAX_NAME_LENGTH &&
     !saving &&
     !loadingThumbnails &&
     (fileKind !== "pdf" || selectedPages.size > 0) &&
     !isProcessing;
 
   const activeStages = fileKind === "pdf" ? STAGE_ORDER_PDF : STAGE_ORDER_DOCX;
+
+  // FIX (#10): warn when too many pages selected
+  const showManyPagesWarning =
+    fileKind === "pdf" &&
+    selectedPages.size > MANY_PAGES_THRESHOLD &&
+    !isProcessing;
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -1158,18 +1241,21 @@ export default function TemplateNewPage() {
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-4 mx-auto lg:mx-0">
-          {criticalError && (
-            <div className="mb-5">
-              <ErrorBanner
-                message={criticalError}
-                onRetry={() => {
-                  setCriticalError("");
-                  handleSave();
-                }}
-                onDismiss={() => setCriticalError("")}
-              />
-            </div>
-          )}
+          {/* FIX (#7): attach ref to error banner container for auto-scroll */}
+          <div ref={errorBannerRef}>
+            {criticalError && (
+              <div className="mb-5">
+                <ErrorBanner
+                  message={criticalError}
+                  onRetry={() => {
+                    setCriticalError("");
+                    handleSave();
+                  }}
+                  onDismiss={() => setCriticalError("")}
+                />
+              </div>
+            )}
+          </div>
 
           {pdfError && (
             <div className="mb-5">
@@ -1478,6 +1564,33 @@ export default function TemplateNewPage() {
                   <FieldError message="Select at least one page to continue." />
                 )}
 
+                {/* FIX (#10): warn if too many pages are selected */}
+                {showManyPagesWarning && (
+                  <div
+                    className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl mt-3"
+                    style={{
+                      background: "var(--warning-bg)",
+                      border:
+                        "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
+                    }}
+                  >
+                    <AlertCircleIcon
+                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                      style={{ color: "var(--warning)" }}
+                    />
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: "var(--warning)" }}
+                    >
+                      <span className="font-semibold">
+                        {selectedPages.size} pages selected.
+                      </span>{" "}
+                      Selecting many pages may increase conversion time.
+                      Consider splitting large PDFs before uploading.
+                    </p>
+                  </div>
+                )}
+
                 <div
                   className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl mt-3"
                   style={{
@@ -1541,9 +1654,20 @@ export default function TemplateNewPage() {
                       id="template-name"
                       placeholder="e.g. Employee Contract"
                       value={name}
+                      // FIX (#8): enforce character limit at the HTML level
+                      maxLength={MAX_NAME_LENGTH}
                       onChange={(e) => {
-                        setName(e.target.value);
-                        if (e.target.value.trim()) setNameError("");
+                        const val = e.target.value;
+                        setName(val);
+                        if (!val.trim()) {
+                          setNameError("Template name is required.");
+                        } else if (val.trim().length > MAX_NAME_LENGTH) {
+                          setNameError(
+                            `Template name must be ${MAX_NAME_LENGTH} characters or fewer.`
+                          );
+                        } else {
+                          setNameError("");
+                        }
                       }}
                       onKeyDown={(e) =>
                         e.key === "Enter" && canSave && handleSave()
@@ -1563,6 +1687,20 @@ export default function TemplateNewPage() {
                         (e.currentTarget.style.border = `1px solid ${nameError ? "color-mix(in srgb, var(--danger) 60%, transparent)" : "var(--border-subtle)"}`)
                       }
                     />
+                    {/* FIX (#8): show character count when approaching the limit */}
+                    {name.length > MAX_NAME_LENGTH * 0.8 && (
+                      <p
+                        className="text-[10px] text-right"
+                        style={{
+                          color:
+                            name.length > MAX_NAME_LENGTH
+                              ? "var(--danger)"
+                              : "var(--text-dim)",
+                        }}
+                      >
+                        {name.length}/{MAX_NAME_LENGTH}
+                      </p>
+                    )}
                     {nameError && <FieldError message={nameError} />}
                   </div>
 
