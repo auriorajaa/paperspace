@@ -173,6 +173,28 @@ export const remove = mutation({
     if (template.ownerId !== identity.subject)
       throw new ConvexError("You don't have access to this template");
 
+    // ── Cascade: deactivate & flag all form connections using this template ──
+    // Connections are marked templateDeleted=true so the frontend can show a
+    // clear "Template Deleted" state rather than confusing sync errors. We do
+    // NOT delete the connections or their submissions — the user may still
+    // want to view or download previously generated documents.
+    const now = Date.now();
+    const connections = await ctx.db
+      .query("formConnections")
+      .withIndex("by_template_id", (q) => q.eq("templateId", args.id))
+      .collect();
+
+    await Promise.all(
+      connections.map((conn) =>
+        ctx.db.patch(conn._id, {
+          isActive: false,
+          templateDeleted: true,
+          templateDeletedAt: now,
+        })
+      )
+    );
+
+    // ── Delete the template file from storage ────────────────────────────────
     try {
       await ctx.storage.delete(template.storageId as any);
     } catch (e) {

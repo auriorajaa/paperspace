@@ -126,6 +126,12 @@ export default defineSchema({
     // Maps Google questionId → questionTitle for response parsing
     googleQuestionMap: v.optional(v.any()),
     lastPolledAt: v.optional(v.number()),
+    // ── Template deletion tracking ───────────────────────────────────────────
+    // Set to true when the linked template is deleted. Connection is
+    // automatically deactivated; sync and retry are blocked on both
+    // backend and frontend to avoid confusing "Template not found" errors.
+    templateDeleted: v.optional(v.boolean()),
+    templateDeletedAt: v.optional(v.number()),
   })
     .index("by_owner_id", ["ownerId"])
     .index("by_template_id", ["templateId"])

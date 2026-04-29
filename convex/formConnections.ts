@@ -165,6 +165,15 @@ export const update = mutation({
     const conn = await ctx.db.get(args.id);
     if (!conn || conn.ownerId !== identity.subject)
       throw new ConvexError("Not found");
+
+    // Block re-activation if template has been deleted
+    if (args.isActive === true && conn.templateDeleted) {
+      throw new ConvexError(
+        "Cannot resume this connection — the linked template has been deleted. " +
+          "Please create a new connection with an active template."
+      );
+    }
+
     const { id, ...rest } = args;
     const patch: Record<string, unknown> = {};
     Object.entries(rest).forEach(([k, v]) => {
@@ -243,11 +252,6 @@ export const deleteSubmission = mutation({
  * layer and hits Convex directly still can't create submissions without a
  * valid, active token.
  *
- * FIX (this version): added optional `responseId` so the webhook path can
- * store it for deduplication, matching what createSubmissionInternal does.
- * Previously the public mutation silently dropped responseId, meaning
- * webhook-triggered submissions had weaker dedup (timestamp-only).
- *
  * Spam guard: rejects if the connection already has ≥ SPAM_LIMIT pending
  * submissions, preventing replay attacks from queuing runaway generation jobs.
  */
@@ -262,9 +266,6 @@ export const createSubmission = mutation({
     filename: v.string(),
     status: v.string(),
     submittedAt: v.number(),
-    // FIX: added — was missing from public mutation, present only on internal.
-    // Without this, webhook submissions couldn't store the Google responseId
-    // and dedup fell back to timestamp-only (weaker, misses same-second submits).
     responseId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -278,6 +279,14 @@ export const createSubmission = mutation({
 
     if (!connection || !connection.isActive) {
       throw new ConvexError("Invalid or inactive token");
+    }
+
+    // Block webhook submissions if the template has been deleted
+    if (connection.templateDeleted) {
+      throw new ConvexError(
+        "The template linked to this connection has been deleted. " +
+          "New submissions cannot be processed."
+      );
     }
 
     // ── 2. Confirm connectionId matches the token's connection ────────────────
@@ -302,8 +311,6 @@ export const createSubmission = mutation({
     }
 
     // ── 4. Dedup check against responseId before inserting ───────────────────
-    // Mirrors the dedup logic in pollConnection so webhook and cron paths are
-    // both protected against duplicate submissions.
     if (args.responseId) {
       const existing = await ctx.db
         .query("formSubmissions")
@@ -314,9 +321,6 @@ export const createSubmission = mutation({
         )
         .first();
       if (existing) {
-        // Return the existing id so the webhook can still respond with a valid
-        // submissionId without crashing. The generation step will simply be a
-        // no-op (the submission is already generated or in progress).
         return existing._id;
       }
     }
@@ -365,7 +369,11 @@ export const getAllGoogleConnectionsInternal = internalQuery({
   handler: async (ctx) => {
     const all = await ctx.db.query("formConnections").collect();
     return all.filter(
-      (c) => c.isActive && c.connectionType === "google" && c.googleFormId
+      (c) =>
+        c.isActive &&
+        !c.templateDeleted &&
+        c.connectionType === "google" &&
+        c.googleFormId
     );
   },
 });
@@ -471,6 +479,30 @@ export const resetSubmissionInternal = internalMutation({
       errorMessage: undefined,
       storageId: undefined,
       fileUrl: undefined,
+    });
+  },
+});
+
+/**
+ * markConnectionTemplateDeletedInternal
+ *
+ * Called by processFormResponses when a generation attempt discovers the
+ * template no longer exists (e.g. deleted between connection setup and the
+ * next cron cycle). Deactivates the connection and sets the templateDeleted
+ * flag so the UI can surface a clear, actionable warning instead of a
+ * cryptic "Template not found" error that repeats on every sync.
+ */
+export const markConnectionTemplateDeletedInternal = internalMutation({
+  args: { connectionId: v.id("formConnections") },
+  handler: async (ctx, args) => {
+    const conn = await ctx.db.get(args.connectionId);
+    if (!conn) return;
+    // Idempotent — skip if already marked to avoid unnecessary writes.
+    if (conn.templateDeleted) return;
+    await ctx.db.patch(args.connectionId, {
+      isActive: false,
+      templateDeleted: true,
+      templateDeletedAt: Date.now(),
     });
   },
 });

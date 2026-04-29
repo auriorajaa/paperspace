@@ -36,6 +36,7 @@ import {
   PlayIcon,
   FileTextIcon,
   PackageIcon,
+  AlertTriangleIcon,
 } from "lucide-react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import Link from "next/link";
@@ -89,15 +90,14 @@ interface Connection {
   fieldMappings: any[];
   lastPolledAt?: number;
   _creationTime: number;
+  /** Set to true by the backend when the linked template is deleted. */
+  templateDeleted?: boolean;
+  /** Timestamp (ms) when the template was marked deleted. */
+  templateDeletedAt?: number;
 }
-
-// FIX: removed BottomSheet + OverflowMenuItem — BottomSheet was defined but
-// never rendered anywhere in the component tree. Dead code removed entirely.
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 
-// FIX: triggerDownload centralises the <a> lifecycle so the element is always
-// removed and the object URL always revoked, even when an earlier step throws.
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -106,7 +106,6 @@ function triggerDownload(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Defer revoke to give the browser time to start the download
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
@@ -209,6 +208,56 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Template Deleted Banner ───────────────────────────────────────────────────
+
+function TemplateDeletedBanner({
+  templateDeletedAt,
+}: {
+  templateDeletedAt?: number;
+}) {
+  return (
+    <div
+      className="flex items-start gap-3 px-4 sm:px-5 py-3"
+      style={{
+        background: "color-mix(in srgb, var(--warning) 8%, transparent)",
+        borderBottom:
+          "1px solid color-mix(in srgb, var(--warning) 18%, transparent)",
+      }}
+    >
+      <AlertTriangleIcon
+        className="w-4 h-4 shrink-0 mt-0.5"
+        style={{ color: "var(--warning)" }}
+      />
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[13px] font-semibold leading-snug"
+          style={{ color: "var(--warning)" }}
+        >
+          Template deleted
+        </p>
+        <p
+          className="text-xs mt-0.5 leading-relaxed"
+          style={{ color: "var(--text-muted)" }}
+        >
+          The template linked to this connection was deleted
+          {templateDeletedAt
+            ? ` on ${format(new Date(templateDeletedAt), "MMM d, yyyy")}`
+            : ""}
+          . New form responses will no longer be processed. Previously generated
+          documents are still available for download below.
+        </p>
+        <p
+          className="text-xs mt-1 leading-relaxed"
+          style={{ color: "var(--text-dim)" }}
+        >
+          💡 To resume document generation, delete this connection and create a
+          new one linked to an active template.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── SelectCheckbox ────────────────────────────────────────────────────────────
 
 function SelectCheckbox({
@@ -294,7 +343,6 @@ function PreviewModal({
 
     return () => {
       cancelled = true;
-      // Revoke after a short delay so the iframe has time to finish rendering
       setPdfBlobUrl((prev) => {
         if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1_000);
         return null;
@@ -557,6 +605,7 @@ function SubmissionRow({
   onRetry,
   onDelete,
   onPreview,
+  templateDeleted,
 }: {
   submission: Submission;
   selected: boolean;
@@ -565,8 +614,8 @@ function SubmissionRow({
   onRetry: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onPreview: (submission: Submission) => void;
-  // FIX: removed unused `isBeingPreviewed` prop — it was declared and passed
-  // everywhere but never read inside this component (no visual difference).
+  /** When true, retry is blocked and an informative tooltip is shown. */
+  templateDeleted?: boolean;
 }) {
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -576,6 +625,12 @@ function SubmissionRow({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleRetry = async () => {
+    if (templateDeleted) {
+      toast.error(
+        "Cannot retry — the template has been deleted. Create a new connection to resume."
+      );
+      return;
+    }
     setRetrying(true);
     try {
       await onRetry(submission._id);
@@ -602,6 +657,8 @@ function SubmissionRow({
   };
 
   const isGenerated = submission.status === "generated" && !!submission.fileUrl;
+  const isTemplateDeletedError =
+    templateDeleted && submission.status === "error";
 
   return (
     <>
@@ -667,6 +724,8 @@ function SubmissionRow({
                 )}
               </span>
             </div>
+
+            {/* Error details toggle */}
             {submission.status === "error" && submission.errorMessage && (
               <button
                 onClick={(e) => {
@@ -708,7 +767,7 @@ function SubmissionRow({
               >
                 <MoreVerticalIcon className="w-3.5 h-3.5" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 {isGenerated && (
                   <DropdownMenuItem
                     onClick={() => onPreview(submission)}
@@ -737,19 +796,36 @@ function SubmissionRow({
                   </DropdownMenuItem>
                 )}
                 {isGenerated && <DropdownMenuSeparator />}
+
+                {/* Retry — only for error submissions; disabled if template deleted */}
                 {submission.status === "error" && (
                   <DropdownMenuItem
                     onClick={handleRetry}
-                    disabled={retrying}
+                    disabled={retrying || templateDeleted}
                     className="flex items-center gap-2 cursor-pointer"
+                    title={
+                      templateDeleted
+                        ? "Cannot retry — template has been deleted"
+                        : undefined
+                    }
                   >
                     <RefreshCwIcon
-                      className={`w-3.5 h-3.5 ${retrying ? "animate-spin" : ""}`}
+                      className={`w-3.5 h-3.5 ${retrying ? "animate-spin" : ""} ${templateDeleted ? "opacity-40" : ""}`}
                     />
-                    {retrying ? "Retrying…" : "Retry"}
+                    <span className={templateDeleted ? "opacity-40" : ""}>
+                      {retrying ? "Retrying…" : "Retry"}
+                    </span>
+                    {templateDeleted && (
+                      <span
+                        className="ml-auto text-[10px]"
+                        style={{ color: "var(--warning)" }}
+                      >
+                        Template deleted
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 )}
-                {/* FIX: separator before destructive action when no separator above */}
+
                 {submission.status !== "generated" && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onClick={() => setConfirmDelete(true)}
@@ -764,6 +840,7 @@ function SubmissionRow({
           </div>
         </div>
 
+        {/* Expanded error details */}
         {expanded && submission.errorMessage && (
           <div className="px-4 sm:px-5 pb-3">
             <div
@@ -786,25 +863,42 @@ function SubmissionRow({
               >
                 {submission.errorMessage}
               </p>
-              {submission.errorMessage?.toLowerCase().includes("token") && (
+
+              {/* Context-aware hints */}
+              {isTemplateDeletedError && (
                 <p
                   className="text-xs mt-2 leading-relaxed"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  💡 This may be caused by an expired Google token. Try
-                  reconnecting your Google account from the template&apos;s
-                  Connect Form page.
+                  💡 The template was deleted after this submission was
+                  received. The document could not be generated. You can still
+                  download any previously generated documents from this
+                  connection. To generate new documents, create a new connection
+                  with an active template.
                 </p>
               )}
-              {submission.errorMessage?.toLowerCase().includes("template") && (
-                <p
-                  className="text-xs mt-2 leading-relaxed"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  💡 The template file may be missing or corrupt. Check your
-                  template in the editor.
-                </p>
-              )}
+              {!isTemplateDeletedError &&
+                submission.errorMessage?.toLowerCase().includes("token") && (
+                  <p
+                    className="text-xs mt-2 leading-relaxed"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    💡 This may be caused by an expired Google token. Try
+                    reconnecting your Google account from the template&apos;s
+                    Connect Form page.
+                  </p>
+                )}
+              {!isTemplateDeletedError &&
+                submission.errorMessage?.toLowerCase().includes("template") &&
+                !isTemplateDeletedError && (
+                  <p
+                    className="text-xs mt-2 leading-relaxed"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    💡 The template file may be missing or corrupt. Check your
+                    template in the editor.
+                  </p>
+                )}
             </div>
           </div>
         )}
@@ -871,7 +965,6 @@ function ConnectionGroup({
   onToggleActive: (connectionId: string, isActive: boolean) => Promise<void>;
   onSync: (connectionId: string) => Promise<void>;
   onPreview: (submission: Submission) => void;
-  // FIX: removed unused previewingSubmissionId prop
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -880,23 +973,26 @@ function ConnectionGroup({
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDeleteConn, setConfirmDeleteConn] = useState(false);
 
+  const isTemplateDeleted = !!connection.templateDeleted;
+
   const filtered = useMemo(() => {
-    return submissions.filter((s) => {
-      if (statusFilter !== "all" && s.status !== statusFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (
-          !s.filename.toLowerCase().includes(q) &&
-          !(s.respondentEmail?.toLowerCase().includes(q) ?? false)
-        )
+    return submissions
+      .filter((s) => {
+        if (statusFilter !== "all" && s.status !== statusFilter) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (
+            !s.filename.toLowerCase().includes(q) &&
+            !(s.respondentEmail?.toLowerCase().includes(q) ?? false)
+          )
+            return false;
+        }
+        if (dateFrom && s.submittedAt < startOfDay(dateFrom).getTime())
           return false;
-      }
-      if (dateFrom && s.submittedAt < startOfDay(dateFrom).getTime())
-        return false;
-      if (dateTo && s.submittedAt > endOfDay(dateTo).getTime()) return false;
-      return true;
-    })
-    .sort((a, b) => b.submittedAt - a.submittedAt);
+        if (dateTo && s.submittedAt > endOfDay(dateTo).getTime()) return false;
+        return true;
+      })
+      .sort((a, b) => b.submittedAt - a.submittedAt);
   }, [submissions, statusFilter, searchQuery, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -927,6 +1023,12 @@ function ConnectionGroup({
   };
 
   const handleSync = async () => {
+    if (isTemplateDeleted) {
+      toast.error(
+        "Cannot sync — the template linked to this connection has been deleted."
+      );
+      return;
+    }
     setSyncing(true);
     try {
       await onSync(connection._id);
@@ -943,7 +1045,11 @@ function ConnectionGroup({
       <div
         className="rounded-2xl overflow-hidden"
         style={{
-          border: `1px solid var(--border-subtle)`,
+          border: `1px solid ${
+            isTemplateDeleted
+              ? "color-mix(in srgb, var(--warning) 30%, var(--border-subtle))"
+              : "var(--border-subtle)"
+          }`,
           background: "var(--bg-card)",
         }}
       >
@@ -978,20 +1084,39 @@ function ConnectionGroup({
               >
                 {connection.formTitle}
               </p>
-              <span
-                className="text-xs font-medium px-1.5 py-0.5 rounded-full"
-                style={{
-                  background: connection.isActive
-                    ? "var(--success-bg)"
-                    : "var(--bg-input)",
-                  color: connection.isActive
-                    ? "var(--success)"
-                    : "var(--text-dim)",
-                }}
-              >
-                {connection.isActive ? "active" : "paused"}
-              </span>
+
+              {/* Template deleted badge — highest priority */}
+              {isTemplateDeleted ? (
+                <span
+                  className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--warning) 12%, transparent)",
+                    color: "var(--warning)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--warning) 30%, transparent)",
+                  }}
+                >
+                  <AlertTriangleIcon className="w-2.5 h-2.5" />
+                  Template deleted
+                </span>
+              ) : (
+                <span
+                  className="text-xs font-medium px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: connection.isActive
+                      ? "var(--success-bg)"
+                      : "var(--bg-input)",
+                    color: connection.isActive
+                      ? "var(--success)"
+                      : "var(--text-dim)",
+                  }}
+                >
+                  {connection.isActive ? "active" : "paused"}
+                </span>
+              )}
             </div>
+
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {counts.total} total
@@ -1007,6 +1132,15 @@ function ConnectionGroup({
               {counts.pending > 0 && (
                 <span className="text-xs" style={{ color: "var(--warning)" }}>
                   {counts.pending} pending
+                </span>
+              )}
+              {isTemplateDeleted && connection.templateDeletedAt && (
+                <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+                  · Template deleted{" "}
+                  {format(
+                    new Date(connection.templateDeletedAt),
+                    "MMM d, yyyy"
+                  )}
                 </span>
               )}
             </div>
@@ -1072,31 +1206,66 @@ function ConnectionGroup({
 
                 <DropdownMenuSeparator />
 
+                {/* Sync Now — disabled when template is deleted */}
                 <DropdownMenuItem
                   onClick={handleSync}
-                  disabled={syncing}
+                  disabled={syncing || isTemplateDeleted}
                   className="flex items-center gap-2 cursor-pointer"
+                  title={
+                    isTemplateDeleted
+                      ? "Cannot sync — template has been deleted"
+                      : undefined
+                  }
                 >
                   <RefreshCwIcon
-                    className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`}
+                    className={`w-4 h-4 ${syncing ? "animate-spin" : ""} ${isTemplateDeleted ? "opacity-40" : ""}`}
                   />
-                  {syncing ? "Syncing…" : "Sync Now"}
+                  <span className={isTemplateDeleted ? "opacity-40" : ""}>
+                    {syncing ? "Syncing…" : "Sync Now"}
+                  </span>
+                  {isTemplateDeleted && (
+                    <span
+                      className="ml-auto text-[10px]"
+                      style={{ color: "var(--warning)" }}
+                    >
+                      Template deleted
+                    </span>
+                  )}
                 </DropdownMenuItem>
 
+                {/* Pause/Resume — disabled when template is deleted */}
                 <DropdownMenuItem
-                  onClick={() =>
-                    onToggleActive(connection._id, !connection.isActive)
-                  }
+                  onClick={() => {
+                    if (isTemplateDeleted) {
+                      toast.error(
+                        "Cannot resume — the linked template has been deleted."
+                      );
+                      return;
+                    }
+                    onToggleActive(connection._id, !connection.isActive);
+                  }}
+                  disabled={isTemplateDeleted}
                   className="flex items-center gap-2 cursor-pointer"
+                  title={
+                    isTemplateDeleted
+                      ? "Cannot resume — template has been deleted"
+                      : undefined
+                  }
                 >
                   {connection.isActive ? (
-                    <PauseIcon className="w-4 h-4" />
+                    <PauseIcon
+                      className={`w-4 h-4 ${isTemplateDeleted ? "opacity-40" : ""}`}
+                    />
                   ) : (
-                    <PlayIcon className="w-4 h-4" />
+                    <PlayIcon
+                      className={`w-4 h-4 ${isTemplateDeleted ? "opacity-40" : ""}`}
+                    />
                   )}
-                  {connection.isActive
-                    ? "Pause Connection"
-                    : "Resume Connection"}
+                  <span className={isTemplateDeleted ? "opacity-40" : ""}>
+                    {connection.isActive
+                      ? "Pause Connection"
+                      : "Resume Connection"}
+                  </span>
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />
@@ -1128,11 +1297,20 @@ function ConnectionGroup({
         {/* Submissions list */}
         {expanded && (
           <>
+            {/* Template deleted informational banner */}
+            {isTemplateDeleted && (
+              <TemplateDeletedBanner
+                templateDeletedAt={connection.templateDeletedAt}
+              />
+            )}
+
             {filtered.length === 0 ? (
               <div className="px-4 sm:px-5 py-10 text-center">
                 <p className="text-sm" style={{ color: "var(--text-dim)" }}>
                   {submissions.length === 0
-                    ? "No responses yet. Submit the form or tap Sync to check for new responses."
+                    ? isTemplateDeleted
+                      ? "No documents were generated before the template was deleted."
+                      : "No responses yet. Submit the form or tap Sync to check for new responses."
                     : "No submissions match the current filters."}
                 </p>
               </div>
@@ -1173,6 +1351,7 @@ function ConnectionGroup({
                     onRetry={onRetry}
                     onDelete={onDelete}
                     onPreview={onPreview}
+                    templateDeleted={isTemplateDeleted}
                   />
                 ))}
 
@@ -1318,7 +1497,6 @@ function BulkActions({
       const failed = results.filter((r) => r.status === "rejected").length;
       const succeeded = downloadable.length - failed;
 
-      // FIX: report failed filenames in the toast, not just a generic count.
       const failedNames = results
         .map((r, i) =>
           r.status === "rejected" ? downloadable[i].filename : null
@@ -1359,7 +1537,6 @@ function BulkActions({
   const handleBulkDeleteConfirmed = async () => {
     setDeleting(true);
     try {
-      // FIX: collect individual results so we can report partial failures
       const ids = Array.from(selectedIds);
       const results = await Promise.allSettled(ids.map((id) => onDelete(id)));
       const failed = results.filter((r) => r.status === "rejected").length;
@@ -1606,8 +1783,6 @@ export default function FormResultsPage() {
   const [dateFromStr, setDateFromStr] = useState("");
   const [dateToStr, setDateToStr] = useState("");
 
-  // FIX: validate that dateFrom <= dateTo; swap silently if user enters them
-  // in the wrong order so the filter always produces results.
   const { dateFrom, dateTo } = useMemo(() => {
     const from = dateFromStr ? new Date(dateFromStr) : null;
     const to = dateToStr ? new Date(dateToStr) : null;
@@ -1720,6 +1895,12 @@ export default function FormResultsPage() {
     [submissions]
   );
 
+  // Count connections with deleted templates for the page-level summary
+  const deletedTemplateConnectionCount = useMemo(
+    () => connections?.filter((c) => c.templateDeleted).length ?? 0,
+    [connections]
+  );
+
   const latestConnectionId = useMemo(() => {
     if (!connections || connections.length === 0) return null;
     return connections.reduce((best, conn) => {
@@ -1779,6 +1960,21 @@ export default function FormResultsPage() {
                   <span style={{ color: "var(--text-dim)" }}>·</span>
                   <span style={{ color: "var(--danger)" }}>
                     {globalCounts.error} errors
+                  </span>
+                </>
+              )}
+              {/* Page-level notice if any connections lost their template */}
+              {deletedTemplateConnectionCount > 0 && (
+                <>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span
+                    className="flex items-center gap-1"
+                    style={{ color: "var(--warning)" }}
+                  >
+                    <AlertTriangleIcon className="w-3 h-3" />
+                    {deletedTemplateConnectionCount} connection
+                    {deletedTemplateConnectionCount !== 1 ? "s" : ""} with
+                    deleted template
                   </span>
                 </>
               )}
@@ -1906,7 +2102,6 @@ export default function FormResultsPage() {
             ))}
           </div>
 
-          {/* FIX: date range with swap-if-inverted hint */}
           <div className="flex items-center gap-1.5 shrink-0">
             <CalendarIcon
               className="w-3.5 h-3.5 shrink-0"

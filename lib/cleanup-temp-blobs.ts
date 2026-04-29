@@ -3,14 +3,22 @@ import { list, del } from "@vercel/blob";
 
 export async function cleanupTempBlobs() {
   try {
-    const { blobs } = await list({ prefix: "temp-conv" });
+    // Fetch both prefixes in parallel
+    const [convResult, pdfResult] = await Promise.all([
+      list({ prefix: "temp-conv" }),
+      list({ prefix: "temp-pdf" }),
+    ]);
+
+    const allBlobs = [...convResult.blobs, ...pdfResult.blobs];
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const old = blobs.filter(
+    const old = allBlobs.filter(
       (b) => new Date(b.uploadedAt).getTime() < oneHourAgo
     );
-    await Promise.all(old.map((b) => del(b.url)));
-    if (old.length > 0)
+
+    if (old.length > 0) {
+      await Promise.all(old.map((b) => del(b.url)));
       console.log(`[cleanup] Deleted ${old.length} temp blobs`);
+    }
   } catch (e) {
     console.warn("[cleanup] Failed:", e);
   }
