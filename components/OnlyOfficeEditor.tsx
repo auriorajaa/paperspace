@@ -1,4 +1,4 @@
-// components\OnlyOfficeEditor.tsx
+// components/OnlyOfficeEditor.tsx
 "use client";
 
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
@@ -74,10 +74,25 @@ function OnlyOfficeInner({
     serverUrl: string;
   } | null>(null);
   const [configError, setConfigError] = useState(false);
+
   const mountedRef = useRef(true);
   const { theme } = useTheme();
 
+  // ── Cache key: only rebuild config when the document identity changes ──────
+  // Changing userName/userAvatar should NOT cause the editor to reload —
+  // those are cosmetic and the cost (full editor teardown + re-init) is huge.
+  const configKeyRef = useRef<string>("");
+  const configKey = `${fileUrl}::${fileKey}::${storageId ?? ""}::${documentId ?? ""}::${templateId ?? ""}`;
+
   const uiTheme = theme === "light" ? "default-light" : "theme-contrast-dark";
+
+  // Keep latest callbacks in a ref so the effect closure doesn't go stale.
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -87,8 +102,15 @@ function OnlyOfficeInner({
   }, []);
 
   useEffect(() => {
+    // Skip if the document identity hasn't changed (e.g. only userName updated)
+    if (configKey === configKeyRef.current && editorData) return;
+    configKeyRef.current = configKey;
+
     setEditorData(null);
     setConfigError(false);
+
+    // Abort controller so we can cancel in-flight requests on quick re-renders
+    const controller = new AbortController();
 
     async function buildConfig() {
       try {
@@ -106,6 +128,7 @@ function OnlyOfficeInner({
             userName,
             userAvatar,
           }),
+          signal: controller.signal,
         });
 
         if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
@@ -113,37 +136,30 @@ function OnlyOfficeInner({
         const { config, serverUrl } = await res.json();
         if (!mountedRef.current) return;
         setEditorData({ config, serverUrl });
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === "AbortError") return; // cancelled — not an error
         console.error("[ONLYOFFICE] Failed to build config:", err);
         if (!mountedRef.current) return;
         setConfigError(true);
-        onError?.();
+        onErrorRef.current?.();
       }
     }
 
     buildConfig();
 
     return () => {
+      controller.abort();
+      // Destroy previous editor instance on unmount / key change
       try {
         const win = window as any;
         win.DocEditor?.instances?.[editorId]?.destroyEditor();
       } catch (_) {}
     };
-  }, [
-    fileUrl,
-    fileKey,
-    documentId,
-    templateId,
-    storageId,
-    userId,
-    userName,
-    userAvatar,
-    editorId,
-  ]);
+    // Only react to document-identity changes, not cosmetic user fields
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey, editorId]);
 
-  if (configError) {
-    return null;
-  }
+  if (configError) return null;
 
   if (!editorData) {
     return (
@@ -179,11 +195,11 @@ function OnlyOfficeInner({
         documentServerUrl={editorData.serverUrl}
         config={themedConfig}
         events_onDocumentReady={() => {
-          onReady?.();
+          onReadyRef.current?.();
         }}
         onLoadComponentError={(code: number, desc: string) => {
           console.error("[ONLYOFFICE] Load error:", code, desc);
-          onError?.();
+          onErrorRef.current?.();
         }}
       />
     </div>
