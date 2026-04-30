@@ -10,17 +10,9 @@ const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────────────────────
-  // Allow calls from trusted server-to-server flows (e.g. ONLYOFFICE callback)
-  // that present the internal secret. Otherwise require a signed-in Clerk user.
-  const internalSecret = req.headers.get("x-internal-secret");
-  const hasInternalAuth =
-    internalSecret && internalSecret === process.env.INTERNAL_SECRET;
-
-  if (!hasInternalAuth) {
-    const { userId } = await auth();
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+  const { userId } = await auth();
+  if (!userId) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   try {
