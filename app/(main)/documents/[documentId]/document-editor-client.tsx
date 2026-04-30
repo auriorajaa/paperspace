@@ -676,14 +676,21 @@ export default function DocumentEditorPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [storageError, setStorageError] = useState<string | null>(null);
 
-  // ── FIX BUG 3: Pre-compute stable fileKey agar tidak berubah saat storageId update ──
-  // Gunakan creationTime sebagai fallback yang stabil. Ini hanya berubah kalau
-  // dokumen benar-benar berbeda.
+  // document-editor-client.tsx
   const stableFileKey = useMemo(() => {
     if (!document) return "";
-    return `doc-${documentId}-${document._creationTime}`;
-  }, [documentId, document?._creationTime]);
+    // storageId berubah setelah save → key berubah → editor re-fetch config
+    // Tapi OO akan anggap ini dokumen baru (cache tidak di-reuse)
+    return `doc-${documentId}-${document._creationTime}-${document.storageId ?? "new"}`;
+  }, [documentId, document?._creationTime, document?.storageId]);
 
+  // ── FIX: Effect dependency — gunakan document?._id sebagai trigger ──────────
+  // Sebelumnya: [document?.storageId, document?.fileUrl]
+  // Masalah: Kalau storageId/fileUrl berubah di tengah sesi (setelah save),
+  // effect ini akan re-run dan re-upload file kosong!
+  //
+  // Solusi: Hanya jalankan effect saat document pertama kali load atau
+  // document benar-benar berbeda (documentId berubah).
   useEffect(() => {
     if (!document) return;
 
@@ -758,7 +765,11 @@ export default function DocumentEditorPage() {
     };
 
     resolve();
-  }, [document?.storageId, document?.fileUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    // ── FIX: Dependency hanya document?._id ─────────────────────────────────
+    // documentId sudah stable dari params, tapi document?._id memastikan
+    // effect hanya jalan saat data document pertama kali available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document?._id]);
 
   const handleRetry = () => {
     setEditorError(false);
@@ -865,7 +876,6 @@ export default function DocumentEditorPage() {
       >
         <button
           onClick={() => {
-            // Hard refresh ke /documents supaya data ter-update real-time
             window.location.href = "/documents";
           }}
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0 cursor-pointer"
@@ -977,12 +987,8 @@ export default function DocumentEditorPage() {
               key={editorKey}
               fileUrl={fileUrl}
               fileName={document.title}
-              // ── FIX BUG 2 & 3: Gunakan stableFileKey yang tidak berubah saat storageId update ──
               fileKey={stableFileKey}
               documentId={documentId}
-              // ── FIX BUG 2: Jangan pass storageId sebagai prop yang trigger re-render ──
-              // StorageId hanya dibutuhkan untuk callback, bukan untuk editor key.
-              // Kita tetap pass tapi tidak masuk configKey di OnlyOfficeInner.
               storageId={document.storageId}
               userId={user?.id}
               userName={user?.fullName ?? user?.firstName ?? undefined}
