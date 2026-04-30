@@ -1919,12 +1919,15 @@ export default function TemplateEditPage() {
         }}
       >
         {/* Back */}
-        <Link
-          href="/templates"
-          className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0"
+        <button
+          onClick={() => {
+            // Hard refresh ke /templates supaya data ter-update real-time
+            window.location.href = "/templates";
+          }}
+          className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0 cursor-pointer"
           style={{ color: "var(--text-muted)" }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.color = "var(--accent-light)")
+            (e.currentTarget.style.color = "var(--text-secondary)")
           }
           onMouseLeave={(e) =>
             (e.currentTarget.style.color = "var(--text-muted)")
@@ -1932,7 +1935,7 @@ export default function TemplateEditPage() {
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Templates</span>
-        </Link>
+        </button>
 
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
 
@@ -2036,9 +2039,11 @@ export default function TemplateEditPage() {
           </button>
 
           {/* Connect Form */}
-          <Link
-            href={`/templates/${templateId}/connect`}
-            className="hidden sm:flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors"
+          <button
+            onClick={() => {
+              window.location.href = `/templates/${templateId}/connect`;
+            }}
+            className="hidden sm:flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
             style={{
               background: "var(--success-bg)",
               color: "var(--success)",
@@ -2048,7 +2053,7 @@ export default function TemplateEditPage() {
           >
             <LinkIcon className="w-3.5 h-3.5" />
             Connect Form
-          </Link>
+          </button>
         </div>
       </div>
 

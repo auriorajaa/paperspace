@@ -863,9 +863,12 @@ export default function DocumentEditorPage() {
           background: "var(--bg-sidebar)",
         }}
       >
-        <Link
-          href="/documents"
-          className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0"
+        <button
+          onClick={() => {
+            // Hard refresh ke /documents supaya data ter-update real-time
+            window.location.href = "/documents";
+          }}
+          className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0 cursor-pointer"
           style={{ color: "var(--text-muted)" }}
           onMouseEnter={(e) =>
             (e.currentTarget.style.color = "var(--text-secondary)")
@@ -875,8 +878,8 @@ export default function DocumentEditorPage() {
           }
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Documents</span>
-        </Link>
+          <span className="hidden sm:inline">Papers</span>
+        </button>
 
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
 
