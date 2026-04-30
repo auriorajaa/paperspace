@@ -8,26 +8,18 @@ function getCorsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-internal-secret",
+    "Access-Control-Allow-Headers": "Content-Type",
   };
 }
+
+// ── /getFile — sengaja unauthenticated ────────────────────────────────────────
+// OnlyOffice server tidak bisa kirim auth header saat fetch dokumen.
+// Security: storageId adalah UUID random yang tidak pernah diekspos publik.
 
 http.route({
   path: "/getFile",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    // NOTE: This endpoint is intentionally unauthenticated.
-    //
-    // OnlyOffice fetches the document URL directly from its server — it cannot
-    // send a Clerk session token or an internal secret header. Adding an auth
-    // gate here breaks the editor (Convex throws "Missing 'iss' claim" when
-    // there is no token at all, rather than returning null).
-    //
-    // Security rationale: Convex storage IDs are cryptographically random
-    // UUIDs. Knowing a storageId is sufficient "proof" of access, equivalent
-    // to a pre-signed S3 URL. The IDs are never exposed publicly; they only
-    // appear inside authenticated API responses consumed by the client.
-
     const url = new URL(request.url);
     const storageId = url.searchParams.get("storageId");
     const filename = url.searchParams.get("filename");
@@ -57,18 +49,26 @@ http.route({
   }),
 });
 
+// ── /getUploadUrl ─────────────────────────────────────────────────────────────
+// Dua jalur auth:
+//   1. scriptToken  — untuk form connections (submit dari Google Forms, dll)
+//   2. x-deploy-key — untuk server-to-server call dari Next.js (onlyoffice-callback)
+//      Deploy key dari Convex dashboard, disimpan di CONVEX_DEPLOY_KEY env var.
+
 http.route({
   path: "/getUploadUrl",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const internalSecret = request.headers.get("x-internal-secret");
-    if (internalSecret && internalSecret === process.env.INTERNAL_SECRET) {
+    // ── Auth jalur 1: deploy key (server-to-server) ────────────────────────
+    const deployKey = request.headers.get("x-deploy-key");
+    if (deployKey && deployKey === process.env.CONVEX_DEPLOY_KEY) {
       const uploadUrl = await ctx.storage.generateUploadUrl();
       return new Response(JSON.stringify({ uploadUrl }), {
         headers: { "Content-Type": "application/json", ...getCorsHeaders() },
       });
     }
 
+    // ── Auth jalur 2: scriptToken (form connection) ────────────────────────
     let scriptToken: string | undefined;
     try {
       const body = await request.clone().json();
@@ -113,79 +113,12 @@ http.route({
   }),
 });
 
-http.route({
-  path: "/updateFileStorage",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const internalSecret = request.headers.get("x-internal-secret");
-    const hasInternalAuth =
-      internalSecret && internalSecret === process.env.INTERNAL_SECRET;
+// ── /updateFileStorage — internal only, tidak perlu HTTP endpoint lagi ────────
+// Endpoint ini dihapus dari HTTP router karena sekarang callback langsung
+// memanggil mutation via Convex admin API (CONVEX_DEPLOY_KEY).
+// Kalau masih dibutuhkan untuk keperluan lain, tambahkan auth yang proper.
 
-    if (!hasInternalAuth) {
-      return new Response(JSON.stringify({ error: "Missing authentication" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
-      });
-    }
-
-    try {
-      const { documentId, templateId, storageId, fileUrl } =
-        await request.json();
-
-      if (!storageId || !fileUrl) {
-        return new Response(
-          JSON.stringify({ error: "Missing storageId or fileUrl" }),
-          {
-            status: 400,
-            headers: {
-              "Content-Type": "application/json",
-              ...getCorsHeaders(),
-            },
-          }
-        );
-      }
-
-      if (documentId) {
-        await ctx.runMutation(internal.documents.updateFileStorageInternal, {
-          id: documentId,
-          storageId,
-          fileUrl,
-        });
-        console.log("[updateFileStorage] document updated", documentId);
-      } else if (templateId) {
-        await ctx.runMutation(internal.templates.updateFileStorageInternal, {
-          id: templateId,
-          storageId,
-          fileUrl,
-        });
-        console.log("[updateFileStorage] template updated", templateId);
-      } else {
-        return new Response(
-          JSON.stringify({ error: "Missing documentId or templateId" }),
-          {
-            status: 400,
-            headers: {
-              "Content-Type": "application/json",
-              ...getCorsHeaders(),
-            },
-          }
-        );
-      }
-
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
-      });
-    } catch (err) {
-      console.error("[updateFileStorage]", err);
-      return new Response(JSON.stringify({ error: String(err) }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders() },
-      });
-    }
-  }),
-});
-
-for (const path of ["/getUploadUrl", "/updateFileStorage"]) {
+for (const path of ["/getUploadUrl"]) {
   http.route({
     path,
     method: "OPTIONS",

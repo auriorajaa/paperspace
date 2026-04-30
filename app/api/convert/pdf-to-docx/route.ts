@@ -32,17 +32,9 @@ function isValidDocx(buffer: Buffer): boolean {
 
 export async function POST(req: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────────────────────
-  // Allow trusted server-to-server calls via the internal secret (e.g. the
-  // ONLYOFFICE callback path). Otherwise require a signed-in Clerk user.
-  const internalSecret = req.headers.get("x-internal-secret");
-  const hasInternalAuth =
-    internalSecret && internalSecret === process.env.INTERNAL_SECRET;
-
-  if (!hasInternalAuth) {
-    const { userId } = await auth();
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+  const { userId } = await auth();
+  if (!userId) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   // Await cleanup so stale blobs are removed before we add new ones.

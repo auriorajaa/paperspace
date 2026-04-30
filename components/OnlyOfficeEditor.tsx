@@ -3,7 +3,7 @@
 
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
 
 import { useTheme } from "@/contexts/ThemeContext";
@@ -78,19 +78,21 @@ function OnlyOfficeInner({
   const mountedRef = useRef(true);
   const { theme } = useTheme();
 
-  // ── FIX BUG 2: Cache key hanya berdasarkan identitas dokumen yang stabil ──
-  // HAPUS storageId dari configKey! StorageId berubah setiap save → trigger rebuild.
-  // Gunakan documentId/templateId + fileKey yang stabil.
-  // fileUrl juga dihapus karena bisa berubah saat storageId berubah (tapi URL pattern sama).
+  // Config key hanya berdasarkan identitas dokumen yang stabil.
+  // storageId SENGAJA tidak dimasukkan ke sini — storageId berubah setiap
+  // kali OO save, dan kalau masuk ke configKey akan trigger rebuild editor
+  // di tengah sesi editing yang menyebabkan flicker / kehilangan state.
   //
-  // Yang benar: hanya rebuild kalau dokumen benar-benar berbeda.
-  // ──────────────────────────────────────────────────────────────────────────
-  const configKeyRef = useRef<string>("");
+  // OO document.key di dalam token sudah include storageId slice untuk
+  // force-refresh cache OO saat dokumen dibuka ulang (bukan saat sedang edit).
   const configKey = `${fileKey}::${documentId ?? ""}::${templateId ?? ""}`;
+
+  // Track configKey yang sudah di-fetch agar tidak re-fetch yang sama
+  const fetchedConfigKeyRef = useRef<string>("");
 
   const uiTheme = theme === "light" ? "default-light" : "theme-contrast-dark";
 
-  // Keep latest callbacks in a ref so the effect closure doesn't go stale.
+  // Keep latest callbacks in refs — hindari stale closure
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
   useEffect(() => {
@@ -106,9 +108,10 @@ function OnlyOfficeInner({
   }, []);
 
   useEffect(() => {
-    // Skip if the document identity hasn't changed
-    if (configKey === configKeyRef.current && editorData) return;
-    configKeyRef.current = configKey;
+    // Skip fetch kalau configKey sama persis — ini mencegah double-fetch
+    // yang terjadi karena React StrictMode atau re-render parent
+    if (configKey === fetchedConfigKeyRef.current && editorData) return;
+    fetchedConfigKeyRef.current = configKey;
 
     setEditorData(null);
     setConfigError(false);
@@ -178,6 +181,7 @@ function OnlyOfficeInner({
     [key: string]: unknown;
   };
 
+  // Inject uiTheme tanpa rebuild seluruh config
   const themedConfig = {
     ...baseConfig,
     editorConfig: {
