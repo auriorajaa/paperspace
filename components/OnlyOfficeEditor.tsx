@@ -78,13 +78,9 @@ function OnlyOfficeInner({
   const mountedRef = useRef(true);
   const { theme } = useTheme();
 
-  // Config key hanya berdasarkan identitas dokumen yang stabil.
-  // storageId SENGAJA tidak dimasukkan ke sini — storageId berubah setiap
-  // kali OO save, dan kalau masuk ke configKey akan trigger rebuild editor
-  // di tengah sesi editing yang menyebabkan flicker / kehilangan state.
-  //
-  // OO document.key di dalam token sudah include storageId slice untuk
-  // force-refresh cache OO saat dokumen dibuka ulang (bukan saat sedang edit).
+  // ── FIX: Config key HANYA berdasarkan identitas dokumen yang stabil ───────
+  // storageId SENGAJA tidak dimasukkan — storageId berubah setiap OO save.
+  // Kalau masuk ke configKey akan trigger rebuild editor di tengah sesi.
   const configKey = `${fileKey}::${documentId ?? ""}::${templateId ?? ""}`;
 
   // Track configKey yang sudah di-fetch agar tidak re-fetch yang sama
@@ -108,8 +104,8 @@ function OnlyOfficeInner({
   }, []);
 
   useEffect(() => {
-    // Skip fetch kalau configKey sama persis — ini mencegah double-fetch
-    // yang terjadi karena React StrictMode atau re-render parent
+    // Skip fetch kalau configKey sama persis — mencegah double-fetch
+    // karena React StrictMode atau re-render parent
     if (configKey === fetchedConfigKeyRef.current && editorData) return;
     fetchedConfigKeyRef.current = configKey;
 
@@ -120,6 +116,8 @@ function OnlyOfficeInner({
 
     async function buildConfig() {
       try {
+        console.log("[OnlyOfficeEditor] Fetching config with key:", configKey);
+
         const res = await fetch("/api/onlyoffice-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -137,10 +135,21 @@ function OnlyOfficeInner({
           signal: controller.signal,
         });
 
-        if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(
+            `Token endpoint returned ${res.status}: ${errorText}`
+          );
+        }
 
         const { config, serverUrl } = await res.json();
+
         if (!mountedRef.current) return;
+
+        console.log(
+          "[OnlyOfficeEditor] Config received, serverUrl:",
+          serverUrl
+        );
         setEditorData({ config, serverUrl });
       } catch (err: any) {
         if (err?.name === "AbortError") return;
@@ -155,10 +164,19 @@ function OnlyOfficeInner({
 
     return () => {
       controller.abort();
+      // Cleanup: destroy editor instance kalau ada
       try {
         const win = window as any;
-        win.DocEditor?.instances?.[editorId]?.destroyEditor();
-      } catch (_) {}
+        if (win.DocEditor?.instances?.[editorId]) {
+          win.DocEditor.instances[editorId].destroyEditor();
+          console.log(
+            "[OnlyOfficeEditor] Destroyed editor instance:",
+            editorId
+          );
+        }
+      } catch (_) {
+        // Ignore cleanup errors
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configKey, editorId]);
@@ -200,6 +218,7 @@ function OnlyOfficeInner({
         documentServerUrl={editorData.serverUrl}
         config={themedConfig}
         events_onDocumentReady={() => {
+          console.log("[OnlyOfficeEditor] Document ready");
           onReadyRef.current?.();
         }}
         onLoadComponentError={(code: number, desc: string) => {

@@ -8,18 +8,32 @@ function getCorsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": process.env.NEXT_PUBLIC_APP_URL ?? "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, x-internal-secret",
   };
 }
 
-// ── /getFile — sengaja unauthenticated ────────────────────────────────────────
-// OnlyOffice server tidak bisa kirim auth header saat fetch dokumen.
-// Security: storageId adalah UUID random yang tidak pernah diekspos publik.
+// Helper: cek internal secret
+function isInternalAuthorized(request: Request): boolean {
+  const secret = request.headers.get("x-internal-secret");
+  const expected = process.env.INTERNAL_API_SECRET;
 
+  // console.log("[auth] Checking secret:", {
+  //   hasSecret: !!secret,
+  //   hasExpected: !!expected,
+  //   match: secret === expected,
+  //   secretPrefix: secret?.slice(0, 10),
+  //   expectedPrefix: expected?.slice(0, 10),
+  // });
+
+  return !!secret && !!expected && secret === expected;
+}
+
+// ── /getFile ────────────────────────────────────────────────────────────────
 http.route({
   path: "/getFile",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    // ... sama seperti sebelumnya
     const url = new URL(request.url);
     const storageId = url.searchParams.get("storageId");
     const filename = url.searchParams.get("filename");
@@ -49,19 +63,15 @@ http.route({
   }),
 });
 
-// ── /getUploadUrl ─────────────────────────────────────────────────────────────
-// Dua jalur auth:
-//   1. scriptToken  — untuk form connections (submit dari Google Forms, dll)
-//   2. x-deploy-key — untuk server-to-server call dari Next.js (onlyoffice-callback)
-//      Deploy key dari Convex dashboard, disimpan di CONVEX_DEPLOY_KEY env var.
+// ── /getUploadUrl ───────────────────────────────────────────────────────────
+// Auth via x-internal-secret (shared antara Next.js dan Convex)
 
 http.route({
   path: "/getUploadUrl",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    // ── Auth jalur 1: deploy key (server-to-server) ────────────────────────
-    const deployKey = request.headers.get("x-deploy-key");
-    if (deployKey && deployKey === process.env.CONVEX_DEPLOY_KEY) {
+    // ── Auth jalur 1: internal secret (server-to-server dari Next.js) ──────
+    if (isInternalAuthorized(request)) {
       const uploadUrl = await ctx.storage.generateUploadUrl();
       return new Response(JSON.stringify({ uploadUrl }), {
         headers: { "Content-Type": "application/json", ...getCorsHeaders() },
@@ -113,12 +123,60 @@ http.route({
   }),
 });
 
-// ── /updateFileStorage — internal only, tidak perlu HTTP endpoint lagi ────────
-// Endpoint ini dihapus dari HTTP router karena sekarang callback langsung
-// memanggil mutation via Convex admin API (CONVEX_DEPLOY_KEY).
-// Kalau masih dibutuhkan untuk keperluan lain, tambahkan auth yang proper.
+// ── /onlyofficeCallback ─────────────────────────────────────────────────────
+// Endpoint internal untuk menerima callback dari Next.js API route.
 
-for (const path of ["/getUploadUrl"]) {
+http.route({
+  path: "/onlyofficeCallback",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isInternalAuthorized(request)) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const body = await request.json();
+      const { type, id, storageId, fileUrl } = body;
+
+      if (!id || !storageId || !fileUrl) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (type === "document" || !type) {
+        await ctx.runMutation(internal.documents.updateFileStorageInternal, {
+          id,
+          storageId,
+          fileUrl,
+        });
+      } else if (type === "template") {
+        await ctx.runMutation(internal.templates.updateFileStorageInternal, {
+          id,
+          storageId,
+          fileUrl,
+        });
+      }
+
+      return new Response(JSON.stringify({ error: 0 }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err: any) {
+      //console.error("[onlyofficeCallback] Error:", err);
+      return new Response(
+        JSON.stringify({ error: "Internal error", message: err.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// ── CORS preflight ──────────────────────────────────────────────────────────
+for (const path of ["/getUploadUrl", "/onlyofficeCallback"]) {
   http.route({
     path,
     method: "OPTIONS",

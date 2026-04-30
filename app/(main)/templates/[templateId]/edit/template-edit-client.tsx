@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ChevronLeftIcon,
   AlertCircleIcon,
@@ -1736,6 +1736,12 @@ export default function TemplateEditPage() {
   );
   const [showScanResult, setShowScanResult] = useState(false);
 
+  const stableFileKey = useMemo(() => {
+    if (!template) return "";
+    // Sama seperti dokumen: include storageId agar key berubah setelah save
+    return `tmpl-${templateId}-${(template as any)._creationTime}-${template.storageId ?? "new"}`;
+  }, [templateId, template?._creationTime, template?.storageId]);
+
   // Keyboard shortcut: Ctrl+S / Cmd+S to save
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2173,7 +2179,7 @@ export default function TemplateEditPage() {
               key={editorKey}
               fileUrl={template.fileUrl}
               fileName={template.name}
-              fileKey={`tmpl-${templateId}-${template.storageId?.slice(-8) ?? (template as any)._creationTime}`}
+              fileKey={stableFileKey}
               templateId={templateId}
               storageId={template.storageId}
               onReady={() => {

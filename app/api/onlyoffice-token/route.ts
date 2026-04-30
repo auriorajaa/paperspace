@@ -49,6 +49,12 @@ export async function POST(req: NextRequest) {
       userAvatar,
     } = await req.json();
 
+    // console.log("[onlyoffice-token] Building config for:", {
+    //   documentId,
+    //   templateId,
+    //   fileName,
+    // });
+
     const appUrl = (
       process.env.NEXT_PUBLIC_APP_URL ??
       `${req.nextUrl.protocol}//${req.nextUrl.host}`
@@ -58,16 +64,34 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL ?? ""
     ).replace(/\/$/, "");
 
+    if (!ooServerUrl) {
+      // console.error(
+      //   "[onlyoffice-token] NEXT_PUBLIC_ONLYOFFICE_SERVER_URL not set"
+      // );
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    // Build callback URL dengan documentId/templateId
     const params = new URLSearchParams();
     if (documentId) params.set("documentId", documentId);
     if (templateId) params.set("templateId", templateId);
-    if (storageId) params.set("storageId", storageId);
+
     const callbackUrl = `${appUrl}/api/onlyoffice-callback?${params.toString()}`;
+    //console.log("[onlyoffice-token] Callback URL:", callbackUrl);
+
+    // ── FIX: Gunakan fileKey yang stabil, TIDAK include storageId ────────────
+    // fileKey sudah unik per dokumen (doc-${documentId}-${creationTime})
+    // storageId berubah setiap save, kalau dimasukkan ke key akan trigger
+    // re-initialize editor setiap kali file di-save.
+    const documentKey = fileKey;
 
     const config: Record<string, unknown> = {
       document: {
         fileType: "docx",
-        key: storageId ? `${fileKey}-${storageId.slice(-8)}` : fileKey,
+        key: documentKey,
         title: fileName,
         url: fileUrl,
         permissions: {
@@ -96,11 +120,6 @@ export async function POST(req: NextRequest) {
           // ── FIX BUG 1: Aktifkan force save ───────────────────────────────
           autosave: true,
           forcesave: true, // ← WAS: false
-          // Interval force save dalam detik (60 = 1 menit)
-          // OnlyOffice akan push ke callback setiap 60 detik
-          // Minimum praktis: 30 detik, max terserah kamu
-          // Catatan: forcesaveinterval di-level root config, bukan customization
-          // ─────────────────────────────────────────────────────────────────
           compactHeader: true,
           compactToolbar: false,
           hideRightMenu: true,
@@ -121,14 +140,20 @@ export async function POST(req: NextRequest) {
     const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET;
     if (jwtSecret) {
       config.token = jwt.sign(config, jwtSecret, { algorithm: "HS256" });
+      //console.log("[onlyoffice-token] JWT token generated");
     }
+
+    // console.log(
+    //   "[onlyoffice-token] Config built successfully, key:",
+    //   documentKey
+    // );
 
     return NextResponse.json({
       config,
       serverUrl: ooServerUrl,
     });
   } catch (err) {
-    console.error("[onlyoffice-token] error:", err);
+    //console.error("[onlyoffice-token] error:", err);
     return NextResponse.json(
       { error: "Failed to build config" },
       { status: 500 }
