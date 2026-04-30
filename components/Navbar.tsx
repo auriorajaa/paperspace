@@ -1,4 +1,4 @@
-// components\Navbar.tsx
+// components/Navbar.tsx
 "use client";
 
 import Link from "next/link";
@@ -24,8 +24,9 @@ import {
   PanelLeftOpenIcon,
   SettingsIcon,
   XIcon,
+  MailIcon,
 } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const NAV_ITEMS = [
@@ -36,13 +37,193 @@ const NAV_ITEMS = [
   { href: "/form-results", label: "Results", icon: ZapIcon },
 ];
 
-// ── Org Dropdown — viewport-aware fixed positioning ───────────────────────────
+// ── Invitation Row ────────────────────────────────────────────────────────────
+
+function InvitationRow({
+  invitation,
+  onDone,
+  compact = false,
+}: {
+  invitation: any;
+  onDone: () => void;
+  compact?: boolean;
+}) {
+  const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
+
+  const handleAccept = async () => {
+    setLoading("accept");
+    try {
+      await invitation.accept();
+      onDone();
+    } catch (e) {
+      console.error("Failed to accept invitation", e);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // Clerk client SDK tidak expose .reject() — dismiss lokal saja.
+  const handleDecline = () => {
+    setLoading("decline");
+    onDone();
+    setLoading(null);
+  };
+
+  const orgName =
+    invitation.publicOrganizationData?.name ??
+    invitation.organizationId ??
+    "Unknown Organization";
+  const orgImage = invitation.publicOrganizationData?.imageUrl ?? null;
+
+  if (compact) {
+    return (
+      <div
+        className="px-3 py-2.5 rounded-xl"
+        style={{
+          background: "var(--bg-muted)",
+          border: "1px solid var(--border-subtle)",
+        }}
+      >
+        <div className="flex items-center gap-2.5 mb-2">
+          <div
+            className="w-7 h-7 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
+            style={{ background: "var(--accent-bg)" }}
+          >
+            {orgImage ? (
+              <img
+                src={orgImage}
+                alt={orgName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span
+                className="text-xs font-bold"
+                style={{ color: "var(--accent-light)" }}
+              >
+                {orgName.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-[12px] font-semibold truncate"
+              style={{ color: "var(--text)" }}
+            >
+              {orgName}
+            </p>
+            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+              Invited you to join
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleAccept}
+            disabled={loading !== null}
+            className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: "var(--accent-strong-bg)",
+              color: "var(--accent-pale)",
+              border: "1px solid var(--accent-border)",
+            }}
+          >
+            {loading === "accept" ? "Joining…" : "Accept"}
+          </button>
+          <button
+            onClick={handleDecline}
+            disabled={loading !== null}
+            className="flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-50"
+            style={{
+              background: "transparent",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
+            Decline
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2 px-3 py-3 rounded-xl mb-2"
+      style={{
+        background: "var(--bg-muted)",
+        border: "1px solid var(--border-subtle)",
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
+          style={{ background: "var(--accent-bg)" }}
+        >
+          {orgImage ? (
+            <img
+              src={orgImage}
+              alt={orgName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span
+              className="text-base font-bold"
+              style={{ color: "var(--accent-light)" }}
+            >
+              {orgName.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[14px] font-semibold truncate"
+            style={{ color: "var(--text)" }}
+          >
+            {orgName}
+          </p>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Invited you to join
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleAccept}
+          disabled={loading !== null}
+          className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50"
+          style={{
+            background: "var(--accent-strong-bg)",
+            color: "var(--accent-pale)",
+            border: "1px solid var(--accent-border)",
+          }}
+        >
+          {loading === "accept" ? "Joining…" : "✓  Accept"}
+        </button>
+        <button
+          onClick={handleDecline}
+          disabled={loading !== null}
+          className="flex-1 py-2.5 rounded-xl text-[13px] font-medium transition-all disabled:opacity-50"
+          style={{
+            background: "transparent",
+            color: "var(--text-muted)",
+            border: "1px solid var(--border-subtle)",
+          }}
+        >
+          Decline
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Org Dropdown ──────────────────────────────────────────────────────────────
 
 function OrgDropdown({
   anchorRef,
   open,
   onClose,
   orgs,
+  invitations,
   organization,
   onPersonal,
   onOrg,
@@ -53,6 +234,7 @@ function OrgDropdown({
   open: boolean;
   onClose: () => void;
   orgs: any[];
+  invitations: any[];
   organization: any;
   onPersonal: () => void;
   onOrg: (id: string) => void;
@@ -66,31 +248,25 @@ function OrgDropdown({
     alignBottom: false,
   });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const visibleInvitations = invitations.filter(
+    (inv) => !dismissedIds.has(inv.id)
+  );
 
-  // Smart viewport-aware positioning
   useEffect(() => {
     if (!open || !anchorRef.current) return;
-
     const recalc = () => {
       if (!anchorRef.current) return;
       const rect = anchorRef.current.getBoundingClientRect();
       const viewportH = window.innerHeight;
       const viewportW = window.innerWidth;
-
-      // Estimate dropdown height: base + org rows
-      const estimatedHeight = 130 + orgs.length * 60;
-      const spaceBelow = viewportH - rect.top;
-      const spaceAbove = rect.bottom;
-
-      // Prefer aligning top with anchor top; if that clips at bottom, flip to bottom-align
+      const estimatedHeight =
+        130 + orgs.length * 60 + visibleInvitations.length * 90;
       const alignBottom =
-        spaceBelow < estimatedHeight && spaceAbove >= estimatedHeight;
-
-      // Horizontal: right of anchor, but clamp to viewport
-      const preferredLeft = rect.right + 10;
-      const dropdownWidth = Math.max(240, rect.width + 40);
-      const left = Math.min(preferredLeft, viewportW - dropdownWidth - 12);
-
+        viewportH - rect.top < estimatedHeight &&
+        rect.bottom >= estimatedHeight;
+      const dropdownWidth = Math.max(260, rect.width + 40);
+      const left = Math.min(rect.right + 10, viewportW - dropdownWidth - 12);
       setPos({
         top: alignBottom ? rect.bottom : rect.top,
         left,
@@ -98,19 +274,17 @@ function OrgDropdown({
         alignBottom,
       });
     };
-
     recalc();
     window.addEventListener("resize", recalc);
     return () => window.removeEventListener("resize", recalc);
-  }, [open, orgs.length]);
+  }, [open, orgs.length, visibleInvitations.length]);
 
-  // Close on outside click or Escape
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (anchorRef.current?.contains(target)) return;
-      if (dropdownRef.current?.contains(target)) return;
+      const t = e.target as Node;
+      if (anchorRef.current?.contains(t) || dropdownRef.current?.contains(t))
+        return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -131,14 +305,13 @@ function OrgDropdown({
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-[9999] rounded-2xl py-1.5 overflow-hidden"
+      className="fixed z-[9999] rounded-2xl py-1.5"
       style={{
         top: pos.top,
         left: pos.left,
         minWidth: pos.width,
         maxHeight: "calc(100vh - 32px)",
         overflowY: "auto",
-        // Align from top or from bottom depending on available space
         transform: pos.alignBottom ? "translateY(-100%)" : "none",
         background: "var(--bg-card)",
         backdropFilter: "blur(16px)",
@@ -146,7 +319,56 @@ function OrgDropdown({
         boxShadow: "var(--shadow-elevated)",
       }}
     >
-      {/* Personal option */}
+      {/* ── Pending Invitations ── */}
+      {visibleInvitations.length > 0 && (
+        <>
+          <div className="px-4 pt-2.5 pb-1">
+            <div className="flex items-center gap-1.5">
+              <MailIcon
+                className="w-3 h-3"
+                style={{ color: "var(--accent-light)" }}
+              />
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--accent-light)" }}
+              >
+                Pending Invitations
+              </p>
+              <span
+                className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: "var(--accent-strong-bg)",
+                  color: "var(--accent-pale)",
+                }}
+              >
+                {visibleInvitations.length}
+              </span>
+            </div>
+          </div>
+          <div className="px-1.5 space-y-1.5 pb-2">
+            {visibleInvitations.map((inv) => (
+              <InvitationRow
+                key={inv.id}
+                invitation={inv}
+                compact
+                onDone={() => {
+                  setDismissedIds((prev) => new Set([...prev, inv.id]));
+                  onClose();
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              height: 1,
+              background: "var(--border-subtle)",
+              margin: "0 12px 6px",
+            }}
+          />
+        </>
+      )}
+
+      {/* Personal */}
       <div className="px-1.5">
         <button
           onClick={async () => {
@@ -296,7 +518,7 @@ function OrgDropdown({
         </>
       )}
 
-      {/* Footer actions */}
+      {/* Footer */}
       <div
         className="px-1.5 pt-1 space-y-0.5"
         style={{ borderTop: "1px solid var(--border-subtle)" }}
@@ -366,24 +588,25 @@ function OrgDropdown({
   );
 }
 
-// ── Workspace Switcher Button ─────────────────────────────────────────────────
+// ── Workspace Switcher ────────────────────────────────────────────────────────
 
 function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const { organization } = useOrganization();
-  const { userMemberships, setActive } = useOrganizationList({
+  const { userMemberships, userInvitations, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
+    userInvitations: { infinite: true }, // ← NEW
   });
   const { openCreateOrganization, openOrganizationProfile } = useClerk();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const orgs = userMemberships?.data ?? [];
+  const invitations = userInvitations?.data ?? [];
+  const pendingCount = invitations.length;
+
   const isPersonal = !organization;
   const currentName = organization?.name ?? "Personal";
   const currentImage = organization?.imageUrl ?? null;
-
-  const handlePersonal = async () => setActive?.({ organization: null });
-  const handleOrg = async (id: string) => setActive?.({ organization: id });
 
   return (
     <div className="relative">
@@ -399,6 +622,7 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
           border: `1px solid ${open ? "var(--accent-border)" : "var(--border-subtle)"}`,
           minHeight: 44,
           height: collapsed ? 44 : "auto",
+          position: "relative",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = "var(--bg-input)";
@@ -474,6 +698,25 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             />
           </>
         )}
+        {/* ── Red badge ── */}
+        {pendingCount > 0 && (
+          <span
+            className="absolute flex items-center justify-center text-[9px] font-bold rounded-full"
+            style={{
+              top: collapsed ? -4 : -5,
+              right: collapsed ? -4 : -5,
+              minWidth: 16,
+              height: 16,
+              padding: "0 4px",
+              background: "#ef4444",
+              color: "#fff",
+              border: "2px solid var(--bg-sidebar)",
+              zIndex: 10,
+            }}
+          >
+            {pendingCount}
+          </span>
+        )}
       </button>
 
       <OrgDropdown
@@ -481,9 +724,10 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
         open={open}
         onClose={() => setOpen(false)}
         orgs={orgs}
+        invitations={invitations}
         organization={organization}
-        onPersonal={handlePersonal}
-        onOrg={handleOrg}
+        onPersonal={async () => setActive?.({ organization: null })}
+        onOrg={async (id) => setActive?.({ organization: id })}
         onCreateOrg={() => openCreateOrganization({})}
         onOrgSettings={() => openOrganizationProfile({})}
       />
@@ -501,24 +745,23 @@ function MobileAccountSheet({
   onClose: () => void;
 }) {
   const { organization } = useOrganization();
-  const { userMemberships, setActive } = useOrganizationList({
+  const { userMemberships, userInvitations, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
+    userInvitations: { infinite: true }, // ← NEW
   });
   const { openCreateOrganization, openOrganizationProfile } = useClerk();
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   const orgs = userMemberships?.data ?? [];
+  const allInvitations: any[] = userInvitations?.data ?? [];
+  const visibleInvitations = allInvitations.filter(
+    (inv) => !dismissedIds.has(inv.id)
+  );
+
   const isPersonal = !organization;
   const currentName = organization?.name ?? "Personal";
   const currentImage = organization?.imageUrl ?? null;
 
-  const handlePersonal = async () => {
-    await setActive?.({ organization: null });
-  };
-  const handleOrg = async (id: string) => {
-    await setActive?.({ organization: id });
-  };
-
-  // Prevent body scroll when sheet open
   useEffect(() => {
     if (open) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
@@ -529,7 +772,6 @@ function MobileAccountSheet({
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="md:hidden fixed inset-0 z-[60] transition-opacity duration-300"
         style={{
@@ -540,10 +782,8 @@ function MobileAccountSheet({
         }}
         onClick={onClose}
       />
-
-      {/* Sheet */}
       <div
-        className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl overflow-hidden"
+        className="md:hidden fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl"
         style={{
           background: "var(--bg-card)",
           border: "1px solid var(--border-hover)",
@@ -554,7 +794,7 @@ function MobileAccountSheet({
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {/* Handle bar */}
+        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div
             className="w-9 h-1 rounded-full"
@@ -567,12 +807,28 @@ function MobileAccountSheet({
           className="flex items-center justify-between px-5 py-3"
           style={{ borderBottom: "1px solid var(--border-subtle)" }}
         >
-          <p
-            className="text-[15px] font-semibold"
-            style={{ color: "var(--text)" }}
-          >
-            Account & Workspace
-          </p>
+          <div className="flex items-center gap-2">
+            <p
+              className="text-[15px] font-semibold"
+              style={{ color: "var(--text)" }}
+            >
+              Account & Workspace
+            </p>
+            {visibleInvitations.length > 0 && (
+              <span
+                className="flex items-center justify-center text-[10px] font-bold rounded-full"
+                style={{
+                  minWidth: 18,
+                  height: 18,
+                  padding: "0 5px",
+                  background: "#ef4444",
+                  color: "#fff",
+                }}
+              >
+                {visibleInvitations.length}
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="w-7 h-7 rounded-full flex items-center justify-center"
@@ -585,8 +841,53 @@ function MobileAccountSheet({
           </button>
         </div>
 
-        {/* Current workspace indicator */}
-        <div className="px-5 pt-4 pb-2">
+        {/* ── Pending Invitations (mobile) ── */}
+        {visibleInvitations.length > 0 && (
+          <div className="px-5 pt-4 pb-2">
+            <div className="flex items-center gap-2 mb-3">
+              <MailIcon
+                className="w-3.5 h-3.5"
+                style={{ color: "var(--accent-light)" }}
+              />
+              <p
+                className="text-[11px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--accent-light)" }}
+              >
+                Pending Invitations
+              </p>
+              <span
+                className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: "var(--accent-strong-bg)",
+                  color: "var(--accent-pale)",
+                }}
+              >
+                {visibleInvitations.length}
+              </span>
+            </div>
+            {visibleInvitations.map((inv) => (
+              <InvitationRow
+                key={inv.id}
+                invitation={inv}
+                onDone={() => {
+                  setDismissedIds((prev) => new Set([...prev, inv.id]));
+                  onClose();
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Current workspace */}
+        <div
+          className="px-5 pt-4 pb-2"
+          style={{
+            borderTop:
+              visibleInvitations.length > 0
+                ? "1px solid var(--border-subtle)"
+                : undefined,
+          }}
+        >
           <p
             className="text-[10px] font-semibold uppercase tracking-widest mb-2"
             style={{ color: "var(--text-dim)" }}
@@ -642,7 +943,7 @@ function MobileAccountSheet({
           </div>
         </div>
 
-        {/* Switch to personal */}
+        {/* Switch to */}
         <div className="px-5 py-2">
           <p
             className="text-[10px] font-semibold uppercase tracking-widest mb-2"
@@ -652,7 +953,7 @@ function MobileAccountSheet({
           </p>
           <button
             onClick={async () => {
-              await handlePersonal();
+              await setActive?.({ organization: null });
               onClose();
             }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
@@ -696,15 +997,14 @@ function MobileAccountSheet({
               />
             )}
           </button>
-
-          {orgs.map((membership) => {
+          {orgs.map((membership: any) => {
             const org = membership.organization;
             const isActive = organization?.id === org.id;
             return (
               <button
                 key={org.id}
                 onClick={async () => {
-                  await handleOrg(org.id);
+                  await setActive?.({ organization: org.id });
                   onClose();
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
@@ -763,7 +1063,7 @@ function MobileAccountSheet({
           })}
         </div>
 
-        {/* Actions */}
+        {/* Preferences */}
         <div
           className="px-5 py-2"
           style={{ borderTop: "1px solid var(--border-subtle)" }}
@@ -774,10 +1074,7 @@ function MobileAccountSheet({
           >
             Preferences
           </p>
-
-          {/* Theme Switcher Mobile Version */}
           <ThemeSwitcher mobile className="mb-2" />
-
           <button
             onClick={() => {
               onClose();
@@ -808,7 +1105,6 @@ function MobileAccountSheet({
               Create organization
             </p>
           </button>
-
           {organization && (
             <button
               onClick={() => {
@@ -845,7 +1141,7 @@ function MobileAccountSheet({
           )}
         </div>
 
-        {/* User account row */}
+        {/* Account row */}
         <div
           className="px-5 py-4 flex items-center gap-3"
           style={{ borderTop: "1px solid var(--border-subtle)" }}
@@ -872,7 +1168,13 @@ function MobileAccountSheet({
 
 // ── Mobile Top Header ─────────────────────────────────────────────────────────
 
-function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
+function MobileHeader({
+  onOpenAccount,
+  pendingInvitations,
+}: {
+  onOpenAccount: () => void;
+  pendingInvitations: number;
+}) {
   const { organization } = useOrganization();
   const currentName = organization?.name ?? "Personal";
   const currentImage = organization?.imageUrl ?? null;
@@ -888,14 +1190,8 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
         paddingTop: "env(safe-area-inset-top)",
       }}
     >
-      {/* Logo */}
       <div className="flex items-center gap-2 flex-1">
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          // style={{
-          //   background: "rgba(255, 255, 255, 0.92)",
-          // }}
-        >
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
           <img src="/favicon.svg" alt="Logo" width={32} height={32} />
         </div>
         <span
@@ -905,18 +1201,30 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
           Paperspace
         </span>
       </div>
-
-      {/* Workspace + account buttons */}
       <div className="flex items-center gap-2">
-        {/* Workspace chip */}
         <button
           onClick={onOpenAccount}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all"
+          className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all"
           style={{
             background: "var(--bg-muted)",
             border: "1px solid var(--border-hover)",
           }}
         >
+          {pendingInvitations > 0 && (
+            <span
+              className="absolute -top-1.5 -right-1.5 flex items-center justify-center text-[9px] font-bold rounded-full z-10"
+              style={{
+                minWidth: 16,
+                height: 16,
+                padding: "0 4px",
+                background: "#ef4444",
+                color: "#fff",
+                border: "2px solid var(--mobile-header-bg, #fff)",
+              }}
+            >
+              {pendingInvitations}
+            </span>
+          )}
           <div
             className="w-5 h-5 rounded-md flex items-center justify-center overflow-hidden shrink-0"
             style={{
@@ -956,8 +1264,6 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
             style={{ color: "var(--text-dim)" }}
           />
         </button>
-
-        {/* Avatar */}
         <UserButton
           appearance={{ elements: { avatarBox: "w-7 h-7 rounded-xl" } }}
         />
@@ -971,9 +1277,14 @@ function MobileHeader({ onOpenAccount }: { onOpenAccount: () => void }) {
 export function Navbar() {
   const pathname = usePathname();
   const { organization } = useOrganization();
+  const { userInvitations } = useOrganizationList({
+    userInvitations: { infinite: true },
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
+
+  const pendingInvitationsCount = userInvitations?.data?.length ?? 0;
 
   useEffect(() => {
     setMounted(true);
@@ -996,14 +1307,15 @@ export function Navbar() {
 
   return (
     <>
-      {/* ── Mobile top header ── */}
-      <MobileHeader onOpenAccount={() => setMobileAccountOpen(true)} />
-      {/* ── Mobile account sheet ── */}
+      <MobileHeader
+        onOpenAccount={() => setMobileAccountOpen(true)}
+        pendingInvitations={pendingInvitationsCount}
+      />
       <MobileAccountSheet
         open={mobileAccountOpen}
         onClose={() => setMobileAccountOpen(false)}
       />
-      {/* ── Desktop sidebar ── */}
+
       <aside
         className="hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-200 overflow-visible"
         style={{
@@ -1013,7 +1325,6 @@ export function Navbar() {
           zIndex: 40,
         }}
       >
-        {/* Header */}
         <div
           className="flex items-center h-14 shrink-0"
           style={{
@@ -1024,14 +1335,7 @@ export function Navbar() {
         >
           {!collapsed && (
             <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                // style={{
-                //   background:
-                //     "linear-gradient(135deg, var(--primary), var(--chart-2))",
-                //   boxShadow: "var(--shadow-logo-glow)",
-                // }}
-              >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
                 <img src="/favicon.svg" alt="Logo" width={32} height={32} />
               </div>
               <span
@@ -1064,7 +1368,6 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* Org context strip */}
         {organization && (
           <div
             className="flex items-center shrink-0 transition-all duration-200"
@@ -1107,7 +1410,6 @@ export function Navbar() {
           </div>
         )}
 
-        {/* Nav items */}
         <nav
           className={`flex-1 py-2 px-2 space-y-0.5 ${collapsed ? "overflow-hidden" : "overflow-y-auto"}`}
         >
@@ -1140,12 +1442,6 @@ export function Navbar() {
                   }
                 }}
               >
-                {/* {active && (
-                  <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
-                    style={{ background: "var(--primary)" }}
-                  />
-                )} */}
                 <Icon
                   className="w-4 h-4 shrink-0"
                   style={{ color: active ? "var(--accent-light)" : "inherit" }}
@@ -1153,9 +1449,7 @@ export function Navbar() {
                 {!collapsed && <span className="truncate">{label}</span>}
                 {collapsed && (
                   <div
-                    className="absolute left-full ml-3 px-3 py-1.5 rounded-xl text-xs font-medium
-                      pointer-events-none z-50 whitespace-nowrap
-                      opacity-0 group-hover/nav:opacity-100 transition-opacity duration-100"
+                    className="absolute left-full ml-3 px-3 py-1.5 rounded-xl text-xs font-medium pointer-events-none z-50 whitespace-nowrap opacity-0 group-hover/nav:opacity-100 transition-opacity duration-100"
                     style={{
                       background: "var(--bg-card)",
                       color: "var(--text)",
@@ -1171,7 +1465,6 @@ export function Navbar() {
           })}
         </nav>
 
-        {/* Bottom section */}
         <div
           className="shrink-0 flex flex-col gap-2 px-2 py-3"
           style={{ borderTop: "1px solid var(--border-subtle)" }}
@@ -1196,7 +1489,7 @@ export function Navbar() {
           </div>
         </div>
       </aside>
-      {/* ── Mobile bottom tab bar ── */}
+
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-50"
         style={{
@@ -1218,7 +1511,6 @@ export function Navbar() {
                 className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative transition-colors min-w-0"
                 style={{
                   color: active ? "var(--accent-light)" : "var(--text-dim)",
-                  // Ensure touch target is at least 44px tall
                   minHeight: 52,
                 }}
               >
@@ -1243,9 +1535,7 @@ export function Navbar() {
           })}
         </div>
       </nav>
-      {/* ── Mobile spacers (prevents content being hidden behind fixed bars) ── */}
-      <div className="md:hidden h-12 shrink-0" aria-hidden />{" "}
-      {/* top header space */}
+      <div className="md:hidden h-12 shrink-0" aria-hidden />
     </>
   );
 }
