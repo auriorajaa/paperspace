@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   UserButton,
   useOrganization,
@@ -49,12 +49,21 @@ function InvitationRow({
   compact?: boolean;
 }) {
   const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
+  const router = useRouter();
 
   const handleAccept = async () => {
     setLoading("accept");
     try {
       await invitation.accept();
       onDone();
+      // Refresh halaman setelah accept berhasil agar Clerk state ter-update
+      // dan user langsung masuk ke organisasi baru
+      setTimeout(() => {
+        router.refresh();
+        // Kalau router.refresh() tidak cukup (misal state Clerk masih stale),
+        // uncomment baris di bawah untuk hard reload:
+        // window.location.reload();
+      }, 300);
     } catch (e) {
       console.error("Failed to accept invitation", e);
     } finally {
@@ -62,7 +71,7 @@ function InvitationRow({
     }
   };
 
-  // Clerk client SDK tidak expose .reject() — dismiss lokal saja.
+  // Clerk client SDK tidak expose .reject() — dismiss lokal.
   const handleDecline = () => {
     setLoading("decline");
     onDone();
