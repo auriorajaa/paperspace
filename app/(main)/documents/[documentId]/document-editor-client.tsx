@@ -30,6 +30,7 @@ import {
 import { OnlyOfficeEditor } from "@/components/OnlyOfficeEditor";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
+import { useEditorExitGuard } from "@/hooks/useEditorExitGuard";
 
 // ── Mobile detection hook ─────────────────────────────────────────────────────
 
@@ -675,6 +676,7 @@ export default function DocumentEditorPage() {
   const [editorKey, setEditorKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const { markExit } = useEditorExitGuard(4000);
 
   // document-editor-client.tsx
   const stableFileKey = useMemo(() => {
@@ -683,6 +685,12 @@ export default function DocumentEditorPage() {
     // Tapi OO akan anggap ini dokumen baru (cache tidak di-reuse)
     return `doc-${documentId}-${document._creationTime}-${document.storageId ?? "new"}`;
   }, [documentId, document?._creationTime, document?.storageId]);
+
+    useEffect(() => {
+      const handler = () => markExit();
+      window.addEventListener("beforeunload", handler);
+      return () => window.removeEventListener("beforeunload", handler);
+    }, [markExit]);
 
   // ── FIX: Effect dependency — gunakan document?._id sebagai trigger ──────────
   // Sebelumnya: [document?.storageId, document?.fileUrl]
@@ -876,6 +884,7 @@ export default function DocumentEditorPage() {
       >
         <button
           onClick={() => {
+            markExit();
             window.location.href = "/documents";
           }}
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0 cursor-pointer"

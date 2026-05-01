@@ -58,6 +58,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useEditorExitGuard } from "@/hooks/useEditorExitGuard";
+import { SyncCooldownButton } from "@/components/SyncCooldownButton";
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -647,11 +649,13 @@ function TemplateMenu({
   onDelete,
   onRename,
   onEditFolderLabels,
+  onEditFields,
 }: {
   template: Doc<"templates">;
   onDelete: () => void;
   onRename: () => void;
   onEditFolderLabels: () => void;
+  onEditFields: () => void;
 }) {
   const router = useRouter();
   return (
@@ -697,7 +701,7 @@ function TemplateMenu({
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            router.push(`/templates/${template._id}/edit`);
+            onEditFields();
           }}
         >
           <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Edit fields
@@ -846,6 +850,8 @@ function TemplateGridCard({
   selectMode,
   onSelect,
   allExistingFolders,
+  canEnterEditor,
+  getCooldownMs,
 }: {
   template: Doc<"templates">;
   onDelete: () => void;
@@ -853,6 +859,8 @@ function TemplateGridCard({
   selectMode: boolean;
   onSelect: (shift: boolean) => void;
   allExistingFolders: string[];
+  canEnterEditor: () => boolean;
+  getCooldownMs: () => number;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
@@ -860,6 +868,17 @@ function TemplateGridCard({
   const [editingDesc, setEditingDesc] = useState(false);
   const [editingFolderLabels, setEditingFolderLabels] = useState(false);
   const tags = template.tags ?? [];
+
+  const handleEditFields = () => {
+    const remaining = getCooldownMs();
+    if (remaining > 0) {
+      toast.info(
+        `Template is syncing to storage. Please wait ${Math.ceil(remaining / 1000)}s…`
+      );
+      return;
+    }
+    router.push(`/templates/${template._id}/edit`);
+  };
 
   const handleClick = (e: React.MouseEvent) => {
     if (editingDesc || editingFolderLabels || renameOpen) return;
@@ -957,6 +976,7 @@ function TemplateGridCard({
                 onDelete={onDelete}
                 onRename={() => setRenameOpen(true)}
                 onEditFolderLabels={() => setEditingFolderLabels(true)}
+                onEditFields={handleEditFields}
               />
             </div>
           </div>
@@ -1017,26 +1037,15 @@ function TemplateGridCard({
           {/* Action buttons */}
           {!selectMode && (
             <div className="flex gap-2 pt-0.5">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/templates/${template._id}/edit`);
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] font-medium transition-all"
-                style={{
-                  background: "var(--bg-muted)",
-                  color: "var(--text-secondary)",
-                  border: `1px solid var(--border-subtle)`,
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "var(--bg-input)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "var(--bg-muted)")
-                }
-              >
-                <PencilIcon className="w-3 h-3" /> Edit
-              </button>
+              <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                <SyncCooldownButton
+                  onClick={handleEditFields}
+                  remainingMs={getCooldownMs()}
+                  isOnCooldown={!canEnterEditor()}
+                  label="Edit"
+                  icon="edit"
+                />
+              </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1104,6 +1113,8 @@ function TemplateListRow({
   selectMode,
   onSelect,
   allExistingFolders,
+  canEnterEditor,
+  getCooldownMs,
 }: {
   template: Doc<"templates">;
   onDelete: () => void;
@@ -1111,12 +1122,25 @@ function TemplateListRow({
   selectMode: boolean;
   onSelect: (shift: boolean) => void;
   allExistingFolders: string[];
+  canEnterEditor: () => boolean;
+  getCooldownMs: () => number;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [editingFolderLabels, setEditingFolderLabels] = useState(false);
   const tags = template.tags ?? [];
+
+  const handleEditFields = () => {
+    const remaining = getCooldownMs();
+    if (remaining > 0) {
+      toast.info(
+        `Template is syncing to storage. Please wait ${Math.ceil(remaining / 1000)}s…`
+      );
+      return;
+    }
+    router.push(`/templates/${template._id}/edit`);
+  };
 
   const handleClick = (e: React.MouseEvent) => {
     if (editingFolderLabels || renameOpen) return;
@@ -1274,6 +1298,7 @@ function TemplateListRow({
             onDelete={onDelete}
             onRename={() => setRenameOpen(true)}
             onEditFolderLabels={() => setEditingFolderLabels(true)}
+            onEditFields={handleEditFields}
           />
         </div>
       </div>
@@ -1924,6 +1949,8 @@ export default function TemplatesPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [page, setPage] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  const { canEnter, getRemainingMs } = useEditorExitGuard(4000);
 
   // Selection
   const [selectMode, setSelectMode] = useState(false);
@@ -2638,6 +2665,8 @@ export default function TemplatesPage() {
                     selectMode={selectMode}
                     onSelect={(shift) => handleSelect(t._id, shift)}
                     allExistingFolders={allFolders}
+                    canEnterEditor={canEnter}
+                    getCooldownMs={getRemainingMs}
                   />
                 ))}
               </div>
@@ -2652,6 +2681,8 @@ export default function TemplatesPage() {
                     selectMode={selectMode}
                     onSelect={(shift) => handleSelect(t._id, shift)}
                     allExistingFolders={allFolders}
+                    canEnterEditor={canEnter}
+                    getCooldownMs={getRemainingMs}
                   />
                 ))}
               </div>

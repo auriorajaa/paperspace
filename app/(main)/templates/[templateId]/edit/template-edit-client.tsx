@@ -45,12 +45,37 @@ import {
 } from "@/lib/placeholder-detector";
 import { fieldTypeColors } from "@/lib/design-tokens";
 import { useAuth } from "@clerk/nextjs";
+import { useEditorExitGuard } from "@/hooks/useEditorExitGuard";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Ekstrak semua teks dari buffer DOCX dengan dua langkah:
+ *
+ * 1. Preprocess — satukan placeholder {{...}} yang terpecah lintas run XML.
+ *    Ini krusial untuk file hasil konversi PDF, di mana setiap karakter
+ *    bisa berada di <w:r> run terpisah.
+ *
+ * 2. Ekstrak teks per-paragraf tanpa menyisipkan spasi di antara run —
+ *    sehingga {{placeholder}} tetap utuh meski sebelumnya terpecah.
+ *
+ * Pendekatan lama (`replace(/<[^>]+>/g, " ")`) menyisipkan spasi di antara
+ * SETIAP tag XML, sehingga `{{` + `name` + `}}` menjadi `{{ name }}` yang
+ * tidak dikenali oleh regex detector.
+ */
 async function extractAllText(buffer: ArrayBuffer): Promise<string> {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(buffer);
+  const [JSZip, { preprocessTemplate, extractTextFromXml }] = await Promise.all(
+    [
+      import("jszip").then((m) => m.default),
+      import("@/lib/template-preprocessor"),
+    ]
+  );
+
+  // Step 1: Stitch split runs (critical for PDF-converted DOCX)
+  const processedBuffer = await preprocessTemplate(buffer);
+
+  const zip = await JSZip.loadAsync(processedBuffer);
+
   const targets = [
     "word/document.xml",
     "word/header1.xml",
@@ -60,18 +85,19 @@ async function extractAllText(buffer: ArrayBuffer): Promise<string> {
     "word/footer2.xml",
     "word/footer3.xml",
   ];
+
   const parts: string[] = [];
   for (const path of targets) {
     const file = zip.file(path);
     if (!file) continue;
     const xml = await file.async("string");
-    parts.push(
-      xml
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-    );
+
+    // Step 2: Extract text joining <w:t> nodes within each paragraph
+    // WITHOUT inserting spaces — preserves {{placeholder}} integrity.
+    const text = extractTextFromXml(xml);
+    if (text) parts.push(text);
   }
+
   return parts.join("\n");
 }
 
@@ -1735,6 +1761,7 @@ export default function TemplateEditPage() {
     null
   );
   const [showScanResult, setShowScanResult] = useState(false);
+  const { markExit } = useEditorExitGuard(4000);
 
   const stableFileKey = useMemo(() => {
     if (!template) return "";
@@ -1742,19 +1769,11 @@ export default function TemplateEditPage() {
     return `tmpl-${templateId}-${(template as any)._creationTime}-${template.storageId ?? "new"}`;
   }, [templateId, template?._creationTime, template?.storageId]);
 
-  // Keyboard shortcut: Ctrl+S / Cmd+S to save
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        // Selalu memanggil versi terkini dari scanAndSave via ref —
-        // tidak perlu re-register listener setiap kali `saving` berubah.
-        scanAndSaveRef.current();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []); // ← array kosong: hanya register sekali saat mount
+    const handler = () => markExit();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [markExit]);
 
   const scanAndSave = useCallback(
     async (redirectTo?: "fill") => {
@@ -1810,11 +1829,6 @@ export default function TemplateEditPage() {
     },
     [saving, template, templateId, updateTemplate, router]
   );
-
-  const scanAndSaveRef = useRef(scanAndSave);
-  useEffect(() => {
-    scanAndSaveRef.current = scanAndSave;
-  }, [scanAndSave]);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 
@@ -1927,7 +1941,7 @@ export default function TemplateEditPage() {
         {/* Back */}
         <button
           onClick={() => {
-            // Hard refresh ke /templates supaya data ter-update real-time
+            markExit();
             window.location.href = "/templates";
           }}
           className="flex items-center gap-1 text-[12px] font-medium transition-colors shrink-0 cursor-pointer"
