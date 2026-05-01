@@ -69,6 +69,7 @@ import { useDebounce } from "@/lib/useDebounce";
 import { shadows } from "@/lib/design-tokens";
 import { COLLECTION_ICONS, getIconComponent } from "@/lib/collection-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useEditorExitGuard } from "@/hooks/useEditorExitGuard";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -1900,6 +1901,8 @@ function GridCard({
   onRestore,
   onDelete,
   onDuplicate,
+  canEnterEditor,
+  getCooldownMs,
 }: {
   document: Doc<"documents">;
   selected: boolean;
@@ -1911,11 +1914,14 @@ function GridCard({
   onRestore: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  canEnterEditor: () => boolean;
+  getCooldownMs: () => number;
 }) {
   const router = useRouter();
   const { organization } = useOrganization();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [syncDisplayMs, setSyncDisplayMs] = useState(0);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
@@ -1926,9 +1932,28 @@ function GridCard({
     : null;
   const cols = (collections ?? []) as Doc<"collections">[];
 
+  const isOnCooldown = !canEnterEditor();
+  const remainingMs = getCooldownMs();
+
+  // Live countdown for sync overlay
+  useEffect(() => {
+    if (!isOnCooldown) return;
+    setSyncDisplayMs(remainingMs);
+    const interval = setInterval(() => {
+      setSyncDisplayMs((prev) => Math.max(0, prev - 100));
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isOnCooldown, remainingMs]);
+
   const handleClick = (e: React.MouseEvent) => {
     if (selectMode) {
       onSelect(document._id, e.shiftKey);
+      return;
+    }
+    if (isOnCooldown) {
+      toast.info(
+        `File is syncing to storage. Please wait ${Math.ceil(syncDisplayMs / 1000)}s…`
+      );
       return;
     }
     router.push(`/documents/${document._id}`);
@@ -1937,7 +1962,7 @@ function GridCard({
   return (
     <>
       <div
-        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200 h-full overflow-hidden"
+        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200 h-full overflow-hidden relative"
         style={{
           background: selected
             ? "rgba(99,102,241,0.09)"
@@ -1955,6 +1980,35 @@ function GridCard({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        {/* Sync overlay */}
+        {isOnCooldown && (
+          <div
+            className="absolute inset-0 z-10 rounded-2xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px]"
+            style={{
+              background: "rgba(10, 10, 14, 0.55)",
+            }}
+          >
+            <div
+              className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: "var(--accent-light)" }}
+            />
+            <div className="text-center">
+              <p
+                className="text-[12px] font-medium"
+                style={{ color: "var(--accent-pale)" }}
+              >
+                Syncing to storage
+              </p>
+              <p
+                className="text-[11px] mt-0.5"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {Math.ceil(syncDisplayMs / 1000)}s remaining
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="p-3.5 flex flex-col gap-2.5 flex-1">
           <div className="flex items-start gap-2.5">
             {selectMode && (
@@ -2016,6 +2070,19 @@ function GridCard({
                   >
                     <UsersIcon style={{ width: 9, height: 9 }} />
                     {orgLabel}
+                  </span>
+                )}
+                {isOnCooldown && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-px rounded"
+                    style={{
+                      background: "var(--accent-bg)",
+                      color: "var(--accent-light)",
+                      border: "1px solid var(--accent-border)",
+                    }}
+                  >
+                    <Loader2Icon className="w-2.5 h-2.5 animate-spin" />
+                    Syncing
                   </span>
                 )}
               </div>
@@ -2122,6 +2189,8 @@ function ListRow({
   onRestore,
   onDelete,
   onDuplicate,
+  canEnterEditor,
+  getCooldownMs,
 }: {
   document: Doc<"documents">;
   selected: boolean;
@@ -2133,11 +2202,14 @@ function ListRow({
   onRestore: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  canEnterEditor: () => boolean;
+  getCooldownMs: () => number;
 }) {
   const router = useRouter();
   const { organization } = useOrganization();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [syncDisplayMs, setSyncDisplayMs] = useState(0);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
     documentId: document._id,
   });
@@ -2148,9 +2220,28 @@ function ListRow({
       : "Shared"
     : null;
 
+  const isOnCooldown = !canEnterEditor();
+  const remainingMs = getCooldownMs();
+
+  // Live countdown
+  useEffect(() => {
+    if (!isOnCooldown) return;
+    setSyncDisplayMs(remainingMs);
+    const interval = setInterval(() => {
+      setSyncDisplayMs((prev) => Math.max(0, prev - 100));
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isOnCooldown, remainingMs]);
+
   const handleClick = (e: React.MouseEvent) => {
     if (selectMode) {
       onSelect(document._id, e.shiftKey);
+      return;
+    }
+    if (isOnCooldown) {
+      toast.info(
+        `File is syncing to storage. Please wait ${Math.ceil(syncDisplayMs / 1000)}s…`
+      );
       return;
     }
     router.push(`/documents/${document._id}`);
@@ -2159,7 +2250,7 @@ function ListRow({
   return (
     <>
       <div
-        className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150 group"
+        className="flex items-start gap-3 px-4 sm:px-5 py-3 cursor-pointer transition-all duration-150 group relative"
         style={{
           borderBottom: `1px solid var(--border-subtle)`,
           background: selected
@@ -2167,11 +2258,34 @@ function ListRow({
             : hovered
               ? "var(--bg-muted)"
               : "transparent",
+          opacity: isOnCooldown ? 0.6 : 1,
         }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        {/* Right-side sync badge */}
+        {isOnCooldown && (
+          <div
+            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2 py-1 rounded-lg z-10"
+            style={{
+              background: "var(--accent-bg)",
+              border: "1px solid var(--accent-border)",
+            }}
+          >
+            <Loader2Icon
+              className="w-3 h-3 animate-spin"
+              style={{ color: "var(--accent-light)" }}
+            />
+            <span
+              className="text-[10px] font-medium tabular-nums"
+              style={{ color: "var(--accent-light)" }}
+            >
+              {Math.ceil(syncDisplayMs / 1000)}s
+            </span>
+          </div>
+        )}
+
         {selectMode && (
           <div
             className="mt-1 shrink-0"
@@ -2226,6 +2340,19 @@ function ListRow({
               >
                 <UsersIcon style={{ width: 9, height: 9 }} />
                 {orgLabel}
+              </span>
+            )}
+            {isOnCooldown && (
+              <span
+                className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-px rounded sm:hidden"
+                style={{
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
+                  border: "1px solid var(--accent-border)",
+                }}
+              >
+                <Loader2Icon className="w-2.5 h-2.5 animate-spin" />
+                Syncing
               </span>
             )}
           </div>
@@ -2799,7 +2926,7 @@ export default function DocumentsPage() {
   const debouncedSearch = useDebounce(search, 250);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [view, setView] = useState<ViewMode>("list");
+  const [view, setView] = useState<ViewMode>("grid");
   const [showArchived, setShowArchived] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -3284,6 +3411,8 @@ export default function DocumentsPage() {
     contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const { canEnter, getRemainingMs } = useEditorExitGuard(4000);
+
   const orgFilterLabel = organization?.name ?? "Org";
   const hasActiveFilters = !!(
     debouncedSearch ||
@@ -3462,8 +3591,9 @@ export default function DocumentsPage() {
             }}
           >
             {[
-              { v: "list" as ViewMode, Icon: ListIcon, t: "List" },
               { v: "grid" as ViewMode, Icon: LayoutGridIcon, t: "Grid" },
+
+              { v: "list" as ViewMode, Icon: ListIcon, t: "List" },
             ].map(({ v, Icon, t }) => (
               <button
                 key={v}
@@ -3791,6 +3921,8 @@ export default function DocumentsPage() {
                     onRestore={() => handleRestoreDoc(doc._id)}
                     onDelete={() => handleDeleteDoc(doc._id)}
                     onDuplicate={() => handleDuplicateDoc(doc._id)}
+                    canEnterEditor={canEnter}
+                    getCooldownMs={getRemainingMs}
                   />
                 ))}
               </div>
@@ -3811,6 +3943,8 @@ export default function DocumentsPage() {
                     onRestore={() => handleRestoreDoc(doc._id)}
                     onDelete={() => handleDeleteDoc(doc._id)}
                     onDuplicate={() => handleDuplicateDoc(doc._id)}
+                    canEnterEditor={canEnter}
+                    getCooldownMs={getRemainingMs}
                   />
                 ))}
               </div>
