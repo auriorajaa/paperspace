@@ -1760,14 +1760,84 @@ export default function TemplateEditPage() {
   const [lastScanResult, setLastScanResult] = useState<DetectedField[] | null>(
     null
   );
+  // Freeze the storageId that was present when this editing session started.
+  //
+  // Why: OO uses `key` to identify + cache documents. We need two properties:
+  //   1. Stable DURING the session   → autosave updating storageId in Convex
+  //      must NOT change the key, otherwise the editor re-initialises mid-edit
+  //      (causes "Node.removeChild" DOM errors + Convex auth hiccups).
+  //   2. Different BETWEEN sessions  → if the file was saved and the user
+  //      reopens the page, OO must get a new key so it fetches the updated
+  //      file instead of serving its stale cache (which caused the stuck
+  //      "Loading editor…" screen).
+  //
+  // useState (not useMemo) so it truly resets to undefined on unmount/remount.
+  const [sessionStorageId, setSessionStorageId] = useState<string | undefined>(
+    undefined
+  );
+  useEffect(() => {
+    // Set once — ignore subsequent storageId changes during the session.
+    if (template?.storageId && sessionStorageId === undefined) {
+      setSessionStorageId(template.storageId);
+    }
+  }, [template?.storageId, sessionStorageId]);
   const [showScanResult, setShowScanResult] = useState(false);
   const { markExit } = useEditorExitGuard(4000);
 
+  const templateRef = useRef(template);
+  useEffect(() => {
+    templateRef.current = template;
+  }, [template]);
+
+  // When the user clicks Save we trigger an OO forcesave, then wait here.
+  // The resolver is called by the useEffect below as soon as storageId changes.
+  const saveResolverRef = useRef<(() => void) | null>(null);
+  const prevStorageIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const current = template?.storageId;
+    if (
+      current !== undefined &&
+      prevStorageIdRef.current !== undefined &&
+      current !== prevStorageIdRef.current &&
+      saveResolverRef.current
+    ) {
+      // storageId just changed → OO callback landed → file is ready
+      saveResolverRef.current();
+      saveResolverRef.current = null;
+    }
+    prevStorageIdRef.current = current;
+  }, [template?.storageId]);
+
+  /**
+   * Returns a promise that resolves when the template's storageId changes
+   * (proof that the OO callback has fired and Convex has the new file),
+   * or after `timeoutMs` — whichever comes first.
+   *
+   * On timeout we resolve (not reject) so the caller can still proceed
+   * with whatever file is currently in Convex.
+   */
+  const waitForFileSaved = useCallback(
+    (timeoutMs = 14_000): Promise<void> =>
+      new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          saveResolverRef.current = null;
+          resolve(); // timeout — proceed with current file
+        }, timeoutMs);
+        saveResolverRef.current = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      }),
+    []
+  );
+
   const stableFileKey = useMemo(() => {
-    if (!template) return "";
-    // Sama seperti dokumen: include storageId agar key berubah setelah save
-    return `tmpl-${templateId}-${(template as any)._creationTime}-${template.storageId ?? "new"}`;
-  }, [templateId, template?._creationTime, template?.storageId]);
+    if (!template || sessionStorageId === undefined) return "";
+    return `tmpl-${templateId}-${(template as any)._creationTime}-${sessionStorageId}`;
+  }, [templateId, template?._creationTime, sessionStorageId]);
+  // Note: template.storageId intentionally NOT in deps — sessionStorageId is
+  // frozen after first set, so this memo is stable for the lifetime of the page.
 
   useEffect(() => {
     const handler = () => markExit();
@@ -1780,9 +1850,40 @@ export default function TemplateEditPage() {
       if (saving || !template) return;
       setSaving(true);
       setShowScanResult(false);
+
       try {
+        // ── Step 1: Ask OO to flush the editor's current state ────────────────
+        // OO's autosave interval can be up to 60 s, so without this the user
+        // might scan a stale file that doesn't contain their new placeholders.
+        let shouldWait = false;
+        try {
+          const cmdRes = await fetch("/api/onlyoffice-command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: stableFileKey, command: "forcesave" }),
+          });
+          const cmdData = await cmdRes.json();
+          // error 0 = forcesave queued  →  callback will fire  →  wait for it
+          // error 4 = no active session →  already saved, nothing to wait for
+          shouldWait = cmdRes.ok && cmdData.error === 0;
+        } catch {
+          // OO server unreachable — scan whatever is in Convex right now
+        }
+
+        // ── Step 2: Wait for Convex to receive the OO callback ───────────────
+        // The callback updates storageId; our useEffect resolves the promise.
+        if (shouldWait) {
+          await waitForFileSaved(14_000);
+        }
+
+        // ── Step 3: Fetch the (now-updated) file and scan ────────────────────
+        // Use templateRef so we read the post-update fileUrl, not the closure's
+        // stale copy.
+        const freshTemplate = templateRef.current;
+        if (!freshTemplate) throw new Error("Template disappeared");
+
         const res = await fetch(
-          `/api/onlyoffice-file?url=${encodeURIComponent(template.fileUrl)}`
+          `/api/onlyoffice-file?url=${encodeURIComponent(freshTemplate.fileUrl)}`
         );
         if (!res.ok) throw new Error("Failed to fetch template file");
         const buffer = await res.arrayBuffer();
@@ -1827,7 +1928,17 @@ export default function TemplateEditPage() {
         setSaving(false);
       }
     },
-    [saving, template, templateId, updateTemplate, router]
+    // stableFileKey and waitForFileSaved added to deps; template removed because
+    // we read it via templateRef inside the async body to avoid stale closure.
+    [
+      saving,
+      template,
+      templateId,
+      updateTemplate,
+      router,
+      stableFileKey,
+      waitForFileSaved,
+    ]
   );
 
   // ── Loading ─────────────────────────────────────────────────────────────────

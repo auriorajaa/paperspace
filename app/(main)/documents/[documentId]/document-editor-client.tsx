@@ -678,19 +678,40 @@ export default function DocumentEditorPage() {
   const [storageError, setStorageError] = useState<string | null>(null);
   const { markExit } = useEditorExitGuard(4000);
 
+  // Freeze the storageId that was present when this editing session started.
+  //
+  // Problem with including storageId in the memo deps:
+  //   Ctrl+S / OO autosave → OO callback fires → Convex updates storageId
+  //   → stableFileKey changes → OnlyOfficeEditor re-inits mid-session
+  //   → "Node.removeChild" DOM error (editor iframe unmounts while React
+  //     is still reconciling).
+  //
+  // Fix: capture storageId ONCE at mount, freeze it for the session.
+  //   - Stable DURING session  → autosave doesn't cause re-init
+  //   - Fresh BETWEEN sessions → next page load gets the latest storageId
+  //     so OO doesn't serve a stale cached version of the file
+  const [sessionStorageId, setSessionStorageId] = useState<string | undefined>(
+    undefined
+  );
+  useEffect(() => {
+    if (document?.storageId && sessionStorageId === undefined) {
+      setSessionStorageId(document.storageId);
+    }
+  }, [document?.storageId, sessionStorageId]);
+
   // document-editor-client.tsx
   const stableFileKey = useMemo(() => {
-    if (!document) return "";
-    // storageId berubah setelah save → key berubah → editor re-fetch config
-    // Tapi OO akan anggap ini dokumen baru (cache tidak di-reuse)
-    return `doc-${documentId}-${document._creationTime}-${document.storageId ?? "new"}`;
-  }, [documentId, document?._creationTime, document?.storageId]);
+    if (!document || sessionStorageId === undefined) return "";
+    return `doc-${documentId}-${document._creationTime}-${sessionStorageId}`;
+  }, [documentId, document?._creationTime, sessionStorageId]);
+  // Note: document.storageId intentionally NOT in deps — sessionStorageId is
+  // frozen after first set, so the key stays stable for the whole session.
 
-    useEffect(() => {
-      const handler = () => markExit();
-      window.addEventListener("beforeunload", handler);
-      return () => window.removeEventListener("beforeunload", handler);
-    }, [markExit]);
+  useEffect(() => {
+    const handler = () => markExit();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [markExit]);
 
   // ── FIX: Effect dependency — gunakan document?._id sebagai trigger ──────────
   // Sebelumnya: [document?.storageId, document?.fileUrl]

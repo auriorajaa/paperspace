@@ -166,3 +166,27 @@ export function extractTextFromXml(xml: string): string {
   // don't accidentally merge (e.g. "Hello" + "World" → "Hello World").
   return paraTexts.join(" ");
 }
+
+export async function extractAllText(buffer: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buffer);
+  const xmlFiles = [
+    "word/document.xml",
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/header3.xml",
+    "word/footer1.xml",
+    "word/footer2.xml",
+    "word/footer3.xml",
+  ];
+
+  const parts: string[] = [];
+  for (const path of xmlFiles) {
+    const file = zip.file(path);
+    if (!file) continue;
+    const xml = await file.async("string");
+    const text = extractTextFromXml(xml).trim();
+    if (text) parts.push(text);
+  }
+
+  return parts.join("\n");
+}

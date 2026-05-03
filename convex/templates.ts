@@ -12,6 +12,12 @@ const fieldSchema = v.object({
   type: v.string(),
   required: v.boolean(),
   placeholder: v.string(),
+  confidence: v.optional(v.number()),
+  source: v.optional(v.string()),
+  targetText: v.optional(v.string()),
+  contextText: v.optional(v.string()),
+  replacementText: v.optional(v.string()),
+  originalPlaceholder: v.optional(v.string()),
   subFields: v.optional(
     v.array(
       v.object({
@@ -21,6 +27,12 @@ const fieldSchema = v.object({
         type: v.string(),
         required: v.boolean(),
         placeholder: v.string(),
+        confidence: v.optional(v.number()),
+        source: v.optional(v.string()),
+        targetText: v.optional(v.string()),
+        contextText: v.optional(v.string()),
+        replacementText: v.optional(v.string()),
+        originalPlaceholder: v.optional(v.string()),
       })
     )
   ),
@@ -110,6 +122,7 @@ export const create = mutation({
     fileUrl: v.string(),
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
+    sourceFileType: v.optional(v.string()),
     organizationId: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     fields: v.array(fieldSchema),
@@ -126,6 +139,7 @@ export const create = mutation({
       fileUrl: args.fileUrl,
       description: args.description,
       previewText: args.previewText,
+      sourceFileType: args.sourceFileType,
       tags: args.tags ?? [],
       fields: args.fields,
     });
@@ -138,6 +152,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
+    sourceFileType: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     fields: v.optional(v.array(fieldSchema)),
     storageId: v.optional(v.string()),
