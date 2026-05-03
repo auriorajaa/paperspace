@@ -54,6 +54,7 @@ export default defineSchema({
     fileUrl: v.string(),
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
+    sourceFileType: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     fields: v.array(
       v.object({
@@ -63,6 +64,12 @@ export default defineSchema({
         type: v.string(),
         required: v.boolean(),
         placeholder: v.string(),
+        confidence: v.optional(v.number()),
+        source: v.optional(v.string()),
+        targetText: v.optional(v.string()),
+        contextText: v.optional(v.string()),
+        replacementText: v.optional(v.string()),
+        originalPlaceholder: v.optional(v.string()),
         subFields: v.optional(
           v.array(
             v.object({
@@ -72,6 +79,12 @@ export default defineSchema({
               type: v.string(),
               required: v.boolean(),
               placeholder: v.string(),
+              confidence: v.optional(v.number()),
+              source: v.optional(v.string()),
+              targetText: v.optional(v.string()),
+              contextText: v.optional(v.string()),
+              replacementText: v.optional(v.string()),
+              originalPlaceholder: v.optional(v.string()),
             })
           )
         ),

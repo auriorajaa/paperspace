@@ -25,6 +25,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import {
+  autoDetectFields,
+  type AutoDetectedField,
+} from "@/lib/auto-field-detector";
+import { detectPlaceholders } from "@/lib/placeholder-detector";
+import {
+  extractAllText,
+  preprocessTemplate,
+} from "@/lib/template-preprocessor";
+import { injectPlaceholders } from "@/lib/docx-placeholder-injector";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FileKind = "docx" | "pdf";
@@ -48,10 +58,10 @@ const STAGE_LABEL: Record<Stage, string> = {
 const STAGE_ORDER_PDF: Stage[] = [
   "splitting",
   "converting",
-  "uploading",
   "scanning",
+  "uploading",
 ];
-const STAGE_ORDER_DOCX: Stage[] = ["uploading", "scanning"];
+const STAGE_ORDER_DOCX: Stage[] = ["scanning", "uploading"];
 
 const MAX_PDF_PAGES = 50;
 const MAX_FILE_MB = 10;
@@ -665,6 +675,9 @@ export default function TemplateNewPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [detectionMode, setDetectionMode] = useState<"manual" | "auto">(
+    "manual"
+  );
 
   // FIX: nameRef so handleFile doesn't re-create on every keystroke
   const nameRef = useRef(name);
@@ -928,12 +941,23 @@ export default function TemplateNewPage() {
   }, [isProcessing]);
 
   // ── Core DOCX upload ─────────────────────────────────────────────────────────
-  const processDocx = async (docxFile: File): Promise<void> => {
+  /*
+  const processDocxLegacy = async (docxFile: File): Promise<void> => {
+    console.log(
+      "[processDocx] start — mode:",
+      detectionMode,
+      "file:",
+      docxFile.name
+    );
+
+    // ── Step 1: Upload ──────────────────────────────────────────────────────
     setStage("uploading");
     let uploadUrl: string;
     try {
       uploadUrl = await generateUploadUrl();
-    } catch {
+      console.log("[processDocx] upload URL obtained");
+    } catch (err) {
+      console.error("[processDocx] failed to get upload URL:", err);
       throw new Error(
         "Could not connect to storage. Please check your connection and try again."
       );
@@ -948,36 +972,141 @@ export default function TemplateNewPage() {
       body: docxFile,
     });
     if (!uploadRes.ok) {
+      console.error("[processDocx] upload failed, status:", uploadRes.status);
       throw new Error(`Upload failed (${uploadRes.status}). Please try again.`);
     }
     const { storageId } = await uploadRes.json();
+    console.log("[processDocx] upload OK, storageId:", storageId);
 
     const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
     const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
 
+    // ── Step 2: Scan ────────────────────────────────────────────────────────
     setStage("scanning");
 
-    // FIX (#6): wrap mammoth in its own try/catch with a clear message
+    // Read DOCX buffer once, use for two purposes
+    let docxBuffer: ArrayBuffer;
+    try {
+      docxBuffer = await docxFile.arrayBuffer();
+      console.log("[processDocx] buffer read, size:", docxBuffer.byteLength);
+    } catch (err) {
+      console.error("[processDocx] failed to read file buffer:", err);
+      throw new Error("Unable to read the document file.");
+    }
+
+    // ── MODE AUTO: L3 + L5 ──────────────────────────────────────────────────
+    if (detectionMode === "auto") {
+      console.log("[processDocx] mode AUTO — run autoDetectFields");
+
+      let autoFields: AutoDetectedField[] = [];
+      try {
+        autoFields = await autoDetectFields(docxBuffer);
+        console.log(
+          `[processDocx] autoDetectFields finished — ${autoFields.length} field(s) found:`,
+          autoFields.map(
+            (f) =>
+              `${f.name}(${f.type}, conf=${f.confidence.toFixed(2)}, src=${f.source})`
+          )
+        );
+      } catch (err) {
+        console.error("[processDocx] autoDetectFields error:", err);
+        throw new Error(
+          "Auto-detection failed — could not analyze document structure."
+        );
+      }
+
+      // Extract previewText also to store
+      let previewText = "";
+      try {
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({
+          arrayBuffer: docxBuffer,
+        });
+        previewText = result.value;
+        console.log("[processDocx] previewText length:", previewText.length);
+      } catch (err) {
+        // Non-fatal — preview is not required
+        console.warn(
+          "[processDocx] failed to extract previewText (non-fatal):",
+          err
+        );
+      }
+
+      // Save template with auto-detected fields
+      let templateId: string;
+      try {
+        templateId = await createTemplate({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          storageId,
+          fileUrl,
+          previewText,
+          tags: tags.length > 0 ? tags : undefined,
+          organizationId: organization?.id,
+          fields: autoFields.map((f) => ({
+            id: f.id,
+            name: f.name,
+            label: f.label,
+            type: f.type,
+            required: f.required,
+            placeholder: f.placeholder,
+            subFields: f.subFields?.map((sf) => ({
+              id: sf.id,
+              name: sf.name,
+              label: sf.label,
+              type: sf.type,
+              required: sf.required,
+              placeholder: sf.placeholder,
+            })),
+          })),
+        });
+        console.log("[processDocx] template saved, id:", templateId);
+      } catch (err) {
+        console.error("[processDocx] failed to save template:", err);
+        throw new Error("Could not save template. Please try again.");
+      }
+
+      toast.success(
+        autoFields.length > 0
+          ? `${autoFields.length} field(s) detected — please review before continuing`
+          : "Template saved — no fields were auto-detected, please review"
+      );
+
+      // Go to review page (not edit)
+      console.log("[processDocx] redirect to review page:", templateId);
+      router.push(`/templates/${templateId}/review`);
+      return;
+    }
+
+    // ── MODE MANUAL: old flow (detect {{placeholder}}) ──────────────────────
+    console.log("[processDocx] mode MANUAL — detectPlaceholders");
+
     let extractedText = "";
     try {
       const mammoth = await import("mammoth");
-      const buffer = await docxFile.arrayBuffer();
-      const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
+      const textResult = await mammoth.extractRawText({
+        arrayBuffer: docxBuffer,
+      });
       extractedText = textResult.value;
-    } catch {
+      console.log("[processDocx] extractedText length:", extractedText.length);
+    } catch (err) {
+      console.error("[processDocx] mammoth error:", err);
       throw new Error(
         "Unable to read the document — it may be corrupted or use an unsupported format."
       );
     }
 
-    // FIX (#6): wrap placeholder detection in its own try/catch
     let fields: ReturnType<
       (typeof import("@/lib/placeholder-detector"))["detectPlaceholders"]
     > = [];
     try {
       const { detectPlaceholders } = await import("@/lib/placeholder-detector");
       fields = detectPlaceholders(extractedText);
-    } catch {
+      console.log(
+        `[processDocx] detectPlaceholders: ${fields.length} field(s)`
+      );
+    } catch (err) {
+      console.error("[processDocx] detectPlaceholders error:", err);
       throw new Error(
         "Could not scan for placeholders — the document structure may be unsupported."
       );
@@ -1008,6 +1137,7 @@ export default function TemplateNewPage() {
         })),
       })),
     });
+    console.log("[processDocx] manual template saved, id:", templateId);
 
     toast.success(
       fields.length > 0
@@ -1018,6 +1148,241 @@ export default function TemplateNewPage() {
   };
 
   // ── Save handler ─────────────────────────────────────────────────────────────
+  */
+
+  const processDocx = async (docxFile: File): Promise<void> => {
+    console.log(
+      "[processDocx] start - mode:",
+      detectionMode,
+      "file:",
+      docxFile.name
+    );
+
+    let docxBuffer: ArrayBuffer;
+    try {
+      docxBuffer = await docxFile.arrayBuffer();
+      console.log("[processDocx] buffer read, size:", docxBuffer.byteLength);
+    } catch (err) {
+      console.error("[processDocx] failed to read file buffer:", err);
+      throw new Error("Unable to read the document file.");
+    }
+
+    setStage("scanning");
+    let preprocessedBuffer: ArrayBuffer;
+    let extractedText = "";
+    try {
+      preprocessedBuffer = await preprocessTemplate(docxBuffer);
+      extractedText = await extractAllText(preprocessedBuffer);
+      console.log("[processDocx] extractedText length:", extractedText.length);
+    } catch (err) {
+      console.error("[processDocx] preprocessing/extraction error:", err);
+      throw new Error(
+        "Unable to read the document - it may be corrupted or use an unsupported format."
+      );
+    }
+
+    const uploadDocxBuffer = async (
+      buffer: ArrayBuffer
+    ): Promise<{ storageId: string; fileUrl: string }> => {
+      setStage("uploading");
+      let uploadUrl: string;
+      try {
+        uploadUrl = await generateUploadUrl();
+        console.log("[processDocx] upload URL obtained");
+      } catch (err) {
+        console.error("[processDocx] failed to get upload URL:", err);
+        throw new Error(
+          "Could not connect to storage. Please check your connection and try again."
+        );
+      }
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        body: new Blob([buffer], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }),
+      });
+
+      if (!uploadRes.ok) {
+        console.error("[processDocx] upload failed, status:", uploadRes.status);
+        throw new Error(
+          `Upload failed (${uploadRes.status}). Please try again.`
+        );
+      }
+
+      const { storageId } = (await uploadRes.json()) as { storageId: string };
+      const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+      return {
+        storageId,
+        fileUrl: `${convexSiteUrl}/getFile?storageId=${storageId}`,
+      };
+    };
+
+    const serializeDetectedField = (field: AutoDetectedField) => ({
+      id: field.id,
+      name: field.name,
+      label: field.label,
+      type: field.type,
+      required: field.required,
+      placeholder: field.placeholder,
+      confidence: field.confidence,
+      source: field.source,
+      targetText: field.targetText,
+      contextText: field.contextText,
+      replacementText: field.replacementText,
+      originalPlaceholder: field.originalPlaceholder ?? field.placeholder,
+      subFields: field.subFields?.map((sf) => ({
+        id: sf.id,
+        name: sf.name,
+        label: sf.label,
+        type: sf.type,
+        required: sf.required,
+        placeholder: sf.placeholder,
+        confidence: sf.confidence,
+        source: sf.source,
+        targetText: sf.targetText,
+        contextText: sf.contextText,
+        replacementText: sf.replacementText,
+        originalPlaceholder: sf.originalPlaceholder ?? sf.placeholder,
+      })),
+    });
+
+    if (detectionMode === "auto") {
+      console.log("[processDocx] mode AUTO - run existing + structural scan");
+
+      const existingFields: AutoDetectedField[] =
+        detectPlaceholders(extractedText).map((field) => ({
+          id: field.id,
+          name: field.name,
+          label: field.label,
+          type: field.type,
+          required: field.required,
+          placeholder: field.placeholder,
+          confidence: 1,
+          source: "manual",
+          originalPlaceholder: field.placeholder,
+          subFields: field.subFields?.map((sf) => ({
+            id: sf.id,
+            name: sf.name,
+            label: sf.label,
+            type: sf.type,
+            required: sf.required,
+            placeholder: sf.placeholder,
+            confidence: 1,
+            source: "manual",
+            originalPlaceholder: sf.placeholder,
+          })),
+        }));
+
+      let autoFields: AutoDetectedField[] = [];
+      try {
+        autoFields = await autoDetectFields(preprocessedBuffer);
+        console.log(
+          `[processDocx] autoDetectFields finished - ${autoFields.length} field(s) found`
+        );
+      } catch (err) {
+        console.error("[processDocx] autoDetectFields error:", err);
+        throw new Error(
+          "Auto-detection failed - could not analyze document structure."
+        );
+      }
+
+      const mergedByName = new Map<string, AutoDetectedField>();
+      existingFields.forEach((field) => mergedByName.set(field.name, field));
+      autoFields.forEach((field) => {
+        if (!mergedByName.has(field.name)) mergedByName.set(field.name, field);
+      });
+      const mergedFields = [...mergedByName.values()];
+
+      const modifiedBuffer = await injectPlaceholders(
+        preprocessedBuffer,
+        mergedFields
+      );
+      const previewText = await extractAllText(modifiedBuffer).catch(
+        () => extractedText
+      );
+      const { storageId, fileUrl } = await uploadDocxBuffer(modifiedBuffer);
+
+      let templateId: string;
+      try {
+        templateId = await createTemplate({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          storageId,
+          fileUrl,
+          previewText,
+          sourceFileType: fileKind ?? "docx",
+          tags: tags.length > 0 ? tags : undefined,
+          organizationId: organization?.id,
+          fields: mergedFields.map(serializeDetectedField),
+        });
+        console.log("[processDocx] template saved, id:", templateId);
+      } catch (err) {
+        console.error("[processDocx] failed to save template:", err);
+        throw new Error("Could not save template. Please try again.");
+      }
+
+      toast.success(
+        mergedFields.length > 0
+          ? `${mergedFields.length} field(s) detected - please review before continuing`
+          : "Template saved - no fields were auto-detected, please review"
+      );
+
+      router.push(`/templates/${templateId}/review`);
+      return;
+    }
+
+    console.log("[processDocx] mode MANUAL - detectPlaceholders");
+    const fields = detectPlaceholders(extractedText);
+    console.log(`[processDocx] detectPlaceholders: ${fields.length} field(s)`);
+
+    const { storageId, fileUrl } = await uploadDocxBuffer(preprocessedBuffer);
+    const templateId = await createTemplate({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      storageId,
+      fileUrl,
+      previewText: extractedText,
+      sourceFileType: fileKind ?? "docx",
+      tags: tags.length > 0 ? tags : undefined,
+      organizationId: organization?.id,
+      fields: fields.map((f) => ({
+        id: f.id,
+        name: f.name,
+        label: f.label,
+        type: f.type,
+        required: f.required,
+        placeholder: f.placeholder,
+        source: "manual",
+        confidence: 1,
+        originalPlaceholder: f.placeholder,
+        subFields: f.subFields?.map((sf) => ({
+          id: sf.id,
+          name: sf.name,
+          label: sf.label,
+          type: sf.type,
+          required: sf.required,
+          placeholder: sf.placeholder,
+          source: "manual",
+          confidence: 1,
+          originalPlaceholder: sf.placeholder,
+        })),
+      })),
+    });
+    console.log("[processDocx] manual template saved, id:", templateId);
+
+    toast.success(
+      fields.length > 0
+        ? `Template created - ${fields.length} placeholder${fields.length !== 1 ? "s" : ""} detected`
+        : "Template created - add placeholders in the editor"
+    );
+    router.push(`/templates/${templateId}/edit`);
+  };
+
   const handleSave = async () => {
     if (isProcessing) return;
     setCriticalError("");
@@ -1506,6 +1871,202 @@ export default function TemplateNewPage() {
                 </div>
               )}
             </section>
+
+            {/* ── SECTION: Detection mode ──────────────────────────── */}
+            {file && !isProcessing && (
+              <section>
+                <div className="mb-3">
+                  <h2
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--text)" }}
+                  >
+                    {fileKind === "pdf" ? "3." : "2."} Field detection method
+                  </h2>
+                  <p
+                    className="text-xs mt-0.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Choose how the system finds fields that need to be filled
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Automatic */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetectionMode("auto");
+                      console.log("[UI] detectionMode set to: auto");
+                    }}
+                    className="flex flex-col gap-2 p-4 rounded-2xl text-left transition-all"
+                    style={{
+                      background:
+                        detectionMode === "auto"
+                          ? "var(--success-bg)"
+                          : "var(--bg-muted)",
+                      border: `1.5px solid ${
+                        detectionMode === "auto"
+                          ? "color-mix(in srgb, var(--success) 40%, transparent)"
+                          : "var(--border-subtle)"
+                      }`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                        style={{
+                          background:
+                            detectionMode === "auto"
+                              ? "color-mix(in srgb, var(--success) 20%, transparent)"
+                              : "var(--bg-input)",
+                          color:
+                            detectionMode === "auto"
+                              ? "var(--success)"
+                              : "var(--text-dim)",
+                        }}
+                      >
+                        Automatic
+                      </span>
+                      {detectionMode === "auto" && (
+                        <CheckIcon
+                          className="w-4 h-4"
+                          style={{ color: "var(--success)" }}
+                        />
+                      )}
+                    </div>
+                    <p
+                      className="text-xs font-medium"
+                      style={{
+                        color:
+                          detectionMode === "auto"
+                            ? "var(--success)"
+                            : "var(--text-secondary)",
+                      }}
+                    >
+                      Auto-detect fields
+                    </p>
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      The system reads the document structure (tables, label:___
+                      patterns) and determines fields automatically. Suitable
+                      for form documents such as invoices, contracts, work
+                      orders.
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {["Label : ___", "2-column table", "Repeating rows"].map(
+                        (t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded"
+                            style={{
+                              background:
+                                "color-mix(in srgb, var(--success) 12%, transparent)",
+                              color: "var(--success)",
+                              border:
+                                "0.5px solid color-mix(in srgb, var(--success) 25%, transparent)",
+                            }}
+                          >
+                            {t}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Manual */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetectionMode("manual");
+                      console.log("[UI] detectionMode set to: manual");
+                    }}
+                    className="flex flex-col gap-2 p-4 rounded-2xl text-left transition-all"
+                    style={{
+                      background:
+                        detectionMode === "manual"
+                          ? "var(--accent-soft)"
+                          : "var(--bg-muted)",
+                      border: `1.5px solid ${
+                        detectionMode === "manual"
+                          ? "var(--accent-border)"
+                          : "var(--border-subtle)"
+                      }`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                        style={{
+                          background:
+                            detectionMode === "manual"
+                              ? "color-mix(in srgb, var(--accent-light) 20%, transparent)"
+                              : "var(--bg-input)",
+                          color:
+                            detectionMode === "manual"
+                              ? "var(--accent-light)"
+                              : "var(--text-dim)",
+                        }}
+                      >
+                        Manual
+                      </span>
+                      {detectionMode === "manual" && (
+                        <CheckIcon
+                          className="w-4 h-4"
+                          style={{ color: "var(--accent-light)" }}
+                        />
+                      )}
+                    </div>
+                    <p
+                      className="text-xs font-medium"
+                      style={{
+                        color:
+                          detectionMode === "manual"
+                            ? "var(--accent-light)"
+                            : "var(--text-secondary)",
+                      }}
+                    >
+                      Define manually in editor
+                    </p>
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Open the editor and mark fields manually using the{" "}
+                      <code
+                        className="font-mono text-[10px] px-1 rounded"
+                        style={{
+                          background: "var(--bg-input)",
+                          color: "var(--accent-pale)",
+                        }}
+                      >
+                        {"{{field_name}}"}
+                      </code>{" "}
+                      format. Suitable if you already know exactly what fields
+                      are needed.
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {["{{name}}", "{{date}}", "{{#items}}"].map((t) => (
+                        <span
+                          key={t}
+                          className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--accent-light) 10%, transparent)",
+                            color: "var(--accent-pale)",
+                            border:
+                              "0.5px solid color-mix(in srgb, var(--accent-light) 20%, transparent)",
+                          }}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                </div>
+              </section>
+            )}
 
             {/* ── PDF loading state ──────────────────────────────────────── */}
             {fileKind === "pdf" &&

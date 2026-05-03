@@ -31,6 +31,7 @@ import {
   FolderInputIcon,
   AlignLeftIcon,
   PackageIcon,
+  ScanIcon,
 } from "lucide-react";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -704,7 +705,15 @@ function TemplateMenu({
             onEditFields();
           }}
         >
-          <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Edit fields
+          <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Open in Editor
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/templates/${template._id}/review`);
+          }}
+        >
+          <ScanIcon className="w-3.5 h-3.5 mr-2" /> Review fields
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={(e) => {
@@ -1042,7 +1051,7 @@ function TemplateGridCard({
                   onClick={handleEditFields}
                   remainingMs={getCooldownMs()}
                   isOnCooldown={!canEnterEditor()}
-                  label="Edit"
+                  label="Editor"
                   icon="edit"
                 />
               </div>
@@ -1069,22 +1078,22 @@ function TemplateGridCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  router.push(`/templates/${template._id}/connect`);
+                  router.push(`/templates/${template._id}/review`);
                 }}
-                className="flex items-center justify-center py-1.5 px-2.5 rounded-xl text-[11px] font-medium transition-all"
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium transition-all"
                 style={{
-                  background: "rgba(52,211,153,0.07)",
-                  color: "var(--success)",
-                  border: "1px solid rgba(52,211,153,0.15)",
+                  background: "rgba(99,102,241,0.07)",
+                  color: "var(--accent-light)",
+                  border: "1px solid rgba(99,102,241,0.18)",
                 }}
                 onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(52,211,153,0.14)")
+                  (e.currentTarget.style.background = "rgba(99,102,241,0.14)")
                 }
                 onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(52,211,153,0.07)")
+                  (e.currentTarget.style.background = "rgba(99,102,241,0.07)")
                 }
               >
-                <LinkIcon className="w-3 h-3" />
+                <ScanIcon className="w-3 h-3" /> Review
               </button>
             </div>
           )}
@@ -1275,23 +1284,45 @@ function TemplateListRow({
           onClick={(e) => e.stopPropagation()}
         >
           {!selectMode && (
-            <button
-              onClick={() => router.push(`/templates/${template._id}/fill`)}
-              className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
-              style={{
-                background: "var(--accent-bg)",
-                color: "var(--accent-light)",
-                border: "1px solid var(--accent-border)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "var(--accent-bg-hover)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "var(--accent-bg)")
-              }
-            >
-              <PlayIcon className="w-3 h-3" /> Use
-            </button>
+            <>
+              {/* Use */}
+              <button
+                onClick={() => router.push(`/templates/${template._id}/fill`)}
+                className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                style={{
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-light)",
+                  border: "1px solid var(--accent-border)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "var(--accent-bg-hover)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "var(--accent-bg)")
+                }
+              >
+                <PlayIcon className="w-3 h-3" /> Use
+              </button>
+
+              {/* Review ← BARU */}
+              <button
+                onClick={() => router.push(`/templates/${template._id}/review`)}
+                className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                style={{
+                  background: "rgba(99,102,241,0.07)",
+                  color: "var(--accent-light)",
+                  border: "1px solid rgba(99,102,241,0.18)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(99,102,241,0.14)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "rgba(99,102,241,0.07)")
+                }
+              >
+                <ScanIcon className="w-3 h-3" /> Review
+              </button>
+            </>
           )}
           <TemplateMenu
             template={template}
