@@ -20,7 +20,7 @@ const features = [
     color: "#818cf8",
     bg: "rgba(99,102,241,0.1)",
     border: "rgba(99,102,241,0.18)",
-    title: "Real-time ONLYOFFICE editor",
+    title: "Real-time document editor",
     desc: "Professional document editing in the browser — no installs needed.",
   },
   {
@@ -194,7 +194,6 @@ export default async function SignInPage() {
               {[
                 { value: "100%", label: "In-browser" },
                 { value: "AI", label: "Summaries" },
-                // { value: "∞", label: "Documents" },
               ].map((s) => (
                 <div key={s.label}>
                   <p

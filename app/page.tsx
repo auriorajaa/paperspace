@@ -323,7 +323,7 @@ export default async function LandingPage() {
                       className="text-[11px] font-medium truncate"
                       style={{ color: "var(--text-secondary)" }}
                     >
-                      Alex Johnson
+                      Alex Setyabudi
                     </span>
                   </div>
                 </div>
@@ -509,7 +509,6 @@ export default async function LandingPage() {
           {[
             { value: "100%", label: "Browser-based, zero install" },
             { value: "AI", label: "Auto-summarises every doc" },
-            { value: "∞", label: "Documents & templates" },
             { value: "5 min", label: "Google Forms auto-sync" },
             { value: "Live", label: "Real-time collaboration" },
           ].map((s) => (
@@ -1113,7 +1112,6 @@ export default async function LandingPage() {
               </p>
               <ul className="space-y-3">
                 {[
-                  "6 field types: text, date, number, email, loop, condition",
                   "Upload .docx or convert from .pdf — placeholders detected automatically",
                   "Import CSV rows → each row becomes a unique, filled document",
                   "Download all generated docs as a .zip archive",

@@ -2929,6 +2929,8 @@ export default function DocumentsPage() {
   const [view, setView] = useState<ViewMode>("grid");
   const [showArchived, setShowArchived] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [pageReady, setPageReady] = useState(false);
+
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -2938,6 +2940,12 @@ export default function DocumentsPage() {
 
   const lastSelectedIdx = useRef<number>(-1);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Page-load cooldown — cards non-interactive for ~2.5s
+  useEffect(() => {
+    const t = setTimeout(() => setPageReady(true), 1900);
+    return () => clearTimeout(t);
+  }, []);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const skip = !(isLoaded && isSignedIn);
@@ -3039,7 +3047,9 @@ export default function DocumentsPage() {
   }, [selected.size]);
 
   const isLoading =
-    allDocs === undefined || (showArchived && archivedDocs === undefined);
+    !pageReady ||
+    allDocs === undefined ||
+    (showArchived && archivedDocs === undefined);
   const totalDocs = allDocs?.length ?? 0;
   const archivedCount = archivedDocs?.length ?? 0;
   const sharedCount = allDocs?.filter((d) => d.organizationId).length ?? 0;

@@ -361,15 +361,15 @@ function FieldRow({
               </div>
 
               <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {field.source && field.source !== "manual" && (
+                {/* {field.source && field.source !== "manual" && (
                   <span
                     className="text-[10px]"
                     style={{ color: "var(--text-dim)" }}
                   >
                     From: {SOURCE_LABELS[field.source] ?? field.source}
                   </span>
-                )}
-                {field.confidence !== undefined && (
+                )} */}
+                {/* {field.confidence !== undefined && (
                   <span
                     className="text-[10px] font-medium"
                     style={{ color: confidenceColor(field.confidence) }}
@@ -377,7 +377,7 @@ function FieldRow({
                     Confidence: {confidenceLabel(field.confidence)} (
                     {Math.round(field.confidence * 100)}%)
                   </span>
-                )}
+                )} */}
               </div>
 
               {field.type === "loop" &&
