@@ -25,10 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import {
-  autoDetectFields,
-  type AutoDetectedField,
-} from "@/lib/auto-field-detector";
+import type { AutoDetectedField } from "@/lib/auto-field-detector";
 import { detectPlaceholders } from "@/lib/placeholder-detector";
 import {
   extractAllText,
@@ -1254,38 +1251,63 @@ export default function TemplateNewPage() {
     if (detectionMode === "auto") {
       console.log("[processDocx] mode AUTO - run existing + structural scan");
 
-      const existingFields: AutoDetectedField[] =
-        detectPlaceholders(extractedText).map((field) => ({
-          id: field.id,
-          name: field.name,
-          label: field.label,
-          type: field.type,
-          required: field.required,
-          placeholder: field.placeholder,
+      const existingFields: AutoDetectedField[] = detectPlaceholders(
+        extractedText
+      ).map((field) => ({
+        id: field.id,
+        name: field.name,
+        label: field.label,
+        type: field.type,
+        required: field.required,
+        placeholder: field.placeholder,
+        confidence: 1,
+        source: "manual",
+        originalPlaceholder: field.placeholder,
+        subFields: field.subFields?.map((sf) => ({
+          id: sf.id,
+          name: sf.name,
+          label: sf.label,
+          type: sf.type,
+          required: sf.required,
+          placeholder: sf.placeholder,
           confidence: 1,
           source: "manual",
-          originalPlaceholder: field.placeholder,
-          subFields: field.subFields?.map((sf) => ({
-            id: sf.id,
-            name: sf.name,
-            label: sf.label,
-            type: sf.type,
-            required: sf.required,
-            placeholder: sf.placeholder,
-            confidence: 1,
-            source: "manual",
-            originalPlaceholder: sf.placeholder,
-          })),
-        }));
+          originalPlaceholder: sf.placeholder,
+        })),
+      }));
 
       let autoFields: AutoDetectedField[] = [];
       try {
-        autoFields = await autoDetectFields(preprocessedBuffer);
+        const detectForm = new FormData();
+        detectForm.append(
+          "file",
+          new Blob([preprocessedBuffer], {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          }),
+          "document.docx"
+        );
+
+        const detectRes = await fetch("/api/detect-fields", {
+          method: "POST",
+          body: detectForm,
+        });
+
+        if (!detectRes.ok) {
+          const errData = await detectRes.json().catch(() => ({}));
+          throw new Error(
+            errData.error ?? `Detection failed (${detectRes.status})`
+          );
+        }
+
+        const { fields: detectedFields } = (await detectRes.json()) as {
+          fields: AutoDetectedField[];
+        };
+        autoFields = detectedFields ?? [];
         console.log(
-          `[processDocx] autoDetectFields finished - ${autoFields.length} field(s) found`
+          `[processDocx] /api/detect-fields returned ${autoFields.length} field(s)`
         );
       } catch (err) {
-        console.error("[processDocx] autoDetectFields error:", err);
+        console.error("[processDocx] detect-fields API error:", err);
         throw new Error(
           "Auto-detection failed - could not analyze document structure."
         );
@@ -1643,7 +1665,7 @@ export default function TemplateNewPage() {
                   className="text-sm font-semibold"
                   style={{ color: "var(--text)" }}
                 >
-                  1. Upload file
+                  Upload file
                 </h2>
                 <p
                   className="text-xs mt-0.5"
@@ -1880,7 +1902,7 @@ export default function TemplateNewPage() {
                     className="text-sm font-semibold"
                     style={{ color: "var(--text)" }}
                   >
-                    {fileKind === "pdf" ? "3." : "2."} Field detection method
+                    {fileKind === "pdf" ? "" : ""} Field detection method
                   </h2>
                   <p
                     className="text-xs mt-0.5"
@@ -2092,7 +2114,7 @@ export default function TemplateNewPage() {
                 </div>
               )}
 
-            {/* ── SECTION 2: Page selection (PDF only) ──────────────────── */}
+            {/* ── SECTION 3: Page selection (PDF only) ──────────────────── */}
             {fileKind === "pdf" && pdfThumbnails.length > 0 && (
               <section>
                 <div className="mb-3">
@@ -2100,7 +2122,7 @@ export default function TemplateNewPage() {
                     className="text-sm font-semibold"
                     style={{ color: "var(--text)" }}
                   >
-                    2. Choose pages
+                    Choose pages
                   </h2>
                   <p
                     className="text-xs mt-0.5"
@@ -2176,7 +2198,7 @@ export default function TemplateNewPage() {
               </section>
             )}
 
-            {/* ── SECTION 3: Template details ───────────────────────────── */}
+            {/* ── SECTION 4: Template details ───────────────────────────── */}
             {file && (
               <section>
                 <div className="mb-3">
@@ -2184,7 +2206,7 @@ export default function TemplateNewPage() {
                     className="text-sm font-semibold"
                     style={{ color: "var(--text)" }}
                   >
-                    {fileKind === "pdf" ? "3." : "2."} Template details
+                    {fileKind === "pdf" ? "" : ""} Template details
                   </h2>
                   <p
                     className="text-xs mt-0.5"

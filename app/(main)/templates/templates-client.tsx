@@ -1960,6 +1960,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const [pageReady, setPageReady] = useState(false);
   const { isLoaded, isSignedIn } = useAuth();
   const templates = useQuery(
     api.templates.getAll,
@@ -2060,6 +2061,11 @@ export default function TemplatesPage() {
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE
   );
+
+  useEffect(() => {
+    const t = setTimeout(() => setPageReady(true), 1900);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -2240,7 +2246,7 @@ export default function TemplatesPage() {
     contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const isLoading = templates === undefined;
+  const isLoading = !pageReady || templates === undefined;
   const hasFilters = !!(search || activeTag || activeFolder);
   const someSelected = selected.size > 0;
   const allPageSelected =
