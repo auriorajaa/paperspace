@@ -104,22 +104,25 @@ interface TextSpanRange {
   end: number;
 }
 
+// Key used to store delegated hover handlers directly on the container element.
+// Cast via `unknown` to satisfy TS strict mode (no index signature on HTMLElement).
+const DOCX_CHIP_HOVER_KEY = "__lcpDocxChipHover";
+
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function fieldMarkerLabel(field: ReviewField) {
   const label = field.label?.trim() || field.name.replace(/_/g, " ");
-  return label.length > 24 ? `${label.slice(0, 23)}...` : label;
+  return label.length > 24 ? `${label.slice(0, 23)}…` : label;
 }
 
 function getFieldTokens(field: ReviewField) {
   const tokens = new Set<string>();
-
   if (field.type === "loop") {
     tokens.add(`{{#${field.name}}}`);
     tokens.add(`{{/${field.name}}}`);
-    field.subFields?.forEach((subField) => tokens.add(`{{${subField.name}}}`));
+    field.subFields?.forEach((sf) => tokens.add(`{{${sf.name}}}`));
   } else if (field.type === "condition") {
     tokens.add(`{{#${field.name}}}`);
     tokens.add(`{{/${field.name}}}`);
@@ -129,22 +132,19 @@ function getFieldTokens(field: ReviewField) {
   } else {
     tokens.add(`{{${field.name}}}`);
   }
-
   if (field.originalPlaceholder) tokens.add(field.originalPlaceholder);
   if (field.replacementText) tokens.add(field.replacementText);
-  if (field.targetText && field.targetText.trim().length > 1) {
+  if (field.targetText && field.targetText.trim().length > 1)
     tokens.add(field.targetText.trim());
-  }
-
-  return [...tokens].filter((token) => token.trim().length > 1);
+  return [...tokens].filter((t) => t.trim().length > 1);
 }
 
 function isPdfTextLayerNode(node: Node): boolean {
-  const element =
+  const el =
     node.nodeType === Node.ELEMENT_NODE
       ? (node as Element)
       : node.parentElement;
-  return Boolean(element?.closest(".pdf-review-text-layer"));
+  return Boolean(el?.closest(".pdf-review-text-layer"));
 }
 
 function unwrapHighlights(container: HTMLElement) {
@@ -160,11 +160,9 @@ function unwrapHighlights(container: HTMLElement) {
 function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
   unwrapHighlights(container);
   if (!fields.length) return;
-
   fields.forEach((field) => {
     getFieldTokens(field).forEach((token) => {
-      const pattern = new RegExp(escapeRegex(token), "g");
-      walkAndReplace(container, pattern, field);
+      walkAndReplace(container, new RegExp(escapeRegex(token), "g"), field);
     });
   });
 }
@@ -172,23 +170,17 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
 function walkAndReplace(node: Node, pattern: RegExp, field: ReviewField) {
   if (node.nodeType === Node.TEXT_NODE) {
     if (isPdfTextLayerNode(node)) return;
-
     const text = node.textContent ?? "";
     if (!pattern.test(text)) return;
     pattern.lastIndex = 0;
-
     const parent = node.parentNode;
     if (!parent) return;
-
     const parts: Node[] = [];
     let idx = 0;
     let match: RegExpExecArray | null;
-
     while ((match = pattern.exec(text)) !== null) {
-      if (match.index > idx) {
+      if (match.index > idx)
         parts.push(document.createTextNode(text.slice(idx, match.index)));
-      }
-
       const mark = document.createElement("span");
       mark.className = "field-highlight";
       mark.dataset.fieldId = field.id;
@@ -200,44 +192,46 @@ function walkAndReplace(node: Node, pattern: RegExp, field: ReviewField) {
       parts.push(mark);
       idx = pattern.lastIndex;
     }
-
-    if (idx < text.length) {
-      parts.push(document.createTextNode(text.slice(idx)));
-    }
-
+    if (idx < text.length) parts.push(document.createTextNode(text.slice(idx)));
     for (const part of parts) parent.insertBefore(part, node);
     parent.removeChild(node);
     return;
   }
-
   if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-  const element = node as Element;
+  const el = node as Element;
   if (
-    ["SCRIPT", "STYLE", "TEXTAREA"].includes(element.tagName) ||
-    element.classList.contains("field-highlight") ||
-    element.classList.contains("docx-review-field-layer") ||
-    element.classList.contains("pdf-review-field-layer") ||
-    element.classList.contains("pdf-review-text-layer")
-  ) {
+    ["SCRIPT", "STYLE", "TEXTAREA"].includes(el.tagName) ||
+    el.classList.contains("field-highlight") ||
+    el.classList.contains("docx-review-field-layer") ||
+    el.classList.contains("pdf-review-field-layer") ||
+    el.classList.contains("pdf-review-text-layer")
+  )
     return;
-  }
-
-  for (const child of Array.from(node.childNodes)) {
+  for (const child of Array.from(node.childNodes))
     walkAndReplace(child, pattern, field);
-  }
 }
 
 function clearPdfFieldOverlays(container: HTMLElement) {
   container
     .querySelectorAll(".pdf-review-field-layer")
-    .forEach((overlay) => overlay.remove());
+    .forEach((el) => el.remove());
 }
 
 function clearDocxFieldOverlays(container: HTMLElement) {
+  // Remove delegated hover listeners before destroying the overlay element.
+  const stored = (container as unknown as Record<string, unknown>)[
+    DOCX_CHIP_HOVER_KEY
+  ] as { over: EventListener; leave: EventListener } | undefined;
+  if (stored) {
+    container.removeEventListener("mouseover", stored.over);
+    container.removeEventListener("mouseleave", stored.leave);
+    delete (container as unknown as Record<string, unknown>)[
+      DOCX_CHIP_HOVER_KEY
+    ];
+  }
   container
     .querySelectorAll(".docx-review-field-layer")
-    .forEach((overlay) => overlay.remove());
+    .forEach((el) => el.remove());
 }
 
 function relativeRect(rect: DOMRect, parentRect: DOMRect): RelativeRect {
@@ -268,6 +262,9 @@ function addPdfFieldBand(
   overlay.appendChild(band);
 }
 
+// Chips are always visible and positioned ABOVE the highlighted rect so they
+// never obscure the text they label. They fall back to below when there is
+// not enough room above, and are centred horizontally over the rect.
 function addFieldChip(
   overlay: HTMLElement,
   field: ReviewField,
@@ -276,25 +273,16 @@ function addFieldChip(
   className: string
 ) {
   const label = fieldMarkerLabel(field);
-  const chipWidth = clamp(label.length * 5.8 + 22, 54, 132);
+  const chipWidth = clamp(label.length * 5.8 + 22, 54, 140);
   const chipHeight = 18;
-  const gutter = 7;
+  const gap = 4;
 
-  let left = rect.left - chipWidth - gutter;
-  let top = rect.top + rect.height / 2 - chipHeight / 2;
-
-  if (left < 4) {
-    const rightSide = rect.right + gutter;
-    if (rightSide + chipWidth <= bounds.width - 4) {
-      left = rightSide;
-    } else {
-      left = clamp(rect.left, 4, bounds.width - chipWidth - 4);
-      top = rect.top - chipHeight - 4;
-      if (top < 4) top = rect.bottom + 4;
-    }
-  }
-
+  let top = rect.top - chipHeight - gap;
+  if (top < 4) top = rect.bottom + gap;
   top = clamp(top, 4, bounds.height - chipHeight - 4);
+
+  let left = rect.left + rect.width / 2 - chipWidth / 2;
+  left = clamp(left, 4, bounds.width - chipWidth - 4);
 
   const chip = document.createElement("div");
   chip.className = className;
@@ -307,6 +295,26 @@ function addFieldChip(
   chip.style.top = `${top}px`;
   chip.style.width = `${chipWidth}px`;
   overlay.appendChild(chip);
+}
+
+// When hovering a band: matching chip pops, others dim.
+// Pass null to reset all to resting state.
+function updateChipStates(
+  overlay: HTMLElement,
+  chipSelector: string,
+  activeFieldId: string | null
+) {
+  overlay.querySelectorAll<HTMLElement>(chipSelector).forEach((chip) => {
+    if (!activeFieldId) {
+      chip.classList.remove("chip-active", "chip-dimmed");
+    } else if (chip.dataset.fieldId === activeFieldId) {
+      chip.classList.add("chip-active");
+      chip.classList.remove("chip-dimmed");
+    } else {
+      chip.classList.add("chip-dimmed");
+      chip.classList.remove("chip-active");
+    }
+  });
 }
 
 function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
@@ -326,26 +334,21 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
     const pageRect = pageEl.getBoundingClientRect();
     const spans = Array.from(
       textLayer.querySelectorAll<HTMLElement>("span")
-    ).filter((span) => {
-      const text = span.textContent ?? "";
-      return text.length > 0 && span.getClientRects().length > 0;
-    });
+    ).filter(
+      (span) =>
+        (span.textContent ?? "").length > 0 && span.getClientRects().length > 0
+    );
     if (!spans.length) return;
 
     const ranges: TextSpanRange[] = [];
     let cursor = 0;
     spans.forEach((span) => {
       const text = span.textContent ?? "";
-      ranges.push({
-        span,
-        text,
-        start: cursor,
-        end: cursor + text.length,
-      });
+      ranges.push({ span, text, start: cursor, end: cursor + text.length });
       cursor += text.length;
     });
 
-    const pageText = ranges.map((range) => range.text).join("");
+    const pageText = ranges.map((r) => r.text).join("");
     if (!pageText.trim()) return;
 
     const overlay = document.createElement("div");
@@ -357,20 +360,19 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
 
     fields.forEach((field) => {
       getFieldTokens(field).forEach((token) => {
-        const trimmedToken = token.trim();
-        if (!trimmedToken.includes("{{") && trimmedToken.length < 3) return;
+        const trimmed = token.trim();
+        if (!trimmed.includes("{{") && trimmed.length < 3) return;
 
         let index = pageText.indexOf(token);
         while (index !== -1) {
           const matchEnd = index + token.length;
           const hitRanges = ranges.filter(
-            (range) => range.end > index && range.start < matchEnd
+            (r) => r.end > index && r.start < matchEnd
           );
-
           const rects = hitRanges
-            .flatMap((range) => Array.from(range.span.getClientRects()))
-            .map((rect) => relativeRect(rect, pageRect))
-            .filter((rect) => rect.width > 0 && rect.height > 0);
+            .flatMap((r) => Array.from(r.span.getClientRects()))
+            .map((r) => relativeRect(r, pageRect))
+            .filter((r) => r.width > 0 && r.height > 0);
 
           rects.forEach((rect) => {
             const key = [
@@ -394,10 +396,7 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
               overlay,
               field,
               firstRect,
-              {
-                width: pageEl.clientWidth,
-                height: pageEl.clientHeight,
-              },
+              { width: pageEl.clientWidth, height: pageEl.clientHeight },
               "pdf-field-chip"
             );
           }
@@ -407,11 +406,32 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
       });
     });
 
-    if (!overlay.childElementCount) overlay.remove();
+    if (!overlay.childElementCount) {
+      overlay.remove();
+      return;
+    }
+
+    // Bands capture pointer events; chips are passive (pointer-events: none).
+    overlay.addEventListener("mouseover", (e: MouseEvent) => {
+      const band = (e.target as HTMLElement).closest<HTMLElement>(
+        ".pdf-field-band"
+      );
+      updateChipStates(
+        overlay,
+        ".pdf-field-chip",
+        band?.dataset.fieldId ?? null
+      );
+    });
+    overlay.addEventListener("mouseleave", () => {
+      updateChipStates(overlay, ".pdf-field-chip", null);
+    });
   });
 }
 
-function renderDocxFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
+function renderDocxFieldOverlays(
+  container: HTMLElement,
+  fields: ReviewField[]
+) {
   clearDocxFieldOverlays(container);
   if (!fields.length) return;
 
@@ -420,7 +440,7 @@ function renderDocxFieldOverlays(container: HTMLElement, fields: ReviewField[]) 
   );
   if (!highlights.length) return;
 
-  const fieldById = new Map(fields.map((field) => [field.id, field]));
+  const fieldById = new Map(fields.map((f) => [f.id, f]));
   const overlay = document.createElement("div");
   overlay.className = "docx-review-field-layer";
   container.appendChild(overlay);
@@ -431,13 +451,10 @@ function renderDocxFieldOverlays(container: HTMLElement, fields: ReviewField[]) 
   highlights.forEach((highlight) => {
     const fieldId = highlight.dataset.fieldId;
     if (!fieldId || renderedChips.has(fieldId)) return;
-
     const field = fieldById.get(fieldId);
     if (!field) return;
-
     const rect = highlight.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
-
     renderedChips.add(fieldId);
     addFieldChip(
       overlay,
@@ -451,17 +468,41 @@ function renderDocxFieldOverlays(container: HTMLElement, fields: ReviewField[]) 
     );
   });
 
-  if (!overlay.childElementCount) overlay.remove();
+  if (!overlay.childElementCount) {
+    overlay.remove();
+    return;
+  }
+
+  // Hover delegation via body container — highlights are inside the text flow,
+  // while chips live in the separate overlay div.
+  const overHandler: EventListener = (e) => {
+    const highlight = (e.target as HTMLElement).closest<HTMLElement>(
+      ".field-highlight"
+    );
+    updateChipStates(
+      overlay,
+      ".docx-field-chip",
+      highlight?.dataset.fieldId ?? null
+    );
+  };
+  const leaveHandler: EventListener = () => {
+    updateChipStates(overlay, ".docx-field-chip", null);
+  };
+
+  (container as unknown as Record<string, unknown>)[DOCX_CHIP_HOVER_KEY] = {
+    over: overHandler,
+    leave: leaveHandler,
+  };
+  container.addEventListener("mouseover", overHandler);
+  container.addEventListener("mouseleave", leaveHandler);
 }
 
 function refreshFieldMarkers(container: HTMLElement, fields: ReviewField[]) {
   clearDocxFieldOverlays(container);
-
   if (container.querySelector(".pdf-review-page")) {
     renderPdfFieldOverlays(container, fields);
     return;
   }
-
   clearPdfFieldOverlays(container);
   applyHighlights(container, fields);
   renderDocxFieldOverlays(container, fields);
@@ -475,7 +516,6 @@ function positionForSelection(rect: DOMRect): { x: number; y: number } {
   const menuWidth = 288;
   const menuHeight = 184;
   const margin = 12;
-
   const rightX = rect.right + 14 + menuWidth / 2;
   const leftX = rect.left - 14 - menuWidth / 2;
   let x =
@@ -484,13 +524,14 @@ function positionForSelection(rect: DOMRect): { x: number; y: number } {
       : leftX - menuWidth / 2 > margin
         ? leftX
         : rect.left + rect.width / 2;
-
   let y = rect.top;
-  if (y + menuHeight > window.innerHeight - margin) {
+  if (y + menuHeight > window.innerHeight - margin)
     y = window.innerHeight - margin - menuHeight;
-  }
-  x = clamp(x, margin + menuWidth / 2, window.innerWidth - margin - menuWidth / 2);
-
+  x = clamp(
+    x,
+    margin + menuWidth / 2,
+    window.innerWidth - margin - menuWidth / 2
+  );
   return { x, y: Math.max(margin, y) };
 }
 
@@ -503,12 +544,10 @@ async function convertDocxToPdf(buffer: ArrayBuffer): Promise<ArrayBuffer> {
     }),
     "preview.docx"
   );
-
   const response = await fetch("/api/convert/docx-to-pdf", {
     method: "POST",
     body: formData,
   });
-
   if (!response.ok) {
     let message = "Failed to convert document preview.";
     try {
@@ -520,31 +559,77 @@ async function convertDocxToPdf(buffer: ArrayBuffer): Promise<ArrayBuffer> {
     }
     throw new Error(message);
   }
-
   return response.arrayBuffer();
+}
+
+// ── Wait for the container (or its nearest measured ancestor) to have a real
+// layout width before we calculate the PDF render scale.  Without this, the
+// canvas is sized against clientWidth = 0 and the result looks blurry / tiny.
+function waitForContainerWidth(
+  container: HTMLElement,
+  minWidth = 160,
+  timeoutMs = 3000
+): Promise<void> {
+  const measure = () =>
+    container.clientWidth ||
+    container.parentElement?.clientWidth ||
+    container.closest<HTMLElement>(
+      ".overflow-hidden, .overflow-auto, [class*='flex-1']"
+    )?.clientWidth ||
+    0;
+
+  if (measure() >= minWidth) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      observer.disconnect();
+      resolve();
+    };
+    const observer = new ResizeObserver(() => {
+      if (measure() >= minWidth) done();
+    });
+    observer.observe(container);
+    if (container.parentElement) observer.observe(container.parentElement);
+    setTimeout(done, timeoutMs);
+  });
 }
 
 async function renderPdfPreview(
   pdfBuffer: ArrayBuffer,
   container: HTMLElement
 ) {
+  await waitForContainerWidth(container);
+
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(pdfBuffer),
-  });
-  const pdf = (await loadingTask.promise) as unknown as PdfDocument;
-  const TextLayer =
-    pdfjsLib.TextLayer as unknown as PdfTextLayerConstructor;
+  const pdf = (await pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) })
+    .promise) as unknown as PdfDocument;
+  const TextLayer = pdfjsLib.TextLayer as unknown as PdfTextLayerConstructor;
 
   container.innerHTML = "";
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-      const page = await pdf.getPage(pageNumber);
+      // Per-page isolation: one bad page must not abort the whole document.
+      let page: PdfPage | null = null;
+      try {
+        page = await pdf.getPage(pageNumber);
+      } catch {
+        const errEl = document.createElement("div");
+        errEl.className = "pdf-review-page pdf-review-page--error";
+        container.appendChild(errEl);
+        continue;
+      }
+
+      // Derive scale from the widest measurement available at render time.
+      const rawWidth =
+        container.clientWidth || container.parentElement?.clientWidth || 0;
+      const availableWidth = Math.max(rawWidth - 48, 320);
       const baseViewport = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(container.clientWidth - 48, 320);
       const scale = Math.min(
         1.6,
         Math.max(0.55, availableWidth / baseViewport.width)
@@ -569,41 +654,51 @@ async function renderPdfPreview(
       if (!ctx) continue;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const textLayer = document.createElement("div");
-      textLayer.className = "pdf-review-text-layer textLayer";
-      textLayer.style.width = `${viewport.width}px`;
-      textLayer.style.height = `${viewport.height}px`;
-      textLayer.style.setProperty("--total-scale-factor", String(scale));
+      const textLayerEl = document.createElement("div");
+      textLayerEl.className = "pdf-review-text-layer textLayer";
+      textLayerEl.style.width = `${viewport.width}px`;
+      textLayerEl.style.height = `${viewport.height}px`;
+      textLayerEl.style.setProperty("--total-scale-factor", String(scale));
 
       pageEl.appendChild(canvas);
-      pageEl.appendChild(textLayer);
+      pageEl.appendChild(textLayerEl);
       container.appendChild(pageEl);
 
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const textContent = await page.getTextContent();
-      await new TextLayer({
-        textContentSource: textContent,
-        container: textLayer,
-        viewport,
-      }).render();
+      try {
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      } catch {
+        continue;
+      }
+
+      // Text layer is best-effort; overlays degrade gracefully without it.
+      try {
+        const textContent = await page.getTextContent();
+        await new TextLayer({
+          textContentSource: textContent,
+          container: textLayerEl,
+          viewport,
+        }).render();
+      } catch {
+        // Canvas is still rendered; silently skip the text layer.
+      }
     }
   } finally {
     await pdf.destroy();
   }
 }
 
-async function looksLikePdfConvertedDocx(buffer: ArrayBuffer): Promise<boolean> {
+async function looksLikePdfConvertedDocx(
+  buffer: ArrayBuffer
+): Promise<boolean> {
   try {
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(buffer);
     const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
     if (!xml) return false;
-
     const anchorCount = xml.match(/<wp:anchor\b/g)?.length ?? 0;
     const drawingCount = xml.match(/<w:drawing\b/g)?.length ?? 0;
     const textBoxCount =
       xml.match(/<(?:w:)?txbxContent\b|<wps:txbx\b/g)?.length ?? 0;
-
     return anchorCount > 8 || textBoxCount > 8 || drawingCount > 40;
   } catch {
     return false;
@@ -623,7 +718,9 @@ export default function LightDocxPreview({
   const fieldsRef = useRef(fields);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(null);
+  const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(
+    null
+  );
   const [loadingLabel, setLoadingLabel] = useState("Loading preview...");
 
   useEffect(() => {
@@ -632,16 +729,14 @@ export default function LightDocxPreview({
 
   useEffect(() => {
     if (!docxBuffer || !bodyRef.current || !styleRef.current) return;
-
     let cancelled = false;
     const body = bodyRef.current;
     const styles = styleRef.current;
-
     setLoading(true);
     setError(null);
 
     const renderPdfFallback = async () => {
-      setLoadingLabel("Preparing exact preview...");
+      setLoadingLabel("Preparing exact preview…");
       body.innerHTML = "";
       styles.innerHTML = "";
       const pdfBuffer = await convertDocxToPdf(docxBuffer);
@@ -654,14 +749,13 @@ export default function LightDocxPreview({
     };
 
     const renderDocx = async () => {
-      setLoadingLabel("Loading preview...");
+      setLoadingLabel("Loading preview…");
       body.innerHTML = "";
       styles.innerHTML = "";
       const { renderAsync } = await import("docx-preview");
       const blob = new Blob([docxBuffer], {
         type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
-
       await renderAsync(blob, body, styles, {
         className: "docx-review",
         inWrapper: true,
@@ -680,12 +774,22 @@ export default function LightDocxPreview({
       try {
         if (await looksLikePdfConvertedDocx(docxBuffer)) return true;
 
+        // Broken images are a strong signal that docx-preview failed to embed assets.
+        const imgs = Array.from(body.querySelectorAll<HTMLImageElement>("img"));
+        const brokenRatio =
+          imgs.length > 0
+            ? imgs.filter((img) => !img.complete || img.naturalWidth === 0)
+                .length / imgs.length
+            : 0;
+        if (brokenRatio > 0.3) return true;
+
         const { extractAllText } = await import("@/lib/template-preprocessor");
         const expectedText = (await extractAllText(docxBuffer)).trim();
         const renderedText = body.innerText.trim();
+        // 0.55 threshold: falls back sooner for partially-rendered documents.
         return (
           expectedText.length > 200 &&
-          renderedText.length < expectedText.length * 0.45
+          renderedText.length < expectedText.length * 0.55
         );
       } catch {
         return false;
@@ -697,25 +801,20 @@ export default function LightDocxPreview({
         await renderPdfFallback();
         return;
       }
-
       await renderDocx();
       if (cancelled) return;
-
       if (await shouldUsePdfFallback()) {
         await renderPdfFallback();
         return;
       }
-
       requestAnimationFrame(() => refreshFieldMarkers(body, fieldsRef.current));
     })()
-      .then(() => {
-        if (cancelled) return;
-      })
       .catch((err) => {
         if (cancelled) return;
-        //console.error("DOCX preview failed", err);
         setError(
-          err instanceof Error ? err.message : "Failed to load document preview."
+          err instanceof Error
+            ? err.message
+            : "Failed to load document preview."
         );
       })
       .finally(() => {
@@ -736,21 +835,16 @@ export default function LightDocxPreview({
 
   const openSelectionMenu = useCallback(() => {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0)
       return;
-    }
-
     const range = selection.getRangeAt(0);
     const root = bodyRef.current;
     if (!root || !root.contains(range.commonAncestorContainer)) return;
-
     const text = selection.toString().trim();
     if (!text || text.length > 120) return;
-
     const rects = Array.from(range.getClientRects());
     const rect = rects[0] ?? range.getBoundingClientRect();
     if (!rect || (rect.width === 0 && rect.height === 0)) return;
-
     const position = positionForSelection(rect);
     setSelectionMenu({
       text,
@@ -767,11 +861,9 @@ export default function LightDocxPreview({
       if (Date.now() - selectionMenu.openedAt < 3000) return;
       setSelectionMenu(null);
     };
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSelectionMenu(null);
     };
-
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -820,24 +912,30 @@ export default function LightDocxPreview({
           padding: 24px;
           user-select: text;
         }
-        .docx-preview-surface > div {
-          position: relative;
-        }
-        .docx-preview-surface .docx-wrapper {
-          background: transparent;
-          padding: 0;
-        }
+        .docx-preview-surface > div { position: relative; }
+        .docx-preview-surface .docx-wrapper { background: transparent; padding: 0; }
         .docx-preview-surface .docx-review {
-          box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+          box-shadow: 0 18px 50px rgba(15,23,42,0.16);
           margin: 0 auto 28px auto;
         }
         .pdf-review-page {
           position: relative;
           background: #fff;
-          box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+          box-shadow: 0 18px 50px rgba(15,23,42,0.16);
           margin: 0 auto 28px auto;
           overflow: hidden;
           isolation: isolate;
+        }
+        .pdf-review-page--error {
+          min-height: 80px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .pdf-review-page--error::after {
+          content: 'Page could not be rendered';
+          font-size: 11px;
+          color: #9ca3af;
         }
         .pdf-review-canvas {
           display: block;
@@ -854,7 +952,6 @@ export default function LightDocxPreview({
           position: absolute;
           inset: 0;
           overflow: clip;
-          opacity: 1;
           line-height: 1;
           text-align: initial;
           transform-origin: 0 0;
@@ -883,16 +980,9 @@ export default function LightDocxPreview({
           --rotate: 0deg;
           transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
         }
-        .pdf-review-text-layer .markedContent {
-          display: contents;
-        }
-        .pdf-review-text-layer span[role="img"] {
-          user-select: none;
-          cursor: default;
-        }
-        .pdf-review-text-layer ::selection {
-          background: rgba(37, 99, 235, 0.28);
-        }
+        .pdf-review-text-layer .markedContent { display: contents; }
+        .pdf-review-text-layer span[role="img"] { user-select: none; cursor: default; }
+        .pdf-review-text-layer ::selection { background: rgba(37,99,235,0.28); }
         .pdf-review-field-layer {
           position: absolute;
           inset: 0;
@@ -907,44 +997,32 @@ export default function LightDocxPreview({
           pointer-events: none;
           overflow: hidden;
         }
-        .pdf-field-band,
-        .pdf-field-chip,
-        .docx-field-chip {
+        /* ── Shared colour tokens ─────────────────────────────────────────── */
+        .pdf-field-band, .pdf-field-chip, .docx-field-chip {
           --marker-color: var(--field-text);
         }
         .pdf-field-band[data-field-type="date"],
         .pdf-field-chip[data-field-type="date"],
-        .docx-field-chip[data-field-type="date"] {
-          --marker-color: var(--field-date);
-        }
+        .docx-field-chip[data-field-type="date"]   { --marker-color: var(--field-date); }
         .pdf-field-band[data-field-type="number"],
         .pdf-field-chip[data-field-type="number"],
-        .docx-field-chip[data-field-type="number"] {
-          --marker-color: var(--field-number);
-        }
+        .docx-field-chip[data-field-type="number"] { --marker-color: var(--field-number); }
         .pdf-field-band[data-field-type="email"],
         .pdf-field-chip[data-field-type="email"],
-        .docx-field-chip[data-field-type="email"] {
-          --marker-color: var(--field-email);
-        }
+        .docx-field-chip[data-field-type="email"]  { --marker-color: var(--field-email); }
         .pdf-field-band[data-field-type="phone"],
         .pdf-field-chip[data-field-type="phone"],
-        .docx-field-chip[data-field-type="phone"] {
-          --marker-color: var(--field-phone);
-        }
+        .docx-field-chip[data-field-type="phone"]  { --marker-color: var(--field-phone); }
         .pdf-field-band[data-field-type="loop"],
         .pdf-field-chip[data-field-type="loop"],
-        .docx-field-chip[data-field-type="loop"] {
-          --marker-color: var(--field-loop);
-        }
+        .docx-field-chip[data-field-type="loop"]   { --marker-color: var(--field-loop); }
         .pdf-field-band[data-field-type="condition"],
         .pdf-field-band[data-field-type="condition_inverse"],
         .pdf-field-chip[data-field-type="condition"],
         .pdf-field-chip[data-field-type="condition_inverse"],
         .docx-field-chip[data-field-type="condition"],
-        .docx-field-chip[data-field-type="condition_inverse"] {
-          --marker-color: var(--field-condition);
-        }
+        .docx-field-chip[data-field-type="condition_inverse"] { --marker-color: var(--field-condition); }
+        /* ── Bands ────────────────────────────────────────────────────────── */
         .pdf-field-band {
           position: absolute;
           border-radius: 3px;
@@ -953,7 +1031,10 @@ export default function LightDocxPreview({
             inset 0 0 0 1px color-mix(in srgb, var(--marker-color) 18%, transparent),
             inset 0 -2px 0 color-mix(in srgb, var(--marker-color) 42%, transparent);
           mix-blend-mode: multiply;
+          pointer-events: auto;
+          cursor: default;
         }
+        /* ── Chips: always visible, positioned above the highlighted text ─── */
         .pdf-field-chip,
         .docx-field-chip {
           position: absolute;
@@ -961,20 +1042,40 @@ export default function LightDocxPreview({
           line-height: 16px;
           padding: 0 6px;
           border-radius: 999px;
-          border: 1px solid color-mix(in srgb, var(--marker-color) 42%, white);
-          background: color-mix(in srgb, white 88%, var(--marker-color) 12%);
+          border: 1px solid color-mix(in srgb, var(--marker-color) 40%, white);
+          background: color-mix(in srgb, white 86%, var(--marker-color) 14%);
           color: var(--marker-color);
-          box-shadow: 0 5px 12px rgba(15, 23, 42, 0.12);
           font-size: 9px;
           font-weight: 700;
-          letter-spacing: 0;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          pointer-events: none;
+          /* Resting: visible but unobtrusive */
+          opacity: 0.82;
+          box-shadow: 0 2px 6px rgba(15,23,42,0.10);
+          transform: none;
+          transition:
+            opacity 0.14s ease,
+            transform 0.14s ease,
+            box-shadow 0.14s ease;
         }
+        /* Hovered field's chip: pop forward */
+        .pdf-field-chip.chip-active,
+        .docx-field-chip.chip-active {
+          opacity: 1;
+          transform: translateY(-1px) scale(1.07);
+          box-shadow: 0 5px 14px rgba(15,23,42,0.18);
+        }
+        /* Other chips when a field is being hovered: step back */
+        .pdf-field-chip.chip-dimmed,
+        .docx-field-chip.chip-dimmed {
+          opacity: 0.28;
+          transform: scale(0.95);
+        }
+        /* ── DOCX inline highlight marks ──────────────────────────────────── */
         .field-highlight {
           border-radius: 2px;
-          border: 0;
           box-decoration-break: clone;
           -webkit-box-decoration-break: clone;
           padding: 0;
@@ -1011,14 +1112,13 @@ export default function LightDocxPreview({
           color: var(--field-condition);
         }
         @media (max-width: 640px) {
-          .docx-preview-surface {
-            padding: 12px;
-          }
-          .docx-preview-surface .docx-wrapper {
-            overflow-x: auto;
-          }
-          .pdf-review-page {
-            margin-bottom: 18px;
+          .docx-preview-surface { padding: 12px; }
+          .docx-preview-surface .docx-wrapper { overflow-x: auto; }
+          .pdf-review-page { margin-bottom: 18px; }
+          /* Touch screens: keep chips fully opaque — hover is unavailable */
+          .pdf-field-chip, .docx-field-chip {
+            opacity: 0.9 !important;
+            transform: none !important;
           }
         }
       `}</style>
@@ -1055,7 +1155,7 @@ export default function LightDocxPreview({
             color: "var(--text)",
             border: "1px solid var(--accent-border)",
           }}
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
         >
           <div
             className="flex items-start gap-2 px-3 py-2.5"
@@ -1075,17 +1175,19 @@ export default function LightDocxPreview({
               </p>
             </div>
           </div>
-          {[
-            ["text", "Add as Text Placeholder"],
-            ["loop", "Add as Loop Start"],
-            ["condition", "Add as Condition (Truthy)"],
-            ["condition_inverse", "Add as Condition (Falsy)"],
-          ].map(([type, label]) => (
+          {(
+            [
+              ["text", "Add as Text Placeholder"],
+              ["loop", "Add as Loop Start"],
+              ["condition", "Add as Condition (Truthy)"],
+              ["condition_inverse", "Add as Condition (Falsy)"],
+            ] as const
+          ).map(([type, label]) => (
             <button
               key={type}
               type="button"
               className="w-full text-left px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)]"
-              onClick={() => handleAdd(type as FieldType)}
+              onClick={() => handleAdd(type)}
             >
               {label}
             </button>

@@ -23,38 +23,59 @@ const jakartaSans = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-// ─── Metadata (exported — consumed by Next.js automatically) ──────────────────
+// ─── Metadata ────────────────────────────────────────────────────────────────
 export const metadata: Metadata = baseMetadata;
 
-// ─── Viewport (separated from metadata as required by Next.js 14+) ────────────
+// ─── Viewport ────────────────────────────────────────────────────────────────
 export const viewport: Viewport = {
   width: "device-width",
+
   initialScale: 1,
+
   maximumScale: 5,
+
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
-    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    {
+      media: "(prefers-color-scheme: dark)",
+      color: "#0a0a0c",
+    },
+    {
+      media: "(prefers-color-scheme: light)",
+      color: "#f8fafc",
+    },
   ],
+
   colorScheme: "dark light",
 };
 
-// ─── Theme init — runs before paint to prevent flash ─────────────────────────
+// ─── Theme init ──────────────────────────────────────────────────────────────
 const themeInitScript = `
 (function() {
   try {
     var savedTheme = localStorage.getItem("theme");
     var theme = savedTheme === "light" ? "light" : "dark";
+
     var root = document.documentElement;
+
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
+
     root.classList.remove("theme-dark", "theme-light", "dark");
-    root.classList.add(theme === "light" ? "theme-light" : "theme-dark");
-    if (theme === "dark") root.classList.add("dark");
+
+    root.classList.add(
+      theme === "light"
+        ? "theme-light"
+        : "theme-dark"
+    );
+
+    if (theme === "dark") {
+      root.classList.add("dark");
+    }
   } catch (e) {}
 })();
 `;
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
+// ─── Layout ──────────────────────────────────────────────────────────────────
 export default function RootLayout({
   children,
 }: {
@@ -63,34 +84,40 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Prevent FOUC — must run before any paint */}
+        {/* Prevent flash before hydration */}
         <Script
           id="theme-init"
           strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+          dangerouslySetInnerHTML={{
+            __html: themeInitScript,
+          }}
         />
 
-        {/* ── Structured data: WebApplication ── */}
-        <script
+        {/* WebApplication JSON-LD */}
+        <Script
+          id="web-application-jsonld"
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(webApplicationJsonLd),
           }}
         />
 
-        {/* ── Structured data: WebSite (enables Sitelinks Search Box) ── */}
-        <script
+        {/* Website JSON-LD */}
+        <Script
+          id="website-jsonld"
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(webSiteJsonLd),
           }}
         />
       </head>
+
       <body className={jakartaSans.className} suppressHydrationWarning>
         <ThemeProvider>
           <ClerkThemeProvider>
             <ConvexClientProvider>
               {children}
+
               <Toaster richColors position="bottom-right" />
             </ConvexClientProvider>
           </ClerkThemeProvider>
