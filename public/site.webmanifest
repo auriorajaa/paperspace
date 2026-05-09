@@ -1,9 +1,11 @@
 {
+  "id": "/",
   "name": "Paperspace — Every document, in one place",
   "short_name": "Paperspace",
   "description": "Write, collaborate, and generate documents at scale. Real-time text editor, AI summaries, smart templates with {{placeholders}}, mail merge from CSV, and Google Forms auto-sync — all in your browser.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
   "theme_color": "#0a0a0c",
   "background_color": "#0a0a0c",
@@ -27,17 +29,6 @@
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/favicon.ico",
-      "sizes": "48x48",
-      "type": "image/x-icon"
     }
   ]
 }

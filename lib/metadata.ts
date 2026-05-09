@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 
 // ─── Site constants ───────────────────────────────────────────────────────────
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.paperspace.work";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://paperspace.work";
+
 export const SITE_NAME = "Paperspace";
-export const SITE_HANDLE = "@paperspace"; // Twitter/X handle
+
+export const SITE_HANDLE = "@paperspace";
+
 export const SITE_DESCRIPTION =
-  "Write, collaborate, and generate documents at scale. Real-time text editor, AI summaries, smart templates with {{placeholders}}, mail merge from CSV, and Google Forms auto-sync — all in your browser.";
+  "Write, collaborate, and generate documents at scale. Real-time document editing, AI summaries, smart templates, mail merge, and Google Forms automation — all in your browser.";
+
 export const SITE_KEYWORDS = [
   "document workspace",
   "online document editor",
@@ -24,48 +28,56 @@ export const SITE_KEYWORDS = [
   "paperspace",
 ];
 
-// ─── OG image dimensions ─────────────────────────────────────────────────────
+// ─── Open Graph / Twitter images ─────────────────────────────────────────────
 const OG_IMAGE = {
-  url: `${SITE_URL}/favicon.svg`,
-  width: 500,
-  height: 500,
+  url: `${SITE_URL}/opengraph-image.png`,
+  width: 1200,
+  height: 630,
   alt: "Paperspace",
-  type: "image/svg+xml",
+  type: "image/png",
 };
 
-// ─── Base (root layout) metadata ─────────────────────────────────────────────
-// Apply in app/layout.tsx. Child pages override individual fields.
+const TWITTER_IMAGE = `${SITE_URL}/twitter-image.png`;
+
+// ─── Base metadata ───────────────────────────────────────────────────────────
 export const baseMetadata: Metadata = {
-  // metadataBase is required so relative og/twitter image URLs resolve correctly
   metadataBase: new URL(SITE_URL),
 
-  // title.template automatically wraps child page titles: "Sign in | Paperspace"
   title: {
     default: `${SITE_NAME} — Every document, in one place`,
     template: `%s | ${SITE_NAME}`,
   },
 
   description: SITE_DESCRIPTION,
+
   keywords: SITE_KEYWORDS,
 
-  authors: [{ name: "Paperspace", url: SITE_URL }],
-  creator: "Paperspace",
-  publisher: "Paperspace",
-  generator: "Next.js",
-  category: "Productivity",
+  authors: [
+    {
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+  ],
+
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+
+  applicationName: SITE_NAME,
+
+  category: "technology",
+
   classification: "Business/Productivity Software",
+
   referrer: "origin-when-cross-origin",
 
-  // Canonical + alternates
   alternates: {
     canonical: SITE_URL,
   },
 
-  // Indexing instructions
   robots: {
     index: true,
     follow: true,
-    nocache: false,
+
     googleBot: {
       index: true,
       follow: true,
@@ -76,94 +88,122 @@ export const baseMetadata: Metadata = {
     },
   },
 
-  // ── Open Graph ──────────────────────────────────────────────────────────────
+  // ─── Open Graph ────────────────────────────────────────────────────────────
   openGraph: {
     type: "website",
+
     locale: "en_US",
+
     url: SITE_URL,
+
     siteName: SITE_NAME,
+
     title: `${SITE_NAME} — Every document, in one place`,
+
     description: SITE_DESCRIPTION,
+
     images: [OG_IMAGE],
   },
 
-  // ── Twitter / X card ────────────────────────────────────────────────────────
+  // ─── Twitter / X ───────────────────────────────────────────────────────────
   twitter: {
     card: "summary_large_image",
+
     site: SITE_HANDLE,
+
     creator: SITE_HANDLE,
+
     title: `${SITE_NAME} — Every document, in one place`,
+
     description: SITE_DESCRIPTION,
-    images: [OG_IMAGE.url],
+
+    images: [TWITTER_IMAGE],
   },
 
-  // ── Icons ───────────────────────────────────────────────────────────────────
+  // ─── Icons ─────────────────────────────────────────────────────────────────
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
+      {
+        url: "/favicon.ico",
+      },
+      {
+        url: "/favicon.svg",
+        type: "image/svg+xml",
+      },
+      {
+        url: "/favicon-96x96.png",
+        sizes: "96x96",
+        type: "image/png",
+      },
     ],
+
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
     ],
-    shortcut: "/favicon.ico",
+
+    shortcut: ["/favicon.ico"],
   },
 
-  // ── PWA / Browser theme ─────────────────────────────────────────────────────
+  // ─── PWA ───────────────────────────────────────────────────────────────────
   manifest: "/site.webmanifest",
-  applicationName: SITE_NAME,
 
-  // themeColor: supports dark/light via array
-  // (Next.js 14+: move to viewport export if you see a warning)
-  // themeColor: [
-  //   { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
-  //   { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
-  // ],
-
-  // ── Format detection (disable auto-link on mobile) ─────────────────────────
+  // ─── Mobile auto-detection ────────────────────────────────────────────────
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
 
-  // ── Search engine verification ──────────────────────────────────────────────
-  // Add your tokens here after verifying ownership in each platform
+  // ─── Verification ──────────────────────────────────────────────────────────
   verification: {
-    // google: "your-google-search-console-token",
-    // yandex: "your-yandex-token",
-    // bing: "your-bing-webmaster-token",
+    // google: "google-search-console-token",
+    // yandex: "yandex-token",
+    // other: {},
   },
 };
 
-// ─── JSON-LD helpers ─────────────────────────────────────────────────────────
-
-/** Root-level WebApplication structured data — add to <head> in layout.tsx */
+// ─── JSON-LD: WebApplication ─────────────────────────────────────────────────
 export const webApplicationJsonLd = {
   "@context": "https://schema.org",
+
   "@type": "WebApplication",
+
   name: SITE_NAME,
+
   url: SITE_URL,
+
   description: SITE_DESCRIPTION,
+
   applicationCategory: "BusinessApplication",
+
   operatingSystem: "All",
+
   browserRequirements: "Requires a modern web browser with JavaScript enabled",
+
   offers: {
     "@type": "Offer",
     price: "0",
     priceCurrency: "USD",
-    description: "Free to get started. No credit card required.",
+    description: "Free to get started",
   },
+
   featureList: [
-    "Real-time ONLYOFFICE document editor",
+    "Real-time document editor",
     "AI-powered document summaries",
-    "Smart templates with typed placeholders",
-    "Mail merge and bulk document generation",
+    "Smart templates",
+    "Mail merge",
     "Google Forms integration",
-    "Document collections and organisation",
-    "Team collaboration and sharing",
+    "Bulk document generation",
+    "Document collections",
+    "Team collaboration",
   ],
+
   screenshot: OG_IMAGE.url,
+
   creator: {
     "@type": "Organization",
     name: SITE_NAME,
@@ -171,34 +211,20 @@ export const webApplicationJsonLd = {
   },
 };
 
-/** Landing page WebSite structured data (enables Google Sitelinks Search Box) */
+// ─── JSON-LD: Website ────────────────────────────────────────────────────────
 export const webSiteJsonLd = {
   "@context": "https://schema.org",
+
   "@type": "WebSite",
+
   name: SITE_NAME,
+
   url: SITE_URL,
+
   description: SITE_DESCRIPTION,
-  potentialAction: {
-    "@type": "SearchAction",
-    target: {
-      "@type": "EntryPoint",
-      urlTemplate: `${SITE_URL}/documents?q={search_term_string}`,
-    },
-    "query-input": "required name=search_term_string",
-  },
 };
 
-// ─── Per-page metadata builder ───────────────────────────────────────────────
-/**
- * Merge page-specific overrides on top of the base OG/Twitter fields.
- * Usage:
- *   export const metadata = buildPageMetadata({
- *     title: "Sign in",
- *     description: "...",
- *     path: "/sign-in",
- *     noIndex: false,
- *   });
- */
+// ─── Metadata builder ────────────────────────────────────────────────────────
 export function buildPageMetadata({
   title,
   description,
@@ -213,33 +239,61 @@ export function buildPageMetadata({
   noIndex?: boolean;
 }): Metadata {
   const url = `${SITE_URL}${path}`;
+
   const desc = description ?? SITE_DESCRIPTION;
+
   const image = ogImage ?? OG_IMAGE.url;
 
   return {
+    metadataBase: new URL(SITE_URL),
+
     title,
+
     description: desc,
-    alternates: { canonical: url },
+
+    alternates: {
+      canonical: url,
+    },
+
     robots: noIndex
-      ? { index: false, follow: false }
-      : { index: true, follow: true },
+      ? {
+          index: false,
+          follow: false,
+        }
+      : {
+          index: true,
+          follow: true,
+        },
+
     openGraph: {
-      title: `${title} | ${SITE_NAME}`,
-      description: desc,
+      type: "website",
+
       url,
+
+      siteName: SITE_NAME,
+
+      title: `${title} | ${SITE_NAME}`,
+
+      description: desc,
+
       images: [
         {
           url: image,
           width: OG_IMAGE.width,
           height: OG_IMAGE.height,
           alt: `${title} | ${SITE_NAME}`,
-          type: OG_IMAGE.type,
+          type: "image/png",
         },
       ],
     },
+
     twitter: {
+      card: "summary_large_image",
+
       title: `${title} | ${SITE_NAME}`,
+
       description: desc,
+
       images: [image],
     },
   };
