@@ -4,6 +4,9 @@ import { auth } from "@clerk/nextjs/server";
 import { PreAuthNavbar } from "@/components/PreAuthNavbar";
 
 export default async function LandingPage() {
+    // throw new Error("Test error");
+
+    // return <div>Hello</div>;
   const { userId } = await auth();
   const isSignedIn = !!userId;
 

@@ -34,7 +34,7 @@ export async function cleanupTempBlobs() {
     if (old.length > 0) {
       // del() accepts an array — satu call untuk semua, lebih efisien
       await del(old.map((b) => b.url));
-      console.log(`[cleanup] Deleted ${old.length} temp blobs`);
+      //console.log(`[cleanup] Deleted ${old.length} temp blobs`);
     }
   } catch (e) {
     console.warn("[cleanup] Failed:", e);

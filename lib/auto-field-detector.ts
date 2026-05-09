@@ -806,9 +806,9 @@ async function callGeminiDetection(
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.log(
-      "[auto-field-detector] No GEMINI_API_KEY — will use rule-based fallback"
-    );
+    // console.log(
+    //   "[auto-field-detector] No GEMINI_API_KEY — will use rule-based fallback"
+    // );
     return null;
   }
 
@@ -887,9 +887,9 @@ async function callGeminiDetection(
       });
     }
 
-    console.log(
-      `[auto-field-detector] Gemini detected ${fields.length} fields`
-    );
+    // console.log(
+    //   `[auto-field-detector] Gemini detected ${fields.length} fields`
+    // );
     return fields;
   } catch (err) {
     console.warn(
@@ -940,6 +940,6 @@ export async function autoDetectFields(
   }
 
   // ── FALLBACK: L3+L5 rule-based detection ──────────────────────────────────
-  console.log("[auto-field-detector] Running rule-based fallback detection");
+  //console.log("[auto-field-detector] Running rule-based fallback detection");
   return runRuleBasedDetection(rawLines);
 }

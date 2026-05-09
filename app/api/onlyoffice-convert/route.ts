@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
     if (!ooServerUrl) {
-      console.error("[onlyoffice-convert] ONLYOFFICE_SERVER_URL not set");
+      //console.error("[onlyoffice-convert] ONLYOFFICE_SERVER_URL not set");
       return new NextResponse("Server configuration error", { status: 500 });
     }
 
@@ -113,10 +113,10 @@ export async function POST(req: NextRequest) {
     let responseText = await convertRes.text();
 
     if (!convertRes.ok) {
-      console.error(
-        "[onlyoffice-convert] conversion failed with status",
-        convertRes.status
-      );
+      // console.error(
+      //   "[onlyoffice-convert] conversion failed with status",
+      //   convertRes.status
+      // );
       return new NextResponse(
         `Conversion failed: ${convertRes.status} - ${responseText.slice(0, 200)}`,
         { status: convertRes.status }
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         const errorMsg = errorMatch
           ? errorMatch[1]
           : "Unknown conversion error (XML response)";
-        console.error("[onlyoffice-convert] XML error:", errorMsg);
+        //console.error("[onlyoffice-convert] XML error:", errorMsg);
         return new NextResponse(errorMsg, { status: 500 });
       }
     } else {
@@ -149,10 +149,10 @@ export async function POST(req: NextRequest) {
         const convertData = JSON.parse(responseText);
         pdfUrl = convertData.fileUrl || convertData.url;
       } catch (e) {
-        console.error(
-          "[onlyoffice-convert] failed to parse response:",
-          responseText
-        );
+        // console.error(
+        //   "[onlyoffice-convert] failed to parse response:",
+        //   responseText
+        // );
         return new NextResponse("Conversion service returned invalid format", {
           status: 500,
         });
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!pdfUrl) {
-      console.error("[onlyoffice-convert] no PDF URL found in response");
+      //console.error("[onlyoffice-convert] no PDF URL found in response");
       return new NextResponse("Conversion response missing PDF URL", {
         status: 500,
       });
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
 
     const pdfRes = await fetch(pdfUrl);
     if (!pdfRes.ok) {
-      console.error("[onlyoffice-convert] PDF download failed:", pdfRes.status);
+      //console.error("[onlyoffice-convert] PDF download failed:", pdfRes.status);
       return new NextResponse("Failed to download converted PDF", {
         status: 500,
       });
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[onlyoffice-convert] error:", err);
+    //console.error("[onlyoffice-convert] error:", err);
     return new NextResponse("Internal error", { status: 500 });
   }
 }

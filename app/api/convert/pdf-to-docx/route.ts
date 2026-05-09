@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     // ── OnlyOffice conversion ─────────────────────────────────────────────────
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
     if (!ooServerUrl) {
-      console.error("[pdf-to-docx] ONLYOFFICE_SERVER_URL not set");
+      //console.error("[pdf-to-docx] ONLYOFFICE_SERVER_URL not set");
       return new NextResponse("Server configuration error.", { status: 500 });
     }
 
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
           responseText.match(/<Message>(.*?)<\/Message>/i) ||
           responseText.match(/<Error>(.*?)<\/Error>/i);
         const msg = errMatch ? decodeXmlEntities(errMatch[1]) : "Unknown";
-        console.error("[pdf-to-docx] XML error from OnlyOffice:", msg);
+        //console.error("[pdf-to-docx] XML error from OnlyOffice:", msg);
         return new NextResponse(`Conversion error: ${msg}`, { status: 500 });
       }
     } else {
@@ -153,10 +153,10 @@ export async function POST(req: NextRequest) {
         const data = JSON.parse(responseText);
         docxUrl = data.fileUrl ?? data.url ?? null;
       } catch {
-        console.error(
-          "[pdf-to-docx] Unparseable response:",
-          responseText.slice(0, 500)
-        );
+        // console.error(
+        //   "[pdf-to-docx] Unparseable response:",
+        //   responseText.slice(0, 500)
+        // );
         return new NextResponse(
           "Unexpected response from conversion service.",
           { status: 500 }
@@ -165,10 +165,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (!docxUrl) {
-      console.error(
-        "[pdf-to-docx] No DOCX URL in response. Full response:",
-        responseText
-      );
+      // console.error(
+      //   "[pdf-to-docx] No DOCX URL in response. Full response:",
+      //   responseText
+      // );
       return new NextResponse("No output URL returned.", { status: 500 });
     }
 
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     if (!isValidDocx(docxBuffer)) {
       const sample = docxBuffer.slice(0, 300).toString();
-      console.error("[pdf-to-docx] Invalid DOCX. First 300 chars:", sample);
+      //console.error("[pdf-to-docx] Invalid DOCX. First 300 chars:", sample);
       return new NextResponse("Converted file is not a valid DOCX.", {
         status: 500,
       });
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[pdf-to-docx] Unexpected error:", err);
+    //console.error("[pdf-to-docx] Unexpected error:", err);
     return new NextResponse("Something went wrong.", { status: 500 });
   } finally {
     if (blobUrl) {

@@ -118,7 +118,7 @@ export async function GET(
 
   if (!formRes.ok) {
     const bodyText = await formRes.text().catch(() => "");
-    console.error("[google/forms/questions]", formRes.status, bodyText);
+    //console.error("[google/forms/questions]", formRes.status, bodyText);
 
     if (formRes.status === 401) {
       return NextResponse.json(

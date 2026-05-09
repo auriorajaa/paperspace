@@ -105,10 +105,10 @@ export async function POST(req: NextRequest) {
       data = JSON.parse(text);
     } catch {
       // OO occasionally returns XML on error
-      console.error(
-        "[onlyoffice-command] non-JSON response:",
-        text.slice(0, 200)
-      );
+      // console.error(
+      //   "[onlyoffice-command] non-JSON response:",
+      //   text.slice(0, 200)
+      // );
       return NextResponse.json(
         { error: 1, raw: text.slice(0, 200) },
         { status: 502 }
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     // error 0 = success, error 4 = no active session (treat as "already saved")
     return NextResponse.json(data, { status: ooRes.ok ? 200 : 502 });
   } catch (err: any) {
-    console.error("[onlyoffice-command] fetch failed:", err);
+    //console.error("[onlyoffice-command] fetch failed:", err);
     return NextResponse.json(
       { error: 1, message: err.message ?? "Command request failed" },
       { status: 500 }

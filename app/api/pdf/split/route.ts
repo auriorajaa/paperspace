@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[api/pdf/split]", err);
+    //console.error("[api/pdf/split]", err);
     return new NextResponse(
       "We couldn't process your PDF. Please try another file.",
       { status: 500 }

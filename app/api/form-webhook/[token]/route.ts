@@ -171,12 +171,12 @@ export async function POST(
 
     Promise.race([generationPromise, timeoutPromise]).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
-      console.error("[form-webhook] Generation error or timeout:", message);
+      //("[form-webhook] Generation error or timeout:", message);
     });
 
     return NextResponse.json({ ok: true, submissionId });
   } catch (err) {
-    console.error("[form-webhook]", err);
+    //console.error("[form-webhook]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

@@ -759,7 +759,7 @@ export default function HomePage() {
       router.push(`/documents/${docId}`);
       toast.success("Paper created");
     } catch (err) {
-      console.error(err);
+      //console.error(err);
       toast.error("Couldn't create paper. Check your connection.");
     } finally {
       setIsCreating(false);

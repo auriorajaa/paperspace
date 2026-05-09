@@ -2225,7 +2225,7 @@ export default function TemplatesPage() {
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("ZIP export failed.");
-      console.error("[bulk-export-zip-templates]", err);
+      //console.error("[bulk-export-zip-templates]", err);
     }
   };
 

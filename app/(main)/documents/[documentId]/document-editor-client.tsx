@@ -740,7 +740,7 @@ export default function DocumentEditorPage() {
         if (savedFileUrlRef.current !== url) {
           savedFileUrlRef.current = url;
           updateDocument({ id: documentId, fileUrl: url }).catch(() => {
-            console.warn("[resolve] Could not persist fileUrl to DB");
+            //console.warn("[resolve] Could not persist fileUrl to DB");
           });
         }
         return;
@@ -787,7 +787,7 @@ export default function DocumentEditorPage() {
         await updateDocument({ id: documentId, storageId, fileUrl: url });
         setFileUrl(url);
       } catch (err) {
-        console.error(err);
+        //console.error(err);
         setStorageError("Couldn't initialize document file.");
         toast.error("Couldn't initialize document. Please try again.");
       }

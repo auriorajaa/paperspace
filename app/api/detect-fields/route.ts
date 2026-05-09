@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ fields });
   } catch (err: unknown) {
-    console.error("[detect-fields] Unexpected error:", err);
+    //console.error("[detect-fields] Unexpected error:", err);
     return NextResponse.json(
       {
         error: err instanceof Error ? err.message : "Field detection failed.",

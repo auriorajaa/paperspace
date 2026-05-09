@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
 
   if (!formRes.ok) {
     const body = await formRes.text().catch(() => "");
-    console.error("[google/forms] Forms API error:", formRes.status, body);
+    //console.error("[google/forms] Forms API error:", formRes.status, body);
 
     if (formRes.status === 404) {
       return NextResponse.json(

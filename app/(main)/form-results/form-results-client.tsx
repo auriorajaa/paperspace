@@ -334,7 +334,7 @@ function PreviewModal({
         setPdfBlobUrl(url);
         setState("ready");
       } catch (err) {
-        console.error("[PreviewModal] PDF conversion error:", err);
+        //console.error("[PreviewModal] PDF conversion error:", err);
         if (!cancelled) setState("error");
       }
     }
@@ -1528,7 +1528,7 @@ function BulkActions({
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("ZIP export failed.");
-      console.error("[bulk-export-zip-form-results]", err);
+      //console.error("[bulk-export-zip-form-results]", err);
     } finally {
       setDownloading(false);
     }

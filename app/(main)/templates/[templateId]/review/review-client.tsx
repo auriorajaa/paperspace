@@ -716,10 +716,10 @@ export default function TemplateReviewClient() {
       .then((res) => res.arrayBuffer())
       .then((buf) => {
         setDocxBuffer(buf);
-        console.log("[ReviewPage] DOCX buffer loaded, size:", buf.byteLength);
+        //console.log("[ReviewPage] DOCX buffer loaded, size:", buf.byteLength);
       })
       .catch((err) => {
-        console.error("[ReviewPage] failed to load DOCX:", err);
+        //console.error("[ReviewPage] failed to load DOCX:", err);
         toast.error("Failed to load document preview.");
       });
   }, [template?.fileUrl]);
@@ -882,7 +882,7 @@ export default function TemplateReviewClient() {
         try {
           updatePayload.previewText = await extractAllText(modifiedBuffer);
         } catch (err) {
-          console.warn("[ReviewPage] previewText extraction failed:", err);
+          //console.warn("[ReviewPage] previewText extraction failed:", err);
         }
 
         const formData = new FormData();
@@ -921,7 +921,7 @@ export default function TemplateReviewClient() {
       );
       router.push(`/templates/${templateId}/fill`);
     } catch (err) {
-      console.error("[ReviewPage] failed to save:", err);
+      //console.error("[ReviewPage] failed to save:", err);
       toast.error("Failed to save changes.");
     } finally {
       setSaving(false);

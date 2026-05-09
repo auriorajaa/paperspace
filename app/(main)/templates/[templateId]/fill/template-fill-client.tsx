@@ -1110,7 +1110,7 @@ function SingleForm({
       });
       toast.success("Document downloaded successfully");
     } catch (err: any) {
-      console.error(err);
+      //console.error(err);
       const errMsg =
         err?.properties?.errors?.map((e: any) => e.message).join(", ") ??
         err?.message ??
@@ -1547,7 +1547,7 @@ function BulkForm({
       setStep(2);
       toast.success(`${data.length} row${data.length !== 1 ? "s" : ""} loaded`);
     } catch (err: any) {
-      console.error(err);
+      //console.error(err);
       toast.error(
         err?.message?.includes("File is password protected")
           ? "This Excel file is password-protected. Remove the password first."
