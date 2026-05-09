@@ -116,7 +116,7 @@ function OnlyOfficeInner({
 
     async function buildConfig() {
       try {
-        console.log("[OnlyOfficeEditor] Fetching config with key:", configKey);
+        //console.log("[OnlyOfficeEditor] Fetching config with key:", configKey);
 
         const res = await fetch("/api/onlyoffice-token", {
           method: "POST",
@@ -146,14 +146,14 @@ function OnlyOfficeInner({
 
         if (!mountedRef.current) return;
 
-        console.log(
-          "[OnlyOfficeEditor] Config received, serverUrl:",
-          serverUrl
-        );
+        // console.log(
+        //   "[OnlyOfficeEditor] Config received, serverUrl:",
+        //   serverUrl
+        // );
         setEditorData({ config, serverUrl });
       } catch (err: any) {
         if (err?.name === "AbortError") return;
-        console.error("[ONLYOFFICE] Failed to build config:", err);
+        //console.error("[ONLYOFFICE] Failed to build config:", err);
         if (!mountedRef.current) return;
         setConfigError(true);
         onErrorRef.current?.();
@@ -169,10 +169,10 @@ function OnlyOfficeInner({
         const win = window as any;
         if (win.DocEditor?.instances?.[editorId]) {
           win.DocEditor.instances[editorId].destroyEditor();
-          console.log(
-            "[OnlyOfficeEditor] Destroyed editor instance:",
-            editorId
-          );
+          // console.log(
+          //   "[OnlyOfficeEditor] Destroyed editor instance:",
+          //   editorId
+          // );
         }
       } catch (_) {
         // Ignore cleanup errors
@@ -218,11 +218,11 @@ function OnlyOfficeInner({
         documentServerUrl={editorData.serverUrl}
         config={themedConfig}
         events_onDocumentReady={() => {
-          console.log("[OnlyOfficeEditor] Document ready");
+          //console.log("[OnlyOfficeEditor] Document ready");
           onReadyRef.current?.();
         }}
         onLoadComponentError={(code: number, desc: string) => {
-          console.error("[ONLYOFFICE] Load error:", code, desc);
+          //console.error("[ONLYOFFICE] Load error:", code, desc);
           onErrorRef.current?.();
         }}
       />

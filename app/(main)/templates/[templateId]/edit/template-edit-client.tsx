@@ -1922,7 +1922,7 @@ export default function TemplateEditPage() {
         );
         if (redirectTo === "fill") router.push(`/templates/${templateId}/fill`);
       } catch (err) {
-        console.error(err);
+        //console.error(err);
         toast.error("Couldn't save. Check your connection and try again.");
       } finally {
         setSaving(false);

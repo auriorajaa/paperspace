@@ -3355,7 +3355,7 @@ export default function DocumentsPage() {
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("ZIP export failed.");
-      console.error("[bulk-export-zip]", err);
+      //console.error("[bulk-export-zip]", err);
     }
   };
 

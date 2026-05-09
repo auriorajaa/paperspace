@@ -65,7 +65,7 @@ function InvitationRow({
         // window.location.reload();
       }, 300);
     } catch (e) {
-      console.error("Failed to accept invitation", e);
+      //console.error("Failed to accept invitation", e);
     } finally {
       setLoading(null);
     }

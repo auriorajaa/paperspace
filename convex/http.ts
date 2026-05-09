@@ -166,7 +166,7 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     } catch (err: any) {
-      //console.error("[onlyofficeCallback] Error:", err);
+      console.error("[onlyofficeCallback] Error:", err);
       return new Response(
         JSON.stringify({ error: "Internal error", message: err.message }),
         { status: 500, headers: { "Content-Type": "application/json" } }

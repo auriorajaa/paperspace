@@ -141,6 +141,12 @@ export const create = mutation({
       connectionType: args.connectionType ?? "manual",
       googleFormId: args.googleFormId,
       googleQuestionMap: args.googleQuestionMap,
+      // FIX: Set lastPolledAt to now so the first cron cycle only processes
+      // responses submitted AFTER this connection was created. Without this,
+      // all pre-existing form responses would be fetched and turned into
+      // documents on the very first poll, wasting Convex storage for data
+      // the user never asked to import.
+      lastPolledAt: Date.now(),
     });
   },
 });

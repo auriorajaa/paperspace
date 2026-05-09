@@ -713,7 +713,7 @@ export default function LightDocxPreview({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("DOCX preview failed", err);
+        //console.error("DOCX preview failed", err);
         setError(
           err instanceof Error ? err.message : "Failed to load document preview."
         );

@@ -854,14 +854,14 @@ export default function TemplateNewPage() {
             return next;
           });
         } catch (pageErr) {
-          console.warn(`[PDF Preview] Page ${i} failed to render:`, pageErr);
+          //console.warn(`[PDF Preview] Page ${i} failed to render:`, pageErr);
           // slot stays null — shown as loading placeholder
         }
       }
     } catch (err: unknown) {
       if (pdfLoadCancelRef.current) return;
 
-      console.error("[PDF Preview]", err);
+      //console.error("[PDF Preview]", err);
       const isPasswordError =
         err instanceof Error &&
         (err.message.includes("password") || err.message.includes("encrypted"));
@@ -1148,19 +1148,19 @@ export default function TemplateNewPage() {
   */
 
   const processDocx = async (docxFile: File): Promise<void> => {
-    console.log(
-      "[processDocx] start - mode:",
-      detectionMode,
-      "file:",
-      docxFile.name
-    );
+    // console.log(
+    //   "[processDocx] start - mode:",
+    //   detectionMode,
+    //   "file:",
+    //   docxFile.name
+    // );
 
     let docxBuffer: ArrayBuffer;
     try {
       docxBuffer = await docxFile.arrayBuffer();
-      console.log("[processDocx] buffer read, size:", docxBuffer.byteLength);
+      // console.log("[processDocx] buffer read, size:", docxBuffer.byteLength);
     } catch (err) {
-      console.error("[processDocx] failed to read file buffer:", err);
+      //console.error("[processDocx] failed to read file buffer:", err);
       throw new Error("Unable to read the document file.");
     }
 
@@ -1170,9 +1170,9 @@ export default function TemplateNewPage() {
     try {
       preprocessedBuffer = await preprocessTemplate(docxBuffer);
       extractedText = await extractAllText(preprocessedBuffer);
-      console.log("[processDocx] extractedText length:", extractedText.length);
+      // console.log("[processDocx] extractedText length:", extractedText.length);
     } catch (err) {
-      console.error("[processDocx] preprocessing/extraction error:", err);
+      //console.error("[processDocx] preprocessing/extraction error:", err);
       throw new Error(
         "Unable to read the document - it may be corrupted or use an unsupported format."
       );
@@ -1185,9 +1185,9 @@ export default function TemplateNewPage() {
       let uploadUrl: string;
       try {
         uploadUrl = await generateUploadUrl();
-        console.log("[processDocx] upload URL obtained");
+        //console.log("[processDocx] upload URL obtained");
       } catch (err) {
-        console.error("[processDocx] failed to get upload URL:", err);
+        //console.error("[processDocx] failed to get upload URL:", err);
         throw new Error(
           "Could not connect to storage. Please check your connection and try again."
         );
@@ -1205,7 +1205,7 @@ export default function TemplateNewPage() {
       });
 
       if (!uploadRes.ok) {
-        console.error("[processDocx] upload failed, status:", uploadRes.status);
+        //console.error("[processDocx] upload failed, status:", uploadRes.status);
         throw new Error(
           `Upload failed (${uploadRes.status}). Please try again.`
         );
@@ -1249,7 +1249,7 @@ export default function TemplateNewPage() {
     });
 
     if (detectionMode === "auto") {
-      console.log("[processDocx] mode AUTO - run existing + structural scan");
+      // console.log("[processDocx] mode AUTO - run existing + structural scan");
 
       const existingFields: AutoDetectedField[] = detectPlaceholders(
         extractedText
@@ -1303,11 +1303,11 @@ export default function TemplateNewPage() {
           fields: AutoDetectedField[];
         };
         autoFields = detectedFields ?? [];
-        console.log(
-          `[processDocx] /api/detect-fields returned ${autoFields.length} field(s)`
-        );
+        // console.log(
+        //   `[processDocx] /api/detect-fields returned ${autoFields.length} field(s)`
+        // );
       } catch (err) {
-        console.error("[processDocx] detect-fields API error:", err);
+        //console.error("[processDocx] detect-fields API error:", err);
         throw new Error(
           "Auto-detection failed - could not analyze document structure."
         );
@@ -1342,9 +1342,9 @@ export default function TemplateNewPage() {
           organizationId: organization?.id,
           fields: mergedFields.map(serializeDetectedField),
         });
-        console.log("[processDocx] template saved, id:", templateId);
+        // console.log("[processDocx] template saved, id:", templateId);
       } catch (err) {
-        console.error("[processDocx] failed to save template:", err);
+        //console.error("[processDocx] failed to save template:", err);
         throw new Error("Could not save template. Please try again.");
       }
 
@@ -1358,9 +1358,9 @@ export default function TemplateNewPage() {
       return;
     }
 
-    console.log("[processDocx] mode MANUAL - detectPlaceholders");
+    //console.log("[processDocx] mode MANUAL - detectPlaceholders");
     const fields = detectPlaceholders(extractedText);
-    console.log(`[processDocx] detectPlaceholders: ${fields.length} field(s)`);
+    // console.log(`[processDocx] detectPlaceholders: ${fields.length} field(s)`);
 
     const { storageId, fileUrl } = await uploadDocxBuffer(preprocessedBuffer);
     const templateId = await createTemplate({
@@ -1395,7 +1395,7 @@ export default function TemplateNewPage() {
         })),
       })),
     });
-    console.log("[processDocx] manual template saved, id:", templateId);
+    // console.log("[processDocx] manual template saved, id:", templateId);
 
     toast.success(
       fields.length > 0
@@ -1918,7 +1918,7 @@ export default function TemplateNewPage() {
                     type="button"
                     onClick={() => {
                       setDetectionMode("auto");
-                      console.log("[UI] detectionMode set to: auto");
+                      //console.log("[UI] detectionMode set to: auto");
                     }}
                     className="flex flex-col gap-2 p-4 rounded-2xl text-left transition-all"
                     style={{
@@ -2002,7 +2002,7 @@ export default function TemplateNewPage() {
                     type="button"
                     onClick={() => {
                       setDetectionMode("manual");
-                      console.log("[UI] detectionMode set to: manual");
+                      //console.log("[UI] detectionMode set to: manual");
                     }}
                     className="flex flex-col gap-2 p-4 rounded-2xl text-left transition-all"
                     style={{

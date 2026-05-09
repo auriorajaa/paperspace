@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[onlyoffice-file]", err);
+    //console.error("[onlyoffice-file]", err);
     return new NextResponse("Proxy error", { status: 500 });
   }
 }

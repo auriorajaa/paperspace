@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
   const { userId: clerkUserId, getToken, sessionClaims } = await auth();
 
   if (!clerkUserId || clerkUserId !== userIdFromState) {
-    console.error(
-      "[google/callback] Clerk userId mismatch — possible session fixation attempt",
-      { clerkUserId, userIdFromState }
-    );
+    // console.error(
+    //   "[google/callback] Clerk userId mismatch — possible session fixation attempt",
+    //   { clerkUserId, userIdFromState }
+    // );
     return NextResponse.redirect(`${redirectBase}?error=oauth_state_invalid`);
   }
 
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenRes.json();
 
   if (!tokens.access_token) {
-    console.error("[google/callback] Token exchange failed:", tokens);
+    //console.error("[google/callback] Token exchange failed:", tokens);
     return NextResponse.redirect(`${redirectBase}?error=token_exchange_failed`);
   }
 
@@ -72,9 +72,9 @@ export async function GET(req: NextRequest) {
   const userInfo = await userRes.json();
 
   if (!userInfo.email) {
-    console.error(
-      "[google/callback] Could not retrieve user email from Google"
-    );
+    // console.error(
+    //   "[google/callback] Could not retrieve user email from Google"
+    // );
     return NextResponse.redirect(`${redirectBase}?error=token_exchange_failed`);
   }
 

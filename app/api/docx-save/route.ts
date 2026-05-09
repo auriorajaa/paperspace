@@ -154,12 +154,12 @@ export async function POST(req: NextRequest) {
     const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
     const fileUrl = `${convexSiteUrl}/getFile?storageId=${storageId}`;
 
-    console.log("[docx-save] Saved DOCX:", {
-      storageId,
-      size: fileBuffer.byteLength,
-      templateId: templateId ?? "none",
-      userId,
-    });
+    // console.log("[docx-save] Saved DOCX:", {
+    //   storageId,
+    //   size: fileBuffer.byteLength,
+    //   templateId: templateId ?? "none",
+    //   userId,
+    // });
 
     return NextResponse.json({
       storageId,
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
       size: fileBuffer.byteLength,
     });
   } catch (err: any) {
-    console.error("[docx-save] error:", err);
+    //console.error("[docx-save] error:", err);
     return NextResponse.json(
       { error: err.message || "Failed to save document" },
       { status: 500 }

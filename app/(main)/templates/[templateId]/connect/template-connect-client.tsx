@@ -662,7 +662,7 @@ function GoogleFormWizard({
           ? "You appear to be offline. Check your internet connection and try again."
           : "Could not reach Google Forms. Check your internet connection and try again."
       );
-      console.error("[handleLoadFormById]", err);
+      //console.error("[handleLoadFormById]", err);
     } finally {
       setFormLoading(false);
     }
@@ -748,7 +748,7 @@ function GoogleFormWizard({
           "Failed to open Google Drive Picker. Please paste the Form URL manually below."
         );
       }
-      console.error("[openPicker]", err);
+      //console.error("[openPicker]", err);
     } finally {
       setPickerLoading(false);
     }

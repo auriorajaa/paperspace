@@ -33,7 +33,7 @@ async function extractConvertedFileUrl(
   const responseText = await convertRes.text();
 
   if (!convertRes.ok) {
-    console.error("[docx-to-pdf] ConvertService error:", responseText);
+    //console.error("[docx-to-pdf] ConvertService error:", responseText);
     return null;
   }
 
@@ -44,10 +44,10 @@ async function extractConvertedFileUrl(
     const errMatch =
       responseText.match(/<Message>(.*?)<\/Message>/i) ||
       responseText.match(/<Error>(.*?)<\/Error>/i);
-    console.error(
-      "[docx-to-pdf] XML error:",
-      errMatch ? decodeXmlEntities(errMatch[1]) : responseText.slice(0, 500)
-    );
+    // console.error(
+    //   "[docx-to-pdf] XML error:",
+    //   errMatch ? decodeXmlEntities(errMatch[1]) : responseText.slice(0, 500)
+    // );
     return null;
   }
 
@@ -58,10 +58,10 @@ async function extractConvertedFileUrl(
     };
     return data.fileUrl ?? data.url ?? null;
   } catch {
-    console.error(
-      "[docx-to-pdf] Unparseable response:",
-      responseText.slice(0, 500)
-    );
+    // console.error(
+    //   "[docx-to-pdf] Unparseable response:",
+    //   responseText.slice(0, 500)
+    // );
     return null;
   }
 }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
     const ooServerUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL;
     if (!ooServerUrl) {
-      console.error("[docx-to-pdf] ONLYOFFICE_SERVER_URL not set");
+      //console.error("[docx-to-pdf] ONLYOFFICE_SERVER_URL not set");
       return NextResponse.json(
         { error: "Server configuration error." },
         { status: 500 }
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[docx-to-pdf] Unexpected error:", err);
+    //console.error("[docx-to-pdf] Unexpected error:", err);
     return NextResponse.json(
       { error: "Something went wrong." },
       { status: 500 }
