@@ -212,6 +212,10 @@ export const search = query({
 export const getCollectionsForDocument = query({
   args: { documentId: v.id("documents") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    // Unauthenticated callers get an empty list — no collection data leaked.
+    if (!identity) return [];
+
     const junctions = await ctx.db
       .query("documentCollections")
       .withIndex("by_document_id", (q) => q.eq("documentId", args.documentId))
@@ -221,7 +225,12 @@ export const getCollectionsForDocument = query({
       junctions.map((j) => ctx.db.get(j.collectionId))
     );
 
-    return collections.filter(Boolean);
+    // Collections are personal — only return collections owned by the caller.
+    // An org member viewing a shared document must NOT see which personal
+    // collections the document owner has placed it in.
+    return collections.filter(
+      (col) => col !== null && col.ownerId === identity.subject
+    );
   },
 });
 
