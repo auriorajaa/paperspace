@@ -1,31 +1,35 @@
 /**
  * lib/auto-field-detector.ts
  *
- * AI-FIRST automatic field detection pipeline.
+ * Layer-3 deterministic rule-based field detection for DOCX template documents.
  *
- *   Layer 1 — Gemini 2.5 Flash-Lite (Primary):
- *     · Receives raw document lines (paragraphs + table content)
- *     · Directly extracts all fillable template fields
- *     · Handles Indonesian official letters (surat dinas / nota dinas / undangan)
- *     · Correctly maps: nomor, lampiran, perihal, tanggal, waktu, tempat, penerima
- *     · Returns complete field list with proper types and targetText
+ * Operates entirely offline via structural pattern analysis of the document XML.
+ * No external services, no machine learning, no probabilistic scoring.
+ * All detection is performed through deterministic pattern matching.
  *
- *   Layer 2 — L3+L5 Rule-Based (Fallback only):
- *     · Runs ONLY when Gemini is unavailable (no API key, rate limit, timeout, error)
- *     · Pattern A: "Label : Value" paragraphs
- *     · Pattern D: Underline blanks after labels
- *     · Pattern E: Form-style boxes / checkboxes
- *     · Pattern F: Standalone date paragraphs → tanggal_surat
- *     · Recipient: "Yth." / "Kepada" blocks → nama_penerima
- *     · Dictionary-based type inference (date, number, email, phone)
+ * Supported document conventions:
+ *   · Indonesian official letters (surat dinas, nota dinas, undangan,
+ *     surat tugas, surat permohonan, surat kuasa)
+ *   · Generic form documents (invoice, contract, work order)
+ *   · PDF-converted DOCX with fragmented line structure
+ *
+ * Detection patterns (processed in priority order):
+ *   A — Standalone date paragraphs     ("29 Januari 2026", "Jakarta, 12 Feb 2026")
+ *   B — "Label : Value" colon pairs    ("Nomor  : 101/DST/…", "Perihal : …")
+ *   C — Recipient blocks               ("Yth.", "Kepada", "Kepada Yth.")
+ *   D — Underline / dash blank fields  ("Nama  ___________")
+ *   E — Form-style empty brackets      ("[ ] Setuju", "Pilihan : ( )")
  *
  * Table handling:
- *   · Table content is extracted and included in document context for Gemini
- *   · Rule-based fallback also processes table content as paragraph-like lines
- *   · Institutional header/footer noise is filtered in both layers
+ *   · Two-column table rows are synthesised into "Label : Value" pairs
+ *     and fed into Pattern B, enabling detection without a separate table pass.
+ *   · Multi-column table content is also included as individual cell lines.
+ *
+ * This module is the fallback detector used when the remote extraction
+ * service (lib/document-field-analyzer.ts) is unavailable.
  */
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 export type AutoFieldType =
   | "text"
@@ -37,8 +41,6 @@ export type AutoFieldType =
   | "condition"
   | "condition_inverse";
 
-type InferredFieldType = "date" | "number" | "email" | "phone";
-
 export interface AutoDetectedField {
   id: string;
   name: string;
@@ -46,30 +48,32 @@ export interface AutoDetectedField {
   type: AutoFieldType;
   required: boolean;
   placeholder: string;
-  /** 0.0 – 1.0, used in review UI for confidence indicator */
+  /**
+   * Retained for interface compatibility with the review UI.
+   * Always 1.0 for this module — no probabilistic scoring is performed.
+   */
   confidence: number;
-  /** Which pattern/layer detected or last modified this field */
+  /** Which pattern produced this field. */
   source:
-    | "label_colon" // L3 Pattern A (fallback)
-    | "underline_blank" // L3 Pattern D (fallback)
-    | "form_box" // L3 Pattern E (fallback)
-    | "standalone_date" // L3 Pattern F (fallback)
-    | "recipient_block" // L3 Recipient (fallback)
-    | "gemini_primary" // Gemini AI detection (primary)
+    | "label_colon" // Pattern B
+    | "underline_blank" // Pattern D
+    | "form_box" // Pattern E
+    | "standalone_date" // Pattern A
+    | "recipient_block" // Pattern C
+    | "ai_primary" // Remote extraction service (see document-field-analyzer.ts)
     | "manual"; // User-written {{placeholder}} syntax
-
-  /** Exact raw text the DOCX injector should replace */
+  /** Exact raw text the DOCX injector should replace. */
   targetText?: string;
-  /** Paragraph text used to scope replacement when targetText is ambiguous */
+  /** Paragraph text used to scope replacement when targetText is ambiguous. */
   contextText?: string;
-  /** Explicit DOCX replacement; defaults to placeholder when omitted */
+  /** Explicit DOCX replacement; defaults to placeholder when omitted. */
   replacementText?: string;
-  /** Placeholder before user edits the field in review */
+  /** Placeholder before user edits the field in the review step. */
   originalPlaceholder?: string;
   subFields?: Omit<AutoDetectedField, "subFields">[];
 }
 
-// ── Shared utilities ──────────────────────────────────────────────────────────
+// ── XML utilities ──────────────────────────────────────────────────────────────
 
 function makeId(): string {
   return `af_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -88,7 +92,6 @@ function decodeXmlEntities(t: string): string {
     .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(parseInt(d, 10)));
 }
 
-/** Collect all <w:t> text nodes in an XML fragment */
 function extractText(xml: string): string {
   const parts: string[] = [];
   const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
@@ -98,7 +101,7 @@ function extractText(xml: string): string {
 }
 
 /**
- * extractParagraphLines — split one <w:p> into visual lines.
+ * Split one <w:p> into visual lines.
  * Handles PDF-converted DOCX where <w:br/> splits lines inside one paragraph.
  */
 function extractParagraphLines(paragraphXml: string): string[] {
@@ -125,9 +128,9 @@ function extractParagraphLines(paragraphXml: string): string[] {
   return lines.filter(Boolean);
 }
 
-// ── Field-name normalisation ──────────────────────────────────────────────────
+// ── Field-name normalisation ───────────────────────────────────────────────────
 
-function toName(raw: string): string {
+function toSlug(raw: string): string {
   return (
     raw
       .trim()
@@ -140,43 +143,37 @@ function toName(raw: string): string {
   );
 }
 
-function normalizeBusinessFieldName(
-  rawLabel: string,
-  baseName: string
-): string {
-  const compact = rawLabel
+/**
+ * Map common Indonesian official-letter label variants to canonical
+ * field names used throughout the template system.
+ */
+function normalizeFieldName(rawLabel: string, fallback: string): string {
+  const key = rawLabel
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
-  if (compact === "nomor" || compact === "no" || compact === "no_surat")
-    return "nomor_surat";
-  if (compact === "lampiran") return "jumlah_lampiran";
-  if (/^(kepada|penerima|nama_penerima|yth)$/.test(compact))
+  if (/^(nomor|no|no_surat|nomer|number)$/.test(key)) return "nomor_surat";
+  if (/^lampiran$/.test(key)) return "jumlah_lampiran";
+  if (/^(kepada|penerima|nama_penerima|yth|ditujukan)$/.test(key))
     return "nama_penerima";
-  if (compact === "hari_tanggal" || compact === "tanggal")
+  if (/^(hari_tanggal|tanggal|tgl|tanggal_surat)$/.test(key))
     return "tanggal_kegiatan";
-  if (compact === "waktu" || compact === "pukul" || compact === "jam")
-    return "waktu_kegiatan";
-  if (
-    compact === "tempat" ||
-    compact === "lokasi" ||
-    compact === "ruang" ||
-    compact === "ruangan"
-  )
+  if (/^(waktu|pukul|jam)$/.test(key)) return "waktu_kegiatan";
+  if (/^(tempat|lokasi|ruang|ruangan|venue|tempat_kegiatan)$/.test(key))
     return "tempat_kegiatan";
-  if (compact === "perihal" || compact === "hal" || compact === "pokok_surat")
+  if (/^(perihal|hal|pokok_surat|subject|re)$/.test(key))
     return "perihal_surat";
 
-  return baseName;
+  return fallback;
 }
 
 function fieldNameFromLabel(rawLabel: string): string {
-  return normalizeBusinessFieldName(rawLabel, toName(rawLabel));
+  return normalizeFieldName(rawLabel, toSlug(rawLabel));
 }
 
-// ── Utility predicates ────────────────────────────────────────────────────────
+// ── Structural predicates ──────────────────────────────────────────────────────
 
 function isBlank(text: string): boolean {
   const t = text.trim();
@@ -189,7 +186,7 @@ function isBlank(text: string): boolean {
 }
 
 function isHeaderFooterNoise(text: string): boolean {
-  const noisePatterns = [
+  return [
     /^page\s*\d+/i,
     /^\d+\s*of\s*\d+/i,
     /^(confidential|draft|internal|private)/i,
@@ -197,11 +194,14 @@ function isHeaderFooterNoise(text: string): boolean {
     /^(date|time):?\s*$/i,
     /^(doc|document)\s*(no|number|#)/i,
     /^rev(ision)?\.?\s*\d+/i,
-  ];
-  return noisePatterns.some((re) => re.test(text.trim()));
+  ].some((re) => re.test(text.trim()));
 }
 
-const INSTITUTIONAL_HEADER_LABELS = new Set([
+/**
+ * Labels that belong to the institutional letterhead — not fillable fields.
+ * These appear in kop surat (letterhead) and should never become placeholders.
+ */
+const HEADER_NOISE_LABELS = new Set([
   "laman",
   "website",
   "web",
@@ -224,185 +224,161 @@ const INSTITUTIONAL_HEADER_LABELS = new Set([
 
 function isInstitutionalValue(value: string): boolean {
   const v = value.trim();
-  if (/^https?:\/\//i.test(v)) return true;
-  if (/^www\./i.test(v)) return true;
-  if (/^\(\d{2,4}\)\s*\d{5,}/.test(v)) return true;
-  return false;
+  return (
+    /^https?:\/\//i.test(v) ||
+    /^www\./i.test(v) ||
+    /^\(\d{2,4}\)\s*\d{5,}/.test(v)
+  );
 }
 
-// ── L5 — Dictionary & format-based type inference (FALLBACK ONLY) ─────────────
+// ── Field type inference (keyword-based, deterministic) ────────────────────────
+//
+// Maps label words to field types using fixed keyword sets.
+// No probabilistic scoring — each keyword maps to exactly one type.
 
-const LABEL_DICT: Record<InferredFieldType, string[]> = {
-  date: [
-    "date",
-    "tanggal",
-    "tgl",
-    "waktu",
-    "time",
-    "bulan",
-    "month",
-    "tahun",
-    "year",
-    "hari",
-    "day",
-    "periode",
-    "period",
-    "masa",
-    "jatuh",
-    "tempo",
-    "deadline",
-    "lahir",
-    "birth",
-    "dob",
-    "expiry",
-    "expiration",
-    "valid",
-    "until",
-    "sampai",
-    "dari",
-    "from",
-    "to",
-    "hingga",
-    "start",
-    "end",
-    "mulai",
-    "selesai",
-  ],
-  number: [
-    "harga",
-    "price",
-    "jumlah",
-    "amount",
-    "total",
-    "qty",
-    "quantity",
-    "nilai",
-    "biaya",
-    "cost",
-    "bayar",
-    "pay",
-    "nominal",
-    "angka",
-    "gaji",
-    "salary",
-    "upah",
-    "wage",
-    "tarif",
-    "rate",
-    "diskon",
-    "discount",
-    "subtotal",
-    "tax",
-    "pajak",
-    "ppn",
-    "vat",
-    "fee",
-    "charge",
-    "sum",
-    "budget",
-    "anggaran",
-    "estimate",
-    "estimasi",
-    "quotation",
-    "quote",
-  ],
-  email: ["email", "e_mail", "surel", "mail", "elektronik", "electronic"],
-  phone: [
-    "telepon",
-    "telp",
-    "phone",
-    "hp",
-    "handphone",
-    "mobile",
-    "whatsapp",
-    "wa",
-    "fax",
-    "faks",
-    "contact",
-    "kontak",
-    "no",
-    "number",
-    "tel",
-    "cell",
-  ],
-};
+const DATE_KEYWORDS = new Set([
+  "tanggal",
+  "tgl",
+  "hari",
+  "bulan",
+  "tahun",
+  "date",
+  "waktu",
+  "time",
+  "pukul",
+  "jam",
+  "deadline",
+  "lahir",
+  "birth",
+  "mulai",
+  "selesai",
+  "hingga",
+  "sampai",
+  "periode",
+  "masa",
+  "tempo",
+  "dari",
+  "until",
+  "jatuh",
+  "expiry",
+  "expiration",
+  "valid",
+  "start",
+  "end",
+]);
 
-function inferTypeFromLabel(label: string): AutoFieldType {
-  const name = toName(label);
-  if (name === "nomor" || name === "no" || name.includes("surat"))
+const NUMBER_KEYWORDS = new Set([
+  "harga",
+  "price",
+  "jumlah",
+  "amount",
+  "total",
+  "qty",
+  "quantity",
+  "nilai",
+  "biaya",
+  "cost",
+  "bayar",
+  "nominal",
+  "angka",
+  "gaji",
+  "salary",
+  "upah",
+  "wage",
+  "tarif",
+  "rate",
+  "diskon",
+  "discount",
+  "subtotal",
+  "pajak",
+  "tax",
+  "ppn",
+  "vat",
+  "fee",
+  "charge",
+  "sum",
+  "budget",
+  "anggaran",
+]);
+
+const EMAIL_KEYWORDS = new Set(["email", "e_mail", "surel", "mail"]);
+
+const PHONE_KEYWORDS = new Set([
+  "telepon",
+  "telp",
+  "phone",
+  "hp",
+  "handphone",
+  "mobile",
+  "whatsapp",
+  "wa",
+  "fax",
+  "faks",
+  "kontak",
+  "contact",
+]);
+
+function inferFieldType(rawLabel: string): AutoFieldType {
+  const words = rawLabel
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  // "Nomor" / "No." fields are document reference numbers — always text.
+  if (words.includes("nomor") || (words.length <= 2 && words.includes("no")))
     return "text";
-  for (const [type, keywords] of Object.entries(LABEL_DICT) as [
-    InferredFieldType,
-    string[],
-  ][]) {
-    if (keywords.some((kw) => name.includes(kw))) return type;
+
+  for (const word of words) {
+    if (DATE_KEYWORDS.has(word)) return "date";
+    if (NUMBER_KEYWORDS.has(word)) return "number";
+    if (EMAIL_KEYWORDS.has(word)) return "email";
+    if (PHONE_KEYWORDS.has(word)) return "phone";
   }
+
   return "text";
 }
 
-function inferTypeFromValue(value: string): AutoFieldType | null {
-  const v = value.trim();
-  if (v.length < 2) return null;
-  if (/^[\w.+\-]+@[\w.\-]+\.\w{2,}$/.test(v)) return "email";
-  if (
-    /^(\+62|08|\+1|\+44|\+91|\+33|\+49)\d{7,15}$/.test(
-      v.replace(/[\s\-()]/g, "")
-    )
-  )
-    return "phone";
-  if (
-    /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(v) ||
-    /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(v) ||
-    /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}[,.]?\s*\d{2,4}$/i.test(
-      v
-    ) ||
-    /^\d{1,2}\s+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\s+\d{4}$/i.test(
-      v
-    ) ||
-    /^\w+,\s+\d{1,2}\s+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\s+\d{4}$/i.test(
-      v
-    )
-  )
-    return "date";
-  if (/^(Rp\.?|IDR|USD|\$|€|£)\s?[\d.,]+/i.test(v)) return "number";
-  if (/^[\d.,]+$/.test(v) && v.length <= 25) return "number";
-  if (/^[\d.,]+%$/.test(v)) return "number";
-  return null;
-}
-
-function inferType(label: string, value?: string): AutoFieldType {
-  if (value && !isBlank(value)) {
-    const fromValue = inferTypeFromValue(value);
-    if (fromValue) return fromValue;
-  }
-  return inferTypeFromLabel(label);
-}
-
-// ── PDF split-line reconstruction (FALLBACK ONLY) ─────────────────────────────
+// ── PDF split-line reconstruction ──────────────────────────────────────────────
+//
+// PDF-to-DOCX conversion often produces fragmented lines where a single
+// "Label : Value" pair is split across multiple paragraphs, e.g.:
+//
+//   Line 0: "Nomor"
+//   Line 1: ":"
+//   Line 2: "101/DST/2026"
+//
+// reconstructSplitLines() merges these back into canonical pairs.
 
 const ID_MONTHS =
   "Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember";
 
-const STANDALONE_DATE_PATTERNS = [
-  new RegExp(`^\d{1,2}\s+(${ID_MONTHS})\s+\d{4}$`, "i"),
-  new RegExp(`^\w+,\s+\d{1,2}\s+(${ID_MONTHS})\s+\d{4}$`, "i"),
+const STANDALONE_DATE_RES = [
+  // "29 Januari 2026"
+  new RegExp(`^\\d{1,2}\\s+(${ID_MONTHS})\\s+\\d{4}$`, "i"),
+  // "Jakarta, 29 Januari 2026"
+  new RegExp(`^\\w[\\w\\s]*,\\s+\\d{1,2}\\s+(${ID_MONTHS})\\s+\\d{4}$`, "i"),
+  // "2026-01-29"
   /^\d{4}-\d{2}-\d{2}$/,
+  // "29/01/2026"
   /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/,
 ];
 
-function isLabelCandidate(t: string): boolean {
-  return (
-    t.length >= 2 &&
-    t.length <= 60 &&
-    !t.includes(":") &&
-    !t.includes("：") &&
-    t.split(/\s+/).length <= 7 &&
-    !STANDALONE_DATE_PATTERNS.some((re) => re.test(t))
-  );
+function isStandaloneDateLine(t: string): boolean {
+  return STANDALONE_DATE_RES.some((re) => re.test(t.trim()));
 }
 
-function isStandaloneColon(t: string): boolean {
-  return /^[:：]\s*$/.test(t);
+function isLabelCandidate(t: string): boolean {
+  const trimmed = t.trim();
+  return (
+    trimmed.length >= 2 &&
+    trimmed.length <= 60 &&
+    !trimmed.includes(":") &&
+    !trimmed.includes("：") &&
+    trimmed.split(/\s+/).length <= 7 &&
+    !isStandaloneDateLine(trimmed)
+  );
 }
 
 function reconstructSplitLines(lines: string[]): string[] {
@@ -413,33 +389,33 @@ function reconstructSplitLines(lines: string[]): string[] {
     const cur = lines[i].trim();
     const next = i + 1 < lines.length ? lines[i + 1].trim() : null;
 
-    if (isStandaloneColon(cur)) {
+    // Skip lines that are only a colon separator
+    if (/^[:：]\s*$/.test(cur)) {
       i++;
       continue;
     }
 
-    // Case 1: "Label" + ": Value"
+    // Case 1: "Label" + ": Value" (colon leads next line)
     if (
       next !== null &&
       /^[:：]/.test(next) &&
-      !isStandaloneColon(next) &&
+      !/^[:：]\s*$/.test(next) &&
       isLabelCandidate(cur)
     ) {
-      const value = next.replace(/^[:：]\s*/, "").trim();
-      result.push(`${cur} : ${value}`);
+      result.push(`${cur} : ${next.replace(/^[:：]\s*/, "").trim()}`);
       i += 2;
       continue;
     }
 
-    // Case 2: "Label :" + "Value"
+    // Case 2: "Label :" + "Value" (colon trails current line, value on next)
     if (next !== null && /[:：]\s*$/.test(cur) && !/^[:：]/.test(next)) {
-      const nextIsLikelyBareLabel =
+      const nextLooksLikeLabel =
         !next.includes(":") &&
         !next.includes("：") &&
         next.split(/\s+/).length <= 3 &&
         next.length <= 30;
 
-      if (!nextIsLikelyBareLabel) {
+      if (!nextLooksLikeLabel) {
         result.push(`${cur} ${next}`.trim());
         i += 2;
         continue;
@@ -453,151 +429,15 @@ function reconstructSplitLines(lines: string[]): string[] {
   return result.filter(Boolean);
 }
 
-// ── L3 Pattern Detectors (FALLBACK ONLY) ─────────────────────────────────────
+// ── Pattern A — Standalone date ────────────────────────────────────────────────
 
-function detectLabelColon(paragraphTexts: string[]): AutoDetectedField[] {
-  const fields: AutoDetectedField[] = [];
-  const seen = new Set<string>();
-  const re = /^([^\n\r:：]{2,50}?)\s*[:：]\s*(.{0,80})?$/;
-
-  for (const raw of paragraphTexts) {
+function detectStandaloneDate(lines: string[]): AutoDetectedField[] {
+  for (const raw of lines) {
     const line = raw.trim();
-    if (!line || line.length > 130) continue;
-    if (isHeaderFooterNoise(line)) continue;
-
-    const match = re.exec(line);
-    if (!match) continue;
-
-    const rawLabel = match[1].trim();
-    const rawValue = (match[2] ?? "").trim();
-
-    if (rawLabel.split(/\s+/).length > 7) continue;
-    if (/[.!?;،]/.test(rawLabel.slice(0, -1))) continue;
-    if (rawLabel.length < 2) continue;
-    if (/^\d/.test(rawLabel)) continue;
-    if (/^\d+[\/\-\.]\d+/.test(rawLabel)) continue;
-
-    const labelNorm = toName(rawLabel);
-    if (INSTITUTIONAL_HEADER_LABELS.has(labelNorm)) continue;
-    if (rawValue && isInstitutionalValue(rawValue)) continue;
-
-    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
-    const name = fieldNameFromLabel(cleanLabel);
-    if (!name || name === "field" || name.length < 2 || seen.has(name))
-      continue;
-    seen.add(name);
-
-    const type = inferType(rawLabel, rawValue);
-    const confidence = isBlank(rawValue) ? 0.85 : 0.72;
-
-    fields.push({
-      id: makeId(),
-      name,
-      label: cleanLabel,
-      type,
-      required: true,
-      placeholder: `{{${name}}}`,
-      confidence,
-      source: "label_colon",
-      targetText: rawValue || undefined,
-      contextText: line,
-      originalPlaceholder: `{{${name}}}`,
-    });
-  }
-
-  return fields;
-}
-
-function detectUnderlineBlanks(paragraphTexts: string[]): AutoDetectedField[] {
-  const fields: AutoDetectedField[] = [];
-  const seen = new Set<string>();
-  const re = /^([^\n\r_\-\.]{2,40}?)\s+([_\-\.…]{3,80})\s*$/;
-
-  for (const raw of paragraphTexts) {
-    const line = raw.trim();
-    if (!line || line.length > 120) continue;
-    if (isHeaderFooterNoise(line)) continue;
-
-    const match = re.exec(line);
-    if (!match) continue;
-
-    const rawLabel = match[1].trim();
-    if (rawLabel.split(/\s+/).length > 7) continue;
-    if (/[.!?;،]/.test(rawLabel.slice(0, -1))) continue;
-    if (rawLabel.length < 2) continue;
-    if (/^\d/.test(rawLabel)) continue;
-
-    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
-    const name = fieldNameFromLabel(cleanLabel);
-    if (!name || name === "field" || name.length < 2 || seen.has(name))
-      continue;
-    seen.add(name);
-
-    fields.push({
-      id: makeId(),
-      name,
-      label: cleanLabel,
-      type: inferType(rawLabel),
-      required: true,
-      placeholder: `{{${name}}}`,
-      confidence: 0.78,
-      source: "underline_blank",
-      targetText: match[2]?.trim() || undefined,
-      contextText: line,
-      originalPlaceholder: `{{${name}}}`,
-    });
-  }
-
-  return fields;
-}
-
-function detectFormBoxes(paragraphTexts: string[]): AutoDetectedField[] {
-  const fields: AutoDetectedField[] = [];
-  const seen = new Set<string>();
-  const checkboxRe = /^(?:[☐□▢\[\(]\s*[\]\)]?\s+)([^\n\r]{1,60})$/;
-  const boxRe = /^([^\n\r:（(]{2,40}?)\s*[:：]\s*[\[\(]\s*[\]\)]\s*$/;
-
-  for (const raw of paragraphTexts) {
-    const line = raw.trim();
-    if (!line || line.length > 100) continue;
-
-    const match = checkboxRe.exec(line) || boxRe.exec(line);
-    if (!match) continue;
-
-    const rawLabel = match[1].trim();
-    if (rawLabel.length < 2 || rawLabel.length > 60) continue;
-    if (/^\d/.test(rawLabel)) continue;
-
-    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
-    const name = fieldNameFromLabel(cleanLabel);
-    if (!name || name === "field" || name.length < 2 || seen.has(name))
-      continue;
-    seen.add(name);
-
-    fields.push({
-      id: makeId(),
-      name,
-      label: cleanLabel,
-      type: inferType(rawLabel),
-      required: false,
-      placeholder: `{{${name}}}`,
-      confidence: 0.75,
-      source: "form_box",
-      targetText: line,
-      contextText: line,
-      originalPlaceholder: `{{${name}}}`,
-    });
-  }
-
-  return fields;
-}
-
-function detectStandaloneDate(paragraphTexts: string[]): AutoDetectedField[] {
-  for (const raw of paragraphTexts) {
-    const line = raw.trim();
-    if (!line || line.includes(":") || line.includes("：")) continue;
-    if (line.length > 40) continue;
-    if (!STANDALONE_DATE_PATTERNS.some((re) => re.test(line))) continue;
+    if (!line) continue;
+    if (line.includes(":") || line.includes("：")) continue;
+    if (line.length > 45) continue;
+    if (!isStandaloneDateLine(line)) continue;
 
     return [
       {
@@ -607,7 +447,7 @@ function detectStandaloneDate(paragraphTexts: string[]): AutoDetectedField[] {
         type: "date",
         required: true,
         placeholder: "{{tanggal_surat}}",
-        confidence: 0.9,
+        confidence: 1,
         source: "standalone_date",
         targetText: line,
         contextText: line,
@@ -618,303 +458,323 @@ function detectStandaloneDate(paragraphTexts: string[]): AutoDetectedField[] {
   return [];
 }
 
-function detectRecipientBlocks(paragraphTexts: string[]): AutoDetectedField[] {
+// ── Pattern B — Label : Value ──────────────────────────────────────────────────
+
+function detectLabelColon(lines: string[]): AutoDetectedField[] {
   const fields: AutoDetectedField[] = [];
-  const ignored =
+  const seen = new Set<string>();
+
+  // Match "Label : Value" or "Label :" (value may be absent / blank)
+  const LINE_RE = /^([^\n\r:：]{2,60}?)\s*[:：]\s*(.{0,120})?$/;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.length > 160) continue;
+    if (isHeaderFooterNoise(line)) continue;
+
+    const match = LINE_RE.exec(line);
+    if (!match) continue;
+
+    const rawLabel = match[1].trim();
+    const rawValue = (match[2] ?? "").trim();
+
+    // Label quality gates — reject noise, sentence fragments, numeric prefixes
+    if (rawLabel.split(/\s+/).length > 7) continue;
+    if (/[.!?;،]/.test(rawLabel.slice(0, -1))) continue;
+    if (rawLabel.length < 2) continue;
+    if (/^\d/.test(rawLabel)) continue;
+    if (/^\d+[\/\-\.]\d+/.test(rawLabel)) continue;
+
+    const labelSlug = toSlug(rawLabel);
+    if (HEADER_NOISE_LABELS.has(labelSlug)) continue;
+    if (rawValue && isInstitutionalValue(rawValue)) continue;
+
+    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
+    const name = fieldNameFromLabel(cleanLabel);
+    if (!name || name === "field" || name.length < 2) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+
+    fields.push({
+      id: makeId(),
+      name,
+      label: cleanLabel,
+      type: inferFieldType(rawLabel),
+      required: true,
+      placeholder: `{{${name}}}`,
+      confidence: 1,
+      source: "label_colon",
+      targetText: rawValue || undefined,
+      contextText: line,
+      originalPlaceholder: `{{${name}}}`,
+    });
+  }
+
+  return fields;
+}
+
+// ── Pattern C — Recipient block ────────────────────────────────────────────────
+
+function detectRecipientBlocks(lines: string[]): AutoDetectedField[] {
+  // Lines that look like address/location components — not the recipient name
+  const IGNORED_LINE =
     /^(di\s+|tempat\b|alamat\b|perihal\b|hal\b|lampiran\b|nomor\b)/i;
 
-  for (let i = 0; i < paragraphTexts.length - 1; i++) {
-    const line = paragraphTexts[i].trim();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (!/^(kepada|kepada\s+yth\.?|yth\.?)\b/i.test(line)) continue;
 
-    const inlineMatch = line.match(/^(?:kepada\s+)?yth\.?\s+(.{3,80})$/i);
-    if (inlineMatch) {
-      const candidate = inlineMatch[1].trim();
+    // Inline form: "Yth. Dr. Budi Santoso, M.Eng."
+    const inline = line.match(/^(?:kepada\s+)?yth\.?\s+(.{3,80})$/i);
+    if (inline) {
+      const candidate = inline[1].trim();
       if (
-        !ignored.test(candidate) &&
+        !IGNORED_LINE.test(candidate) &&
         !isHeaderFooterNoise(candidate) &&
         !/[:{}]/.test(candidate)
       ) {
-        fields.push({
+        return [
+          {
+            id: makeId(),
+            name: "nama_penerima",
+            label: "Nama Penerima",
+            type: "text",
+            required: true,
+            placeholder: "{{nama_penerima}}",
+            confidence: 1,
+            source: "recipient_block",
+            targetText: candidate,
+            contextText: candidate,
+            originalPlaceholder: "{{nama_penerima}}",
+          },
+        ];
+      }
+    }
+
+    // Block form: recipient name appears on the next line(s)
+    const candidate = lines
+      .slice(i + 1, i + 5)
+      .map((l) => l.trim())
+      .find(
+        (l) =>
+          l.length >= 3 &&
+          l.length <= 80 &&
+          !IGNORED_LINE.test(l) &&
+          !isHeaderFooterNoise(l) &&
+          !/[:{}]/.test(l)
+      );
+
+    if (candidate) {
+      return [
+        {
           id: makeId(),
           name: "nama_penerima",
           label: "Nama Penerima",
           type: "text",
           required: true,
           placeholder: "{{nama_penerima}}",
-          confidence: 0.8,
+          confidence: 1,
           source: "recipient_block",
           targetText: candidate,
           contextText: candidate,
           originalPlaceholder: "{{nama_penerima}}",
-        });
-        break;
-      }
+        },
+      ];
     }
+  }
 
-    const candidate = paragraphTexts
-      .slice(i + 1, i + 5)
-      .map((item) => item.trim())
-      .find(
-        (item) =>
-          item.length >= 3 &&
-          item.length <= 80 &&
-          !ignored.test(item) &&
-          !isHeaderFooterNoise(item) &&
-          !/[:{}]/.test(item)
-      );
+  return [];
+}
 
-    if (!candidate) continue;
+// ── Pattern D — Underline blanks ───────────────────────────────────────────────
+
+function detectUnderlineBlanks(lines: string[]): AutoDetectedField[] {
+  const fields: AutoDetectedField[] = [];
+  const seen = new Set<string>();
+
+  // Match "Label  _________" or "Label  ---------" or "Label  ........."
+  const LINE_RE = /^([^\n\r_\-\.]{2,40}?)\s+([_\-\.…]{3,80})\s*$/;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.length > 130) continue;
+    if (isHeaderFooterNoise(line)) continue;
+
+    const match = LINE_RE.exec(line);
+    if (!match) continue;
+
+    const rawLabel = match[1].trim();
+    if (rawLabel.split(/\s+/).length > 7) continue;
+    if (/[.!?;،]/.test(rawLabel.slice(0, -1))) continue;
+    if (rawLabel.length < 2) continue;
+    if (/^\d/.test(rawLabel)) continue;
+
+    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
+    const name = fieldNameFromLabel(cleanLabel);
+    if (!name || name === "field" || name.length < 2) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
 
     fields.push({
       id: makeId(),
-      name: "nama_penerima",
-      label: "Nama Penerima",
-      type: "text",
+      name,
+      label: cleanLabel,
+      type: inferFieldType(rawLabel),
       required: true,
-      placeholder: "{{nama_penerima}}",
-      confidence: 0.74,
-      source: "recipient_block",
-      targetText: candidate,
-      contextText: candidate,
-      originalPlaceholder: "{{nama_penerima}}",
+      placeholder: `{{${name}}}`,
+      confidence: 1,
+      source: "underline_blank",
+      targetText: match[2]?.trim() || undefined,
+      contextText: line,
+      originalPlaceholder: `{{${name}}}`,
     });
-    break;
   }
 
   return fields;
 }
 
+// ── Pattern E — Form boxes / checkboxes ───────────────────────────────────────
+
+function detectFormBoxes(lines: string[]): AutoDetectedField[] {
+  const fields: AutoDetectedField[] = [];
+  const seen = new Set<string>();
+
+  const CHECKBOX_RE = /^(?:[☐□▢\[\(]\s*[\]\)]?\s+)([^\n\r]{1,60})$/;
+  const BOX_RE = /^([^\n\r:（(]{2,40}?)\s*[:：]\s*[\[\(]\s*[\]\)]\s*$/;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.length > 100) continue;
+
+    const match = CHECKBOX_RE.exec(line) ?? BOX_RE.exec(line);
+    if (!match) continue;
+
+    const rawLabel = match[1].trim();
+    if (rawLabel.length < 2 || rawLabel.length > 60) continue;
+    if (/^\d/.test(rawLabel)) continue;
+
+    const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
+    const name = fieldNameFromLabel(cleanLabel);
+    if (!name || name === "field" || name.length < 2) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+
+    fields.push({
+      id: makeId(),
+      name,
+      label: cleanLabel,
+      type: inferFieldType(rawLabel),
+      required: false,
+      placeholder: `{{${name}}}`,
+      confidence: 1,
+      source: "form_box",
+      targetText: line,
+      contextText: line,
+      originalPlaceholder: `{{${name}}}`,
+    });
+  }
+
+  return fields;
+}
+
+// ── Table content extraction ───────────────────────────────────────────────────
+
 function extractTableLines(xml: string): string[] {
   const lines: string[] = [];
-  const rowRe = /<w:tr[ >][\s\S]*?<\/w:tr>/g;
+  const ROW_RE = /<w:tr[ >][\s\S]*?<\/w:tr>/g;
   let rowMatch: RegExpExecArray | null;
 
-  while ((rowMatch = rowRe.exec(xml)) !== null) {
+  while ((rowMatch = ROW_RE.exec(xml)) !== null) {
     const rowXml = rowMatch[0];
-    const cellRe = /<w:tc[ >][\s\S]*?<\/w:tc>/g;
+    const CELL_RE = /<w:tc[ >][\s\S]*?<\/w:tc>/g;
     let cellMatch: RegExpExecArray | null;
     const cells: string[] = [];
 
-    while ((cellMatch = cellRe.exec(rowXml)) !== null) {
+    while ((cellMatch = CELL_RE.exec(rowXml)) !== null) {
       const cellText = extractText(cellMatch[0]);
       if (cellText) cells.push(cellText);
     }
 
-    if (cells.length > 0) {
-      lines.push(cells.join(" "));
-      lines.push(...cells);
+    if (cells.length === 0) continue;
+
+    // Two-column rows are the primary carrier of label:value pairs in
+    // Indonesian official letters. Synthesise a colon-pair line so Pattern B
+    // can pick them up without a dedicated table-specific pattern.
+    if (cells.length === 2) {
+      lines.push(`${cells[0]} : ${cells[1]}`);
     }
+
+    // Also include the row as joined text and individual cells
+    if (cells.length > 2) lines.push(cells.join(" "));
+    lines.push(...cells);
   }
 
   return lines.filter((l) => l.length > 0 && l.length < 200);
 }
 
-// ── FALLBACK: L3+L5 Rule-based detection ─────────────────────────────────────
-// Only runs when Gemini is unavailable (no API key, rate limit, error, timeout)
+// ── Deduplication ─────────────────────────────────────────────────────────────
+//
+// When the same field name is found by multiple patterns, the pattern with
+// the higher structural specificity wins. Priority is defined by the order
+// below — lower index = higher priority.
 
-function runRuleBasedDetection(rawLines: string[]): AutoDetectedField[] {
-  const paraTexts = reconstructSplitLines(rawLines);
+const PATTERN_PRIORITY: Array<AutoDetectedField["source"]> = [
+  "standalone_date", // most specific: exact date text
+  "label_colon", // high reliability: explicit colon separator
+  "recipient_block", // specific to addressee blocks
+  "underline_blank", // reliable but less specific
+  "form_box", // lowest: most ambiguous
+];
 
-  const candidates: AutoDetectedField[] = [
-    ...detectStandaloneDate(paraTexts),
-    ...detectLabelColon(paraTexts),
-    ...detectRecipientBlocks(paraTexts),
-    ...detectUnderlineBlanks(paraTexts),
-    ...detectFormBoxes(paraTexts),
-  ].sort((a, b) => b.confidence - a.confidence);
+function deduplicateByPriority(
+  candidates: AutoDetectedField[]
+): AutoDetectedField[] {
+  const byName = new Map<string, AutoDetectedField>();
 
-  // Deduplicate by name — higher confidence wins
-  const fields: AutoDetectedField[] = [];
-  const seenNames = new Map<string, number>();
-
-  for (const f of candidates) {
-    const idx = seenNames.get(f.name);
-    if (idx !== undefined) {
-      if (f.confidence > fields[idx].confidence) {
-        fields[idx] = f;
-      }
-    } else {
-      seenNames.set(f.name, fields.length);
-      fields.push(f);
-    }
-  }
-
-  return fields;
-}
-
-// ── PRIMARY: Gemini AI Detection ──────────────────────────────────────────────
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-
-interface GeminiFieldItem {
-  name: string;
-  label: string;
-  type: string;
-  targetText?: string;
-  confidence?: number;
-}
-
-function buildGeminiPrompt(rawLines: string[]): string {
-  const docContext = rawLines.slice(0, 200).join("\n");
-
-  return `You are an expert document template field extractor for Indonesian official letters (surat dinas, nota dinas, undangan, surat tugas, surat permohonan).
-
-Extract ALL fillable template fields from the document below.
-
-DOCUMENT TEXT (one line per visual element, including table content):
-${docContext}
-
-EXTRACTION RULES:
-1. Only extract genuinely VARIABLE fields that change per letter — dates, names, numbers, subjects, locations, recipients.
-2. NEVER extract static institutional text: phone numbers, addresses, website URLs, institution names, NIP, signatures, kop surat headers.
-3. NEVER extract body paragraph prose or table header rows ("No", "Waktu", "Kegiatan", "Nama", "Jabatan", "Barang", "Jumlah").
-4. For each field, provide the EXACT text that appears in the document (targetText) so it can be replaced.
-
-EXPECTED FIELD TYPES:
-- text  → names, subjects, titles, recipient names, document numbers, attachment counts
-- date  → any date (document date, event date, birth date, deadline)
-- number → quantities, prices, amounts (e.g. "450", "Rp 5.000")
-- email → email addresses
-- phone → phone numbers, WhatsApp, fax
-
-EXPECTED FIELDS (check ALL of these exist in the document):
-- tanggal_surat    → document date (e.g. "29 Januari 2026", "12 Februari 2026")
-- nomor_surat      → document reference number (e.g. "101/DST/PL3.A.9/B/PK.01/2026")
-- jumlah_lampiran  → attachment count (e.g. "1 (satu) lembar", "1 lembar") — NOT the subject!
-- perihal_surat    → letter subject (e.g. "Undangan Sosialisasi dari MSU") — NOT the attachment count!
-- nama_penerima    → recipient name/title (e.g. "Orang tua/Wali mahasiswa MSU di Depok")
-- tanggal_kegiatan → event date (e.g. "Jumat, 30 Januari 2026", "Sabtu 14 Februari 2026")
-- waktu_kegiatan   → event time (e.g. "08.30 s.d. 11.00 WIB", "13.00 s.d. 14.00 WIB")
-- tempat_kegiatan  → event venue (e.g. "Aula Gedung PUT sisi kanan", "Online Zoom", "Auditorium Perpustakaan PNJ")
-
-IMPORTANT DISTINCTIONS:
-- "Lampiran" value should be the COUNT (e.g. "1 lembar"), NOT the subject line.
-- "Perihal" value should be the SUBJECT (e.g. "Undangan Sosialisasi"), NOT the attachment count.
-- "Yth." or "Kepada" introduces the recipient name.
-- Dates at the top of the letter (before "Yth.") are tanggal_surat.
-- Dates in the event details section are tanggal_kegiatan.
-
-Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"name":"field_name","label":"Field Label","type":"text|date|number|email|phone","targetText":"exact text from document","confidence":0.95}]`;
-}
-
-async function callGeminiDetection(
-  rawLines: string[]
-): Promise<AutoDetectedField[] | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    // console.log(
-    //   "[auto-field-detector] No GEMINI_API_KEY — will use rule-based fallback"
-    // );
-    return null;
-  }
-
-  try {
-    const res = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildGeminiPrompt(rawLines) }] }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 4096,
-          responseMimeType: "application/json",
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      console.warn(
-        `[auto-field-detector] Gemini HTTP ${res.status} — using rule-based fallback`
-      );
-      return null;
+  for (const field of candidates) {
+    const existing = byName.get(field.name);
+    if (!existing) {
+      byName.set(field.name, field);
+      continue;
     }
 
-    const data = await res.json();
-    const rawText: string =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-
-    // Strip accidental markdown fences
-    const cleaned = rawText
-      .replace(/^\x60\x60\x60(?:json)?\s*/i, "")
-      .replace(/\s*\x60\x60\x60$/, "")
-      .trim();
-
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) {
-      console.warn(
-        "[auto-field-detector] Gemini returned non-array — using rule-based fallback"
-      );
-      return null;
-    }
-
-    // Convert Gemini items to AutoDetectedField
-    const fields: AutoDetectedField[] = [];
-    const seenNames = new Set<string>();
-
-    for (const item of parsed) {
-      const name = (item.name ?? "").replace(/[^a-z0-9_]/gi, "_").toLowerCase();
-      if (!name || name.length < 2) continue;
-      if (seenNames.has(name)) continue;
-      seenNames.add(name);
-
-      const targetText = (item.targetText ?? "").trim() || undefined;
-      const confidence =
-        typeof item.confidence === "number" && item.confidence > 0
-          ? Math.min(item.confidence, 1)
-          : 0.92;
-      const type = (
-        ["text", "date", "number", "email", "phone"].includes(item.type)
-          ? item.type
-          : "text"
-      ) as AutoFieldType;
-
-      fields.push({
-        id: makeId(),
-        name,
-        label: item.label || name,
-        type,
-        required: true,
-        placeholder: `{{${name}}}`,
-        confidence,
-        source: "gemini_primary",
-        targetText,
-        contextText: targetText,
-        originalPlaceholder: `{{${name}}}`,
-      });
-    }
-
-    // console.log(
-    //   `[auto-field-detector] Gemini detected ${fields.length} fields`
-    // );
-    return fields;
-  } catch (err) {
-    console.warn(
-      "[auto-field-detector] Gemini call failed:",
-      err,
-      "— using rule-based fallback"
+    const existingRank = PATTERN_PRIORITY.indexOf(
+      existing.source as (typeof PATTERN_PRIORITY)[number]
     );
-    return null;
+    const newRank = PATTERN_PRIORITY.indexOf(
+      field.source as (typeof PATTERN_PRIORITY)[number]
+    );
+
+    // A lower index means higher priority; −1 means not in the list (lowest)
+    if (newRank !== -1 && (existingRank === -1 || newRank < existingRank)) {
+      byName.set(field.name, field);
+    }
   }
+
+  return [...byName.values()];
 }
 
-// ── Main detector — public API ────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────────────
 
+/**
+ * Detect all fillable template fields in a DOCX buffer using Layer-3
+ * structural pattern matching (offline, deterministic).
+ *
+ * Used directly by the remote extraction service (document-field-analyzer.ts)
+ * as its fallback strategy when the remote inference endpoint is unavailable.
+ */
 export async function autoDetectFields(
   buffer: ArrayBuffer
 ): Promise<AutoDetectedField[]> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(buffer);
 
-  // Load document body
   const file = zip.file("word/document.xml");
   if (!file) return [];
   const xml = await file.async("string");
 
-  // Extract table content
+  // Strip tables from the body for paragraph scanning; collect table lines
+  // separately so they are not double-processed.
   const tableLines: string[] = [];
   const bodyWithoutTables = xml.replace(
     /<w:tbl[ >][\s\S]*?<\/w:tbl>/g,
@@ -924,22 +784,26 @@ export async function autoDetectFields(
     }
   );
 
-  // Collect raw visual lines from body paragraphs
+  // Collect visual lines from body paragraphs
   const rawLines: string[] = [];
-  const paraRe = /<w:p[ >][\s\S]*?<\/w:p>/g;
+  const PARA_RE = /<w:p[ >][\s\S]*?<\/w:p>/g;
   let pm: RegExpExecArray | null;
-  while ((pm = paraRe.exec(bodyWithoutTables)) !== null) {
+  while ((pm = PARA_RE.exec(bodyWithoutTables)) !== null) {
     rawLines.push(...extractParagraphLines(pm[0]));
   }
   rawLines.push(...tableLines);
 
-  // ── PRIMARY: Try Gemini AI detection first ────────────────────────────────
-  const geminiFields = await callGeminiDetection(rawLines);
-  if (geminiFields && geminiFields.length > 0) {
-    return geminiFields;
-  }
+  // Merge fragmented lines produced by PDF→DOCX converters
+  const lines = reconstructSplitLines(rawLines);
 
-  // ── FALLBACK: L3+L5 rule-based detection ──────────────────────────────────
-  //console.log("[auto-field-detector] Running rule-based fallback detection");
-  return runRuleBasedDetection(rawLines);
+  // Run all patterns and resolve conflicts by structural priority
+  const candidates: AutoDetectedField[] = [
+    ...detectStandaloneDate(lines),
+    ...detectLabelColon(lines),
+    ...detectRecipientBlocks(lines),
+    ...detectUnderlineBlanks(lines),
+    ...detectFormBoxes(lines),
+  ];
+
+  return deduplicateByPriority(candidates);
 }
