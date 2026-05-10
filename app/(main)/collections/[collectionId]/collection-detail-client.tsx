@@ -989,7 +989,7 @@ export default function CollectionDetailPage() {
     const variant: ErrorVariant = isNoAccess ? "no-access" : "not-found";
 
     const extraHint = isNoAccess
-      ? "You don't have access to this collection."
+      ? ""
       : undefined;
 
     return (
