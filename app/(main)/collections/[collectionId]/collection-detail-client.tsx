@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
-import { useAuth, useOrganization } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import {
@@ -872,7 +872,6 @@ export default function CollectionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
-  const { organization } = useOrganization();
   const collectionId = params.collectionId as Id<"collections">;
 
   const collection = useQuery(
@@ -990,7 +989,7 @@ export default function CollectionDetailPage() {
     const variant: ErrorVariant = isNoAccess ? "no-access" : "not-found";
 
     const extraHint = isNoAccess
-      ? "If this is a shared collection, switch to your organization and try again."
+      ? "You don't have access to this collection."
       : undefined;
 
     return (
@@ -1010,13 +1009,13 @@ export default function CollectionDetailPage() {
             >
               ← Back to Collections
             </button>
-            {isNoAccess && !organization && (
+            {isNoAccess && (
               <span
                 className="flex items-center gap-1.5 text-[11px]"
                 style={{ color: "var(--text-dim)" }}
               >
                 <BuildingIcon className="w-3.5 h-3.5" />
-                Switch org via the account menu
+                We don't share collection to others.
               </span>
             )}
           </>

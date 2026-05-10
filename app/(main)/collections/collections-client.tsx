@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useAuth, useOrganization } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import {
@@ -942,7 +942,7 @@ function ListSkeleton() {
 
 export default function CollectionsPage() {
   const { isLoaded, isSignedIn } = useAuth();
-  const { organization } = useOrganization();
+  // const { organization } = useOrganization();
   const collections = useQuery(
     api.collections.getAll,
     isLoaded && isSignedIn ? {} : "skip"
@@ -1027,7 +1027,7 @@ export default function CollectionsPage() {
       color: data.color,
       tags: data.tags,
       isFavorite: data.isFavorite,
-      organizationId: organization?.id,
+      // organizationId: organization?.id,
     });
     toast.success("Collection created");
   };
