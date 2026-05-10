@@ -2,22 +2,13 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 
-// ── Access helpers (mirrors documents.ts pattern) ─────────────────────────────
+// ── Access helper ─────────────────────────────────────────────────────────────
+// Collections are strictly personal — only the creator may read or write them.
 
-function getOrgId(identity: any): string | undefined {
-  return identity.organization_id as string | undefined;
-}
-
-function hasAccess(
-  col: { ownerId: string; organizationId?: string },
-  identity: any
+function isOwner(
+  col: { ownerId: string },
+  identity: { subject: string }
 ): boolean {
-  if (col.ownerId === identity.subject) return true;
-  const orgId = getOrgId(identity);
-  return !!(orgId && col.organizationId && col.organizationId === orgId);
-}
-
-function isOwner(col: { ownerId: string }, identity: any): boolean {
   return col.ownerId === identity.subject;
 }
 
@@ -29,31 +20,14 @@ export const getAll = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    const orgId = getOrgId(identity);
-
-    const personalCols = await ctx.db
+    // Owner-only: no org index lookup needed.
+    const cols = await ctx.db
       .query("collections")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .collect();
 
-    let orgCols: typeof personalCols = [];
-    if (orgId) {
-      orgCols = await ctx.db
-        .query("collections")
-        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
-        .collect();
-    }
-
-    // Deduplicate (a collection could be both owned and org-scoped)
-    const seen = new Set<string>();
-    const all = [...personalCols, ...orgCols].filter((c) => {
-      if (seen.has(c._id)) return false;
-      seen.add(c._id);
-      return true;
-    });
-
     const withCounts = await Promise.all(
-      all.map(async (col) => {
+      cols.map(async (col) => {
         const junctions = await ctx.db
           .query("documentCollections")
           .withIndex("by_collection_id", (q) => q.eq("collectionId", col._id))
@@ -78,36 +52,16 @@ export const getRecent = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    const orgId = getOrgId(identity);
     const limit = args.limit ?? 4;
 
-    const personalCols = await ctx.db
+    const cols = await ctx.db
       .query("collections")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .order("desc")
       .take(limit);
 
-    let orgCols: typeof personalCols = [];
-    if (orgId) {
-      orgCols = await ctx.db
-        .query("collections")
-        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
-        .order("desc")
-        .take(limit);
-    }
-
-    const seen = new Set<string>();
-    const all = [...personalCols, ...orgCols]
-      .filter((c) => {
-        if (seen.has(c._id)) return false;
-        seen.add(c._id);
-        return true;
-      })
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .slice(0, limit);
-
     const withCounts = await Promise.all(
-      all.map(async (col) => {
+      cols.map(async (col) => {
         const junctions = await ctx.db
           .query("documentCollections")
           .withIndex("by_collection_id", (q) => q.eq("collectionId", col._id))
@@ -129,8 +83,8 @@ export const getById = query({
     const col = await ctx.db.get(args.id);
     if (!col) return null;
 
-    // SECURITY: only owner or org member may fetch this collection
-    if (!hasAccess(col, identity)) return null;
+    // Collections are strictly owner-only.
+    if (!isOwner(col, identity)) return null;
 
     return col;
   },
@@ -142,9 +96,9 @@ export const getDocuments = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    // SECURITY: verify caller has access to the collection before returning its documents
+    // Collections are strictly owner-only.
     const col = await ctx.db.get(args.collectionId);
-    if (!col || !hasAccess(col, identity)) return [];
+    if (!col || !isOwner(col, identity)) return [];
 
     const junctions = await ctx.db
       .query("documentCollections")
@@ -169,7 +123,7 @@ export const create = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
-    organizationId: v.optional(v.string()),
+    // organizationId intentionally omitted — collections are personal only.
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
@@ -194,7 +148,6 @@ export const create = mutation({
       name: args.name,
       description: args.description,
       ownerId: identity.subject,
-      organizationId: args.organizationId,
       icon: args.icon ?? "folder",
       color: args.color ?? "#6366f1",
       tags: args.tags ?? [],
@@ -220,8 +173,6 @@ export const update = mutation({
 
     const col = await ctx.db.get(args.id);
     if (!col) throw new ConvexError("Collection not found");
-
-    // Only the owner can update (org members get read access, not write)
     if (!isOwner(col, identity))
       throw new ConvexError("You don't have access to this collection");
 
@@ -296,10 +247,10 @@ export const addDocument = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // SECURITY: verify caller has access to the collection
+    // Collections are strictly owner-only.
     const col = await ctx.db.get(args.collectionId);
     if (!col) throw new ConvexError("Collection not found");
-    if (!hasAccess(col, identity))
+    if (!isOwner(col, identity))
       throw new ConvexError("You don't have access to this collection");
 
     const existing = await ctx.db
@@ -331,10 +282,10 @@ export const removeDocument = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // SECURITY: verify caller has access to the collection
+    // Collections are strictly owner-only.
     const col = await ctx.db.get(args.collectionId);
     if (!col) throw new ConvexError("Collection not found");
-    if (!hasAccess(col, identity))
+    if (!isOwner(col, identity))
       throw new ConvexError("You don't have access to this collection");
 
     const junction = await ctx.db
@@ -359,6 +310,6 @@ export const getCollectionAccessStatus = query({
     const col = await ctx.db.get(args.id);
     if (!col) return { exists: false, hasAccess: false };
 
-    return { exists: true, hasAccess: hasAccess(col, identity) };
+    return { exists: true, hasAccess: isOwner(col, identity) };
   },
 });

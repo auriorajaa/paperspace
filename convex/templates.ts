@@ -77,12 +77,8 @@ export const getById = query({
     const template = await ctx.db.get(args.id);
     if (!template) return null;
 
-    const orgId = (identity as any).organization_id as string | undefined;
-    const isOwner = template.ownerId === identity.subject;
-    const isOrgMember =
-      !!orgId && !!template.organizationId && template.organizationId === orgId;
-
-    if (!isOwner && !isOrgMember) return null;
+    // Templates are strictly owner-only — org membership is not enough.
+    if (template.ownerId !== identity.subject) return null;
 
     return template;
   },
@@ -94,16 +90,10 @@ export const getGeneratedCount = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return 0;
 
-    // SECURITY: Verify the user actually owns or belongs to the org of this template
+    // Templates are strictly owner-only.
     const template = await ctx.db.get(args.templateId);
     if (!template) return 0;
-
-    const orgId = (identity as any).organization_id as string | undefined;
-    const isOwner = template.ownerId === identity.subject;
-    const isOrgMember =
-      !!orgId && !!template.organizationId && template.organizationId === orgId;
-
-    if (!isOwner && !isOrgMember) return 0;
+    if (template.ownerId !== identity.subject) return 0;
 
     const docs = await ctx.db
       .query("generatedDocuments")
@@ -123,7 +113,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
     sourceFileType: v.optional(v.string()),
-    organizationId: v.optional(v.string()),
+    // organizationId intentionally omitted — templates are personal only.
     tags: v.optional(v.array(v.string())),
     fields: v.array(fieldSchema),
   },
@@ -134,7 +124,6 @@ export const create = mutation({
     return ctx.db.insert("templates", {
       name: args.name,
       ownerId: identity.subject,
-      organizationId: args.organizationId,
       storageId: args.storageId,
       fileUrl: args.fileUrl,
       description: args.description,
@@ -168,7 +157,6 @@ export const update = mutation({
       throw new ConvexError("You don't have access to this template");
 
     // FIX: Hapus file lama jika user upload file template baru.
-    // Sebelumnya file lama di storage tidak pernah dihapus saat template di-replace.
     if (args.storageId && args.storageId !== template.storageId) {
       try {
         await ctx.storage.delete(template.storageId as any);
@@ -199,10 +187,6 @@ export const remove = mutation({
       throw new ConvexError("You don't have access to this template");
 
     // ── Cascade: deactivate & flag all form connections using this template ──
-    // Connections are marked templateDeleted=true so the frontend can show a
-    // clear "Template Deleted" state rather than confusing sync errors. We do
-    // NOT delete the connections or their submissions — the user may still
-    // want to view or download previously generated documents.
     const now = Date.now();
     const connections = await ctx.db
       .query("formConnections")
@@ -247,29 +231,21 @@ export const saveGeneratedDocument = mutation({
     format: v.string(),
     isBulk: v.boolean(),
     bulkCount: v.optional(v.number()),
-    organizationId: v.optional(v.string()),
+    // organizationId intentionally omitted — templates are personal only.
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // SECURITY: Verify user actually owns this template before saving generated doc
+    // Templates are strictly owner-only.
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new ConvexError("Template not found");
-
-    const orgId = (identity as any).organization_id as string | undefined;
-    const isOwner = template.ownerId === identity.subject;
-    const isOrgMember =
-      !!orgId && !!template.organizationId && template.organizationId === orgId;
-
-    if (!isOwner && !isOrgMember) {
+    if (template.ownerId !== identity.subject)
       throw new ConvexError("You don't have access to this template");
-    }
 
     return ctx.db.insert("generatedDocuments", {
       templateId: args.templateId,
       ownerId: identity.subject,
-      organizationId: args.organizationId,
       title: args.title,
       fieldValues: args.fieldValues,
       format: args.format,
@@ -329,7 +305,7 @@ export const updateFileStorageInternal = internalMutation({
     fileUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    // FIX: Sama seperti documents — hapus file lama sebelum update.
+    // FIX: Hapus file lama sebelum update.
     const template = await ctx.db.get(args.id);
     if (template?.storageId && template.storageId !== args.storageId) {
       try {

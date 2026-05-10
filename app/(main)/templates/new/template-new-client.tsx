@@ -3,7 +3,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useOrganization } from "@clerk/nextjs";
+// import { useOrganization } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
@@ -657,7 +657,7 @@ function ProgressSteps({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TemplateNewPage() {
   const router = useRouter();
-  const { organization } = useOrganization();
+  // const { organization } = useOrganization();
   const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
   const createTemplate = useMutation(api.templates.create);
   const allTemplates = useQuery(api.templates.getAll);
@@ -1339,7 +1339,7 @@ export default function TemplateNewPage() {
           previewText,
           sourceFileType: fileKind ?? "docx",
           tags: tags.length > 0 ? tags : undefined,
-          organizationId: organization?.id,
+          // organizationId: organization?.id,
           fields: mergedFields.map(serializeDetectedField),
         });
         // console.log("[processDocx] template saved, id:", templateId);
@@ -1371,7 +1371,7 @@ export default function TemplateNewPage() {
       previewText: extractedText,
       sourceFileType: fileKind ?? "docx",
       tags: tags.length > 0 ? tags : undefined,
-      organizationId: organization?.id,
+      // organizationId: organization?.id,
       fields: fields.map((f) => ({
         id: f.id,
         name: f.name,
