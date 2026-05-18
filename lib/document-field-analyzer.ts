@@ -11,6 +11,18 @@
  * error, network timeout, or malformed response), the module falls back
  * transparently to the offline rule-based detector in auto-field-detector.ts.
  *
+ * DESIGN CONSTRAINT — AI output must stay aligned with L3:
+ *   The AI prompt is intentionally constrained to the same structural
+ *   rules as the L3 rule-based detector. This means:
+ *     · Only "Label : Value" pairs, standalone dates, and recipient blocks
+ *       are extracted — not free-form prose inference.
+ *     · Field names follow the same canonical table as normalizeFieldName()
+ *       in auto-field-detector.ts.
+ *     · Repeating label blocks produce indexed fields (nama_1 / nama_2)
+ *       matching the two-pass indexing logic in detectLabelColon().
+ *   This alignment ensures the field review UI behaves consistently
+ *   regardless of which detection path ran.
+ *
  * ─────────────────────────────────────────────────────────────────────────
  * [DEV NOTE — INTERNAL, DO NOT REMOVE]
  * The inference endpoint behind this module is Google Gemini 2.5 Flash-Lite.
@@ -30,20 +42,12 @@ import type { AutoDetectedField, AutoFieldType } from "./auto-field-detector";
 import { autoDetectFields } from "./auto-field-detector";
 
 // ── Service configuration ──────────────────────────────────────────────────────
-//
-// All names here are provider-agnostic. See the [DEV NOTE] above for the
-// actual service details.
 
-// Primary extraction key.  Falls back to the legacy env-var name for
-// backward compatibility with existing deployment configurations.
 const AI_EXTRACTION_KEY: string | undefined =
   process.env.AI_EXTRACTION_KEY ?? process.env.GEMINI_API_KEY;
 
-// Model identifier — override via AI_MODEL for staging or A/B testing.
 const AI_MODEL: string = process.env.AI_MODEL ?? "gemini-2.5-flash-lite";
 
-// Inference endpoint — constructed at module load from the configured model.
-// Override the full URL via AI_ENDPOINT for provider migrations.
 const AI_ENDPOINT: string =
   process.env.AI_ENDPOINT ??
   (() => {
@@ -105,10 +109,25 @@ function collectTableLines(tableXml: string): string[] {
       const t = collectCellText(cell[0]);
       if (t) cells.push(t);
     }
-    if (cells.length > 0) {
-      lines.push(cells.join(" "));
-      lines.push(...cells);
+    if (cells.length === 0) continue;
+
+    // Two-column rows: synthesise an explicit "Label : Value" colon pair.
+    // This is critical for correct detection of repeated label blocks
+    // (e.g. multiple Nama/NIP/Pangkat/Jabatan entries in Surat Tugas).
+    // Without the colon pair, the AI sees identical space-joined strings
+    // for same-value fields (e.g. two people with the same pangkat/jabatan)
+    // and incorrectly deduplicates them into a single field.
+    // Matching the same synthesis logic used by extractTableLines() in
+    // auto-field-detector.ts keeps both paths consistent.
+    if (cells.length === 2) {
+      lines.push(`${cells[0]} : ${cells[1]}`);
     }
+
+    // For wider tables, include the space-joined row for context
+    if (cells.length > 2) lines.push(cells.join(" "));
+
+    // Always include individual cell text as well
+    lines.push(...cells);
   }
   return lines.filter((l) => l.length > 0 && l.length < 200);
 }
@@ -142,48 +161,129 @@ async function extractDocumentLines(buffer: ArrayBuffer): Promise<string[]> {
 }
 
 // ── Prompt construction ────────────────────────────────────────────────────────
+//
+// DESIGN NOTE:
+//   The prompt is deliberately constrained to mirror the structural rules
+//   of the L3 rule-based detector (auto-field-detector.ts). This prevents
+//   the AI from "going too smart" and inferring fields from free-form prose,
+//   which would produce results inconsistent with L3 and confuse users when
+//   they switch between AI-detected and rule-based results.
+//
+//   The key constraints enforced in the prompt:
+//     1. Only extract from explicit "Label : Value" pairs, standalone dates,
+//        and clear recipient blocks — not from body prose.
+//     2. Field names must follow the same canonical table as normalizeFieldName()
+//        in auto-field-detector.ts.
+//     3. Repeated labels → indexed names (nama_1/nama_2) matching L3's two-pass
+//        logic.
+//     4. Institutional text (phone, URL, signing official's NIP) is excluded,
+//        same as L3's HEADER_NOISE_LABELS and isInstitutionalValue().
 
 function buildExtractionPrompt(rawLines: string[]): string {
   const docContext = rawLines.slice(0, 200).join("\n");
 
-  return `You are an expert document template field extractor for Indonesian official letters (surat dinas, nota dinas, undangan, surat tugas, surat permohonan).
+  return `You are a document template field extractor for Indonesian official letters.
 
-Extract ALL fillable template fields from the document below.
-
-DOCUMENT TEXT (one line per visual element, including table content):
+DOCUMENT TEXT (one line per visual element — paragraphs and table rows):
 ${docContext}
 
-EXTRACTION RULES:
-1. Only extract genuinely VARIABLE fields that change per letter — dates, names, numbers, subjects, locations, recipients.
-2. NEVER extract static institutional text: phone numbers, addresses, website URLs, institution names, NIP, signatures, kop surat headers.
-3. NEVER extract body paragraph prose or table header rows ("No", "Waktu", "Kegiatan", "Nama", "Jabatan", "Barang", "Jumlah").
-4. For each field, provide the EXACT text that appears in the document (targetText) so it can be replaced.
+━━━ STEP 1 — IDENTIFY DOCUMENT TYPE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Classify as ONE of:
+  undangan | surat_tugas | nota_dinas | pengumuman | surat_permohonan | surat_kuasa | other
 
-EXPECTED FIELD TYPES:
-- text   → names, subjects, titles, recipient names, document numbers, attachment counts
-- date   → any date (document date, event date, birth date, deadline)
-- number → quantities, prices, amounts (e.g. "450", "Rp 5.000")
-- email  → email addresses
-- phone  → phone numbers, WhatsApp, fax
+━━━ STEP 2 — DETECT FILLABLE FIELDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-EXPECTED FIELDS (check ALL of these exist in the document):
-- tanggal_surat    → document date (e.g. "29 Januari 2026", "12 Februari 2026")
-- nomor_surat      → document reference number (e.g. "101/DST/PL3.A.9/B/PK.01/2026")
-- jumlah_lampiran  → attachment count (e.g. "1 (satu) lembar", "1 lembar") — NOT the subject!
-- perihal_surat    → letter subject (e.g. "Undangan Sosialisasi dari MSU") — NOT the attachment count!
-- nama_penerima    → recipient name/title (e.g. "Orang tua/Wali mahasiswa MSU di Depok")
-- tanggal_kegiatan → event date (e.g. "Jumat, 30 Januari 2026", "Sabtu 14 Februari 2026")
-- waktu_kegiatan   → event time (e.g. "08.30 s.d. 11.00 WIB", "13.00 s.d. 14.00 WIB")
-- tempat_kegiatan  → event venue (e.g. "Aula Gedung PUT sisi kanan", "Online Zoom")
+ONLY extract fields found in these three structural patterns:
+  A) Explicit "Label : Value" pairs — e.g. "Nomor  : 101/DST/2026"
+  B) Standalone date lines           — e.g. "29 Januari 2026" (top of letter)
+  C) Recipient blocks                — lines after "Yth." or "Kepada Yth."
+
+DO NOT extract:
+  ✗ Fields inferred from body paragraph prose (e.g. names mentioned in a sentence)
+  ✗ Institutional letterhead data: institution name, phone, fax, URL, address
+  ✗ NIP / signature of the signing official at the bottom
+  ✗ Table header rows ("No", "Waktu", "Kegiatan", "Nama", "Jabatan" AS HEADERS)
+  ✗ Static labels that never change between letters
+
+━━━ STEP 3 — HANDLE REPEATED LABEL BLOCKS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+When the same label (e.g. "Nama", "NIP", "Jabatan") appears MORE THAN ONCE
+in the document (e.g. a Surat Tugas listing two or more assigned staff):
+
+  - Create INDEXED fields using suffix _1, _2, etc.
+  - The first occurrence becomes field_1, the second becomes field_2, and so on.
+  - If a label appears only once, use NO suffix.
+  - NEVER reuse the same field name — every output item must have a unique name.
+
+  CRITICAL — INDEX BY POSITION, NOT BY VALUE UNIQUENESS:
+  Even if two or more occurrences of a label have IDENTICAL values
+  (e.g. two staff members with the same pangkat/golongan or the same jabatan),
+  you MUST still create a SEPARATE indexed field for each occurrence.
+  They belong to DIFFERENT persons and must be filled independently.
+  DO NOT merge or deduplicate based on identical targetText values.
+
+  Example (Surat Tugas, two dosen with same pangkat and jabatan):
+
+    Nama               : Fajar Septian, M.Kom.
+    NIP                : 198909092025061002
+    Pangkat dan Golongan : III/b-Penata Muda Tingkat I
+    Jabatan            : Dosen Jurusan Teknik Informatika dan Komputer
+    Nama               : Dwi Ermawati, M.T.
+    NIP                : 199106202025062002
+    Pangkat dan Golongan : III/b-Penata Muda Tingkat I
+    Jabatan            : Dosen Jurusan Teknik Informatika dan Komputer
+
+  Correct output — 8 separate fields, one per occurrence:
+    nama_1 / Nama 1 / Fajar Septian, M.Kom.
+    nip_1 / NIP 1 / 198909092025061002
+    pangkat_golongan_1 / Pangkat Golongan 1 / III/b-Penata Muda Tingkat I
+    jabatan_1 / Jabatan 1 / Dosen Jurusan Teknik Informatika dan Komputer
+    nama_2 / Nama 2 / Dwi Ermawati, M.T.
+    nip_2 / NIP 2 / 199106202025062002
+    pangkat_golongan_2 / Pangkat Golongan 2 / III/b-Penata Muda Tingkat I
+    jabatan_2 / Jabatan 2 / Dosen Jurusan Teknik Informatika dan Komputer
+
+  WRONG (DO NOT merge same-value entries):
+    pangkat_golongan_1 only — missing _2
+    jabatan_1 only — missing _2
+
+━━━ CANONICAL FIELD NAMES (use exactly these — no variations) ━━━━━━━━━━━━━━━
+Universal (all document types):
+  tanggal_surat      → document date at the top of the letter (Pattern B)
+  nomor_surat        → reference/document number
+  jumlah_lampiran    → attachment count ("1 lembar", "2 (dua) lembar")
+  perihal_surat      → letter subject / topic
+
+Undangan:
+  nama_penerima      → recipient name/title (after "Yth." — Pattern C only)
+  tanggal_kegiatan   → event date (inside letter body, "hari/tanggal" label)
+  waktu_kegiatan     → event time ("waktu" or "pukul" label)
+  tempat_kegiatan    → event venue ("tempat" or "lokasi" label)
+
+Surat Tugas / SK / Personnel:
+  nama               → person name (indexed if repeated: nama_1, nama_2 …)
+  nip                → NIP number (indexed if repeated: nip_1, nip_2 …)
+  pangkat_golongan   → rank and grade (indexed: pangkat_golongan_1 …)
+  jabatan            → position / title (indexed: jabatan_1 …)
+  kegiatan_tugas     → task/activity description
 
 IMPORTANT DISTINCTIONS:
-- "Lampiran" value should be the COUNT (e.g. "1 lembar"), NOT the subject line.
-- "Perihal" value should be the SUBJECT (e.g. "Undangan Sosialisasi"), NOT the attachment count.
-- "Yth." or "Kepada" introduces the recipient name.
-- Dates at the top of the letter (before "Yth.") are tanggal_surat.
-- Dates in the event details section are tanggal_kegiatan.
+  · "Lampiran" value = the COUNT (e.g. "1 lembar"), NOT the subject line.
+  · "Perihal" value = the SUBJECT, NOT the attachment count.
+  · tanggal_surat = date at TOP of letter (before "Yth.").
+  · tanggal_kegiatan = date in the event details section (inside body).
+  · NIP of the SIGNING OFFICIAL at the bottom → DO NOT extract (static).
+  · NIP of ASSIGNED STAFF in Surat Tugas body → DO extract (variable).
 
-Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
+━━━ FIELD TYPES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  text   → ALL non-date values: names, reference numbers, NIP, pangkat,
+           jabatan, addresses, phone numbers, email addresses, amounts —
+           the template engine applies identical string substitution for all
+           of these, so there is no distinction between sub-types.
+  date   → any date or time value (document date, event date, time)
+
+━━━ OUTPUT FORMAT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Return ONLY a valid JSON array — no markdown fences, no explanation, nothing else:
 [{"name":"field_name","label":"Field Label","type":"text|date|number|email|phone","targetText":"exact text from document","confidence":0.95}]`;
 }
 

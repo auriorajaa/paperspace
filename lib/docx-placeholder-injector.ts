@@ -308,7 +308,11 @@ function collectCells(rowXml: string): XmlRange[] {
   return collectRanges(rowXml, /<w:tc[ >][\s\S]*?<\/w:tc>/g);
 }
 
-function replaceRange(xml: string, range: XmlRange, replacement: string): string {
+function replaceRange(
+  xml: string,
+  range: XmlRange,
+  replacement: string
+): string {
   return xml.slice(0, range.start) + replacement + xml.slice(range.end);
 }
 
@@ -318,14 +322,116 @@ function replaceFieldsInTextFragments(
 ): string {
   const textFields = fields.filter((field) => field.type !== "loop");
 
+  // 1. Group fields by targetText
+  const byTarget = new Map<string, InjectableField[]>();
+  for (const field of textFields) {
+    const target = field.targetText?.trim();
+    if (!target || target.length < 2) continue;
+    const arr = byTarget.get(target) ?? [];
+    arr.push(field);
+    byTarget.set(target, arr);
+  }
+
+  // 2. Sort each group by _N suffix (_1 first, _2 second, …)
+  for (const [, arr] of byTarget) {
+    arr.sort((a, b) => {
+      const ai = parseInt(a.name.match(/_(\d+)$/)?.[1] ?? "0", 10);
+      const bi = parseInt(b.name.match(/_(\d+)$/)?.[1] ?? "0", 10);
+      return ai - bi;
+    });
+  }
+
+  // 3. Global occurrence counter — persists ACROSS paragraphs.
+  //
+  //    THE BUG THIS FIXES:
+  //    In a Surat Tugas, pangkat_golongan for person 1 and person 2 live in
+  //    separate table-cell paragraphs, each with exactly one occurrence of the
+  //    same target text. The old code used a per-paragraph occurrence index (i)
+  //    that always started at 0, so fieldIndex = Math.min(0, …) = 0 for every
+  //    paragraph — both rows always got group[0] = _1.
+  //
+  //    With a global counter:
+  //      Person 1's paragraph → baseConsumed=0 → group[0] = _1  ✓
+  //      Person 2's paragraph → baseConsumed=1 → group[1] = _2  ✓
+  const globalOccurrence = new Map<string, number>();
+
   return xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (paragraph) => {
     let result = paragraph;
     const paragraphText = getText(result);
 
+    // ── Occurrence-aware replacement ──────────────────────────────────────────
+    for (const [target, group] of byTarget) {
+      if (!paragraphText.includes(target)) continue;
+
+      const baseConsumed = globalOccurrence.get(target) ?? 0;
+
+      if (group.length === 1) {
+        // Single field — simple replacement (unchanged behaviour)
+        const field = group[0];
+        const replacement = getReplacement(field);
+        if (
+          field.originalPlaceholder &&
+          field.originalPlaceholder !== replacement
+        ) {
+          result = replaceTextInFragment(
+            result,
+            field.originalPlaceholder,
+            replacement
+          ).xml;
+        }
+        if (!result.includes(replacement)) {
+          result = replaceTextInFragment(result, target, replacement).xml;
+        }
+        continue;
+      }
+
+      // Multiple fields share the same targetText.
+      //
+      // We replace occurrences one at a time, first→last, using the global
+      // counter to pick the right indexed field. Because replaceTextInFragment
+      // always replaces the FIRST remaining occurrence of `target`, calling it
+      // iteratively naturally walks through occurrence 1, 2, 3 … in order.
+      //
+      //   Pass 1: replaces occurrence #1 with group[baseConsumed+0]
+      //   Pass 2: replaces occurrence #2 (now #1) with group[baseConsumed+1]
+      //   …
+      //
+      // This handles both the common cross-paragraph case (1 occurrence per
+      // paragraph, global counter advances between paragraphs) and the rarer
+      // within-paragraph case (multiple occurrences in one paragraph).
+      let localCount = 0;
+      let currentText = getText(result);
+
+      while (currentText.includes(target)) {
+        const globalIdx = baseConsumed + localCount;
+        const field = group[Math.min(globalIdx, group.length - 1)];
+        const fieldReplacement = getReplacement(field);
+
+        const replaced = replaceTextInFragment(
+          result,
+          target,
+          fieldReplacement
+        );
+        if (!replaced.changed) break;
+
+        result = replaced.xml;
+        currentText = getText(result);
+        localCount++;
+      }
+
+      globalOccurrence.set(target, baseConsumed + localCount);
+    }
+
+    // ── Fields without targetText (fallback) ─────────────────────────────────
     for (const field of textFields) {
+      if (field.targetText?.trim()) continue;
+
       const replacement = getReplacement(field);
 
-      if (field.originalPlaceholder && field.originalPlaceholder !== replacement) {
+      if (
+        field.originalPlaceholder &&
+        field.originalPlaceholder !== replacement
+      ) {
         result = replaceTextInFragment(
           result,
           field.originalPlaceholder,
@@ -334,17 +440,6 @@ function replaceFieldsInTextFragments(
       }
 
       if (result.includes(replacement)) continue;
-
-      const target = field.targetText?.trim();
-      if (target) {
-        const context = field.contextText?.trim();
-        if (context && !paragraphText.includes(context) && !paragraphText.includes(target)) {
-          continue;
-        }
-        const replaced = replaceTextInFragment(result, target, replacement);
-        result = replaced.xml;
-        continue;
-      }
 
       const context = field.contextText?.trim();
       if (
@@ -401,7 +496,8 @@ function injectTwoColumnBlankCells(
     if (!isBlank(rightText)) return rowXml;
 
     const field = tableFields.find(
-      (candidate) => normalizeLabel(candidate.label) === normalizeLabel(leftText)
+      (candidate) =>
+        normalizeLabel(candidate.label) === normalizeLabel(leftText)
     );
     if (!field) return rowXml;
 
@@ -425,7 +521,9 @@ function injectLoopTables(xml: string, fields: InjectableField[]): string {
     if (rows.length < 2) return tableXml;
 
     const headerCells = collectCells(rows[0].xml);
-    const headerLabels = headerCells.map((cell) => normalizeLabel(getText(cell.xml)));
+    const headerLabels = headerCells.map((cell) =>
+      normalizeLabel(getText(cell.xml))
+    );
     const loopField = loopFields.find((field) => {
       const subFields = field.subFields ?? [];
       if (subFields.length < 2 || subFields.length > headerLabels.length) {
@@ -441,7 +539,9 @@ function injectLoopTables(xml: string, fields: InjectableField[]): string {
     const dataRow = rows.slice(1).find((row) => {
       const cells = collectCells(row.xml);
       if (cells.length < loopField.subFields!.length) return false;
-      const blankCount = cells.filter((cell) => isBlank(getText(cell.xml))).length;
+      const blankCount = cells.filter((cell) =>
+        isBlank(getText(cell.xml))
+      ).length;
       return blankCount / cells.length >= 0.4;
     });
 
@@ -451,7 +551,11 @@ function injectLoopTables(xml: string, fields: InjectableField[]): string {
     let nextRow = dataRow.xml;
     const subFields = loopField.subFields;
 
-    for (let i = Math.min(subFields.length, dataCells.length) - 1; i >= 0; i--) {
+    for (
+      let i = Math.min(subFields.length, dataCells.length) - 1;
+      i >= 0;
+      i--
+    ) {
       const subField = subFields[i];
       let token = `{{${subField.name}}}`;
       if (i === 0) token = `{{#${loopField.name}}}${token}`;

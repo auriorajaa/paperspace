@@ -16,6 +16,8 @@
  * Detection patterns (processed in priority order):
  *   A — Standalone date paragraphs     ("29 Januari 2026", "Jakarta, 12 Feb 2026")
  *   B — "Label : Value" colon pairs    ("Nomor  : 101/DST/…", "Perihal : …")
+ *       ↳ Sub-rule B2: REPEATED labels produce indexed fields
+ *                      (nama_1/nama_2, nip_1/nip_2, etc.)
  *   C — Recipient blocks               ("Yth.", "Kepada", "Kepada Yth.")
  *   D — Underline / dash blank fields  ("Nama  ___________")
  *   E — Form-style empty brackets      ("[ ] Setuju", "Pilihan : ( )")
@@ -24,6 +26,16 @@
  *   · Two-column table rows are synthesised into "Label : Value" pairs
  *     and fed into Pattern B, enabling detection without a separate table pass.
  *   · Multi-column table content is also included as individual cell lines.
+ *
+ * CHANGELOG vs previous version:
+ *   - detectLabelColon(): refactored to two-pass indexed approach so repeated
+ *     labels (e.g. multiple Nama/NIP/Jabatan blocks in Surat Tugas) produce
+ *     indexed fields (nama_1, nip_1 … nama_2, nip_2 …) instead of being
+ *     silently dropped after the first occurrence.
+ *   - normalizeFieldName(): added canonical mappings for nip, pangkat_golongan,
+ *     jabatan — common in Surat Tugas / SK documents.
+ *   - detectRecipientBlocks(): aligned to avoid name-clash with indexed "nama_N"
+ *     produced by Pattern B (recipient block always uses "nama_penerima").
  *
  * This module is the fallback detector used when the remote extraction
  * service (lib/document-field-analyzer.ts) is unavailable.
@@ -146,6 +158,11 @@ function toSlug(raw: string): string {
 /**
  * Map common Indonesian official-letter label variants to canonical
  * field names used throughout the template system.
+ *
+ * This table must stay in sync with the AI extraction prompt in
+ * document-field-analyzer.ts so that both paths produce the same
+ * canonical names — keeping the field review UI consistent regardless
+ * of which detection path ran.
  */
 function normalizeFieldName(rawLabel: string, fallback: string): string {
   const key = rawLabel
@@ -154,17 +171,40 @@ function normalizeFieldName(rawLabel: string, fallback: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+  // ── Universal header fields ──────────────────────────────────────────────
   if (/^(nomor|no|no_surat|nomer|number)$/.test(key)) return "nomor_surat";
   if (/^lampiran$/.test(key)) return "jumlah_lampiran";
+  if (/^(perihal|hal|pokok_surat|subject|re)$/.test(key))
+    return "perihal_surat";
+
+  // ── Recipient / addressee ────────────────────────────────────────────────
   if (/^(kepada|penerima|nama_penerima|yth|ditujukan)$/.test(key))
     return "nama_penerima";
-  if (/^(hari_tanggal|tanggal|tgl|tanggal_surat)$/.test(key))
+
+  // ── Event / activity fields (undangan) ───────────────────────────────────
+  if (/^(hari_tanggal|tanggal|tgl|tanggal_surat|hari)$/.test(key))
     return "tanggal_kegiatan";
   if (/^(waktu|pukul|jam)$/.test(key)) return "waktu_kegiatan";
   if (/^(tempat|lokasi|ruang|ruangan|venue|tempat_kegiatan)$/.test(key))
     return "tempat_kegiatan";
-  if (/^(perihal|hal|pokok_surat|subject|re)$/.test(key))
-    return "perihal_surat";
+
+  // ── Personnel fields (surat tugas, SK, etc.) ─────────────────────────────
+  //    NOTE: "nama" alone maps to the generic "nama" — intentionally NOT
+  //    mapped to "nama_penerima". Pattern B will index it if it repeats
+  //    (nama_1, nama_2, …), keeping each person's block distinct.
+  if (/^(nama|name)$/.test(key)) return "nama";
+  if (/^(nip|nomor_induk_pegawai|nip_nrp)$/.test(key)) return "nip";
+  if (
+    /^(pangkat|pangkat_dan_golongan|pangkat_golongan|golongan|pangkat_gol)$/.test(
+      key
+    )
+  )
+    return "pangkat_golongan";
+  if (/^(jabatan|posisi|position)$/.test(key)) return "jabatan";
+
+  // ── Assignment / task description ────────────────────────────────────────
+  if (/^(kegiatan|tugas|uraian_tugas|keperluan)$/.test(key))
+    return "kegiatan_tugas";
 
   return fallback;
 }
@@ -326,15 +366,19 @@ function inferFieldType(rawLabel: string): AutoFieldType {
     .split(/\s+/)
     .filter(Boolean);
 
-  // "Nomor" / "No." fields are document reference numbers — always text.
-  if (words.includes("nomor") || (words.length <= 2 && words.includes("no")))
+  // Reference numbers / identifiers are always text regardless of keywords.
+  if (
+    words.includes("nomor") ||
+    words.includes("nip") ||
+    (words.length <= 2 && words.includes("no"))
+  )
     return "text";
 
+  // Only distinguish date fields — everything else (numbers, phone, email,
+  // names, etc.) is treated as plain text because the template engine applies
+  // the same simple string substitution for all non-structural types.
   for (const word of words) {
     if (DATE_KEYWORDS.has(word)) return "date";
-    if (NUMBER_KEYWORDS.has(word)) return "number";
-    if (EMAIL_KEYWORDS.has(word)) return "email";
-    if (PHONE_KEYWORDS.has(word)) return "phone";
   }
 
   return "text";
@@ -458,14 +502,40 @@ function detectStandaloneDate(lines: string[]): AutoDetectedField[] {
   return [];
 }
 
-// ── Pattern B — Label : Value ──────────────────────────────────────────────────
+// ── Pattern B — Label : Value (with two-pass indexed deduplication) ───────────
+//
+// CHANGE FROM PREVIOUS VERSION:
+//   Old behaviour: `seen.has(name)` silently dropped every occurrence of a
+//   label after the first, so in a Surat Tugas with two person blocks:
+//
+//     Nama  : Fajar Septian   ← kept as "nama"
+//     NIP   : 1989…           ← kept as "nip"
+//     Nama  : Dwi Ermawati    ← DROPPED (seen "nama" already)
+//     NIP   : 1991…           ← DROPPED (seen "nip" already)
+//
+//   New behaviour: two-pass approach counts total occurrences first, then
+//   assigns indexed names only when a label actually repeats:
+//
+//     Nama  : Fajar Septian   → name="nama_1",  label="Nama 1"
+//     NIP   : 1989…           → name="nip_1",   label="NIP 1"
+//     Nama  : Dwi Ermawati    → name="nama_2",  label="Nama 2"
+//     NIP   : 1991…           → name="nip_2",   label="NIP 2"
+//
+//   Non-repeating labels (e.g. Nomor, Perihal) keep their canonical name
+//   without any numeric suffix.
 
 function detectLabelColon(lines: string[]): AutoDetectedField[] {
-  const fields: AutoDetectedField[] = [];
-  const seen = new Set<string>();
-
   // Match "Label : Value" or "Label :" (value may be absent / blank)
   const LINE_RE = /^([^\n\r:：]{2,60}?)\s*[:：]\s*(.{0,120})?$/;
+
+  // ── Pass 1: Collect all valid matches (no deduplication yet) ──────────────
+  interface RawMatch {
+    cleanLabel: string;
+    baseName: string;
+    rawValue: string;
+    line: string;
+  }
+  const rawMatches: RawMatch[] = [];
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -490,22 +560,46 @@ function detectLabelColon(lines: string[]): AutoDetectedField[] {
     if (rawValue && isInstitutionalValue(rawValue)) continue;
 
     const cleanLabel = rawLabel.replace(/[:*]/g, "").trim();
-    const name = fieldNameFromLabel(cleanLabel);
-    if (!name || name === "field" || name.length < 2) continue;
-    if (seen.has(name)) continue;
-    seen.add(name);
+    const baseName = fieldNameFromLabel(cleanLabel);
+    if (!baseName || baseName === "field" || baseName.length < 2) continue;
+
+    rawMatches.push({ cleanLabel, baseName, rawValue, line });
+  }
+
+  // ── Pass 2: Count total occurrences per base name ──────────────────────────
+  const nameCount = new Map<string, number>();
+  for (const m of rawMatches) {
+    nameCount.set(m.baseName, (nameCount.get(m.baseName) ?? 0) + 1);
+  }
+
+  // ── Pass 3: Build fields — index only when a name repeats ─────────────────
+  //
+  // If a base name appears exactly once, use it as-is ("nomor_surat").
+  // If it appears more than once, suffix with _1, _2, … ("nama_1", "nama_2").
+  // This keeps non-repeating fields clean while capturing every person in a
+  // multi-person assignment block.
+  const nameIndex = new Map<string, number>();
+  const fields: AutoDetectedField[] = [];
+
+  for (const m of rawMatches) {
+    const total = nameCount.get(m.baseName) ?? 1;
+    const idx = nameIndex.get(m.baseName) ?? 0;
+    nameIndex.set(m.baseName, idx + 1);
+
+    const name = total > 1 ? `${m.baseName}_${idx + 1}` : m.baseName;
+    const label = total > 1 ? `${m.cleanLabel} ${idx + 1}` : m.cleanLabel;
 
     fields.push({
       id: makeId(),
       name,
-      label: cleanLabel,
-      type: inferFieldType(rawLabel),
+      label,
+      type: inferFieldType(m.cleanLabel),
       required: true,
       placeholder: `{{${name}}}`,
       confidence: 1,
       source: "label_colon",
-      targetText: rawValue || undefined,
-      contextText: line,
+      targetText: m.rawValue || undefined,
+      contextText: m.line,
       originalPlaceholder: `{{${name}}}`,
     });
   }
@@ -514,6 +608,10 @@ function detectLabelColon(lines: string[]): AutoDetectedField[] {
 }
 
 // ── Pattern C — Recipient block ────────────────────────────────────────────────
+//
+// NOTE: This pattern always emits "nama_penerima" (not "nama"), which is
+// intentionally distinct from the indexed "nama_1 / nama_2" produced by
+// Pattern B for personnel in Surat Tugas.
 
 function detectRecipientBlocks(lines: string[]): AutoDetectedField[] {
   // Lines that look like address/location components — not the recipient name
@@ -717,6 +815,10 @@ function extractTableLines(xml: string): string[] {
 // When the same field name is found by multiple patterns, the pattern with
 // the higher structural specificity wins. Priority is defined by the order
 // below — lower index = higher priority.
+//
+// NOTE: With the new indexed naming in Pattern B, collisions between patterns
+// are much rarer. The most common case is still standalone_date vs label_colon
+// both trying to claim "tanggal_surat".
 
 const PATTERN_PRIORITY: Array<AutoDetectedField["source"]> = [
   "standalone_date", // most specific: exact date text
