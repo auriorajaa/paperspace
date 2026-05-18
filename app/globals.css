@@ -146,9 +146,9 @@
   --mobile-tab-bg: rgba(10, 10, 14, 0.96);
   --popover-surface: #18181d;
   --overlay-backdrop: rgba(0, 0, 0, 0.6);
-  --shadow-elevated: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(99, 102, 241, 0.08);
-  --shadow-flyout: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --shadow-logo-glow: 0 0 14px rgba(99, 102, 241, 0.4);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(99, 102, 241, 0.06);
+  --shadow-flyout: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-logo-glow: 0 0 8px rgba(99, 102, 241, 0.25);
   --org-strip-bg: rgba(99, 102, 241, 0.07);
   --org-strip-border: rgba(99, 102, 241, 0.12);
   --accent-soft: rgba(99, 102, 241, 0.12);
@@ -256,9 +256,9 @@
   --mobile-tab-bg: rgba(248, 250, 252, 0.96);
   --popover-surface: #ffffff;
   --overlay-backdrop: rgba(15, 23, 42, 0.24);
-  --shadow-elevated: 0 2px 8px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(99, 102, 241, 0.05);
-  --shadow-flyout: 0 4px 10px rgba(15, 23, 42, 0.08);
-  --shadow-logo-glow: 0 0 10px rgba(79, 70, 229, 0.14);
+  --shadow-elevated: 0 2px 6px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(99, 102, 241, 0.04);
+  --shadow-flyout: 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-logo-glow: 0 0 6px rgba(79, 70, 229, 0.1);
   --org-strip-bg: rgba(99, 102, 241, 0.1);
   --org-strip-border: rgba(99, 102, 241, 0.2);
   --accent-soft: rgba(99, 102, 241, 0.1);
@@ -286,6 +286,7 @@
   }
 }
 
+/* ── Global custom scrollbar ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -298,17 +299,102 @@
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 99px;
+  transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
 
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* ── Field panel scrollbar — slightly wider, accent tinted ─────────── */
+.field-panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.field-panel-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.field-panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+
+.field-panel-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 99px;
+  transition: background 0.2s;
+}
+
+.field-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent-light) 35%, var(--scrollbar-thumb-hover));
+}
+
+.field-panel-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ── TypeSelect fixed dropdown animation ───────────────────────────── */
+@keyframes typeSelectIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes typeSelectInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.type-select-fixed-dropdown {
+  animation: typeSelectIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+/* ── "NEW" badge pulse animation ────────────────────────────────────── */
+@keyframes newBadgePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.new-badge {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  animation: newBadgePulse 2s ease-in-out infinite;
+}
+
+/* ── Field row hover ─────────────────────────────────────────────── */
+.field-row {
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.field-row:hover:not(:has(input:focus)) {
+  border-color: var(--border-hover) !important;
+}
+
 [data-radix-popper-content-wrapper] {
   --card: var(--popover-surface);
   --popover: var(--popover-surface);
 }
-
-
-
-

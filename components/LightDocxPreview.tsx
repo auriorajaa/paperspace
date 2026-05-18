@@ -104,8 +104,6 @@ interface TextSpanRange {
   end: number;
 }
 
-// Key used to store delegated hover handlers directly on the container element.
-// Cast via `unknown` to satisfy TS strict mode (no index signature on HTMLElement).
 const DOCX_CHIP_HOVER_KEY = "__lcpDocxChipHover";
 
 function escapeRegex(str: string) {
@@ -157,50 +155,83 @@ function unwrapHighlights(container: HTMLElement) {
   });
 }
 
-function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
-  unwrapHighlights(container);
-  if (!fields.length) return;
-  fields.forEach((field) => {
-    getFieldTokens(field).forEach((token) => {
-      walkAndReplace(container, new RegExp(escapeRegex(token), "g"), field);
-    });
-  });
+// ── Occurrence-aware DOM walker ────────────────────────────────────────────────
+
+interface MatchEntry {
+  index: number;
+  end: number;
+  token: string;
+  field: ReviewField;
 }
 
-function walkAndReplace(node: Node, pattern: RegExp, field: ReviewField) {
+function walkAndReplaceAll(
+  node: Node,
+  tokenToFields: Map<string, ReviewField[]>,
+  occurrenceCounters: Map<string, number>
+): void {
   if (node.nodeType === Node.TEXT_NODE) {
     if (isPdfTextLayerNode(node)) return;
     const text = node.textContent ?? "";
-    if (!pattern.test(text)) return;
-    pattern.lastIndex = 0;
+    if (!text) return;
     const parent = node.parentNode;
     if (!parent) return;
+
+    const allMatches: MatchEntry[] = [];
+
+    for (const [token, fields] of tokenToFields) {
+      if (!fields.length) continue;
+      const re = new RegExp(escapeRegex(token), "g");
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const consumed = occurrenceCounters.get(token) ?? 0;
+        const field = fields[Math.min(consumed, fields.length - 1)];
+        allMatches.push({
+          index: m.index,
+          end: m.index + token.length,
+          token,
+          field,
+        });
+        occurrenceCounters.set(token, consumed + 1);
+      }
+    }
+
+    if (!allMatches.length) return;
+
+    allMatches.sort((a, b) => a.index - b.index);
+
     const parts: Node[] = [];
-    let idx = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      if (match.index > idx)
-        parts.push(document.createTextNode(text.slice(idx, match.index)));
+    let cursor = 0;
+
+    for (const match of allMatches) {
+      if (match.index < cursor) continue;
+      if (match.index > cursor) {
+        parts.push(document.createTextNode(text.slice(cursor, match.index)));
+      }
       const mark = document.createElement("span");
       mark.className = "field-highlight";
-      mark.dataset.fieldId = field.id;
-      mark.dataset.fieldName = field.name;
-      mark.dataset.fieldType = field.type;
-      mark.dataset.fieldLabel = fieldMarkerLabel(field);
-      mark.title = field.label;
-      mark.textContent = match[0];
+      mark.dataset.fieldId = match.field.id;
+      mark.dataset.fieldName = match.field.name;
+      mark.dataset.fieldType = match.field.type;
+      mark.dataset.fieldLabel = fieldMarkerLabel(match.field);
+      mark.title = match.field.label;
+      mark.textContent = text.slice(match.index, match.end);
       parts.push(mark);
-      idx = pattern.lastIndex;
+      cursor = match.end;
     }
-    if (idx < text.length) parts.push(document.createTextNode(text.slice(idx)));
+
+    if (cursor < text.length) {
+      parts.push(document.createTextNode(text.slice(cursor)));
+    }
+
     for (const part of parts) parent.insertBefore(part, node);
     parent.removeChild(node);
     return;
   }
+
   if (node.nodeType !== Node.ELEMENT_NODE) return;
   const el = node as Element;
   if (
-    ["SCRIPT", "STYLE", "TEXTAREA"].includes(el.tagName) ||
+    ["SCRIPT", "STYLE", "TEXTAREA"].includes((el as HTMLElement).tagName) ||
     el.classList.contains("field-highlight") ||
     el.classList.contains("docx-review-field-layer") ||
     el.classList.contains("pdf-review-field-layer") ||
@@ -208,7 +239,279 @@ function walkAndReplace(node: Node, pattern: RegExp, field: ReviewField) {
   )
     return;
   for (const child of Array.from(node.childNodes))
-    walkAndReplace(child, pattern, field);
+    walkAndReplaceAll(child, tokenToFields, occurrenceCounters);
+}
+
+// ── Same-value sibling-aware token map builder ─────────────────────────────────
+//
+// PROBLEM: indexed fields like pangkat_golongan_1 / pangkat_golongan_2 often
+// share an identical targetText (e.g. both persons have the same pangkat/jabatan).
+// When the document was injected, the injector may have written {{pangkat_golongan_1}}
+// for BOTH occurrences (since it can't distinguish them by value). This leaves
+// {{pangkat_golongan_2}} absent from the document, so _2 never gets a chip.
+//
+// FIX: After building the initial token→fields map, extend any single-field token
+// whose field has same-targetText siblings, so the occurrence counter can assign:
+//   first  {{pangkat_golongan_1}} → pangkat_golongan_1
+//   second {{pangkat_golongan_1}} → pangkat_golongan_2
+//
+// This works equally for both the DOCX inline-highlight path and the PDF overlay
+// path, and does not affect fields with unique values (occurrence counter still
+// advances field[0] → field[0] with no siblings to spill into).
+
+function buildTokenToFieldsMap(
+  fields: ReviewField[],
+  tokenFilter?: (token: string) => boolean
+): Map<string, ReviewField[]> {
+  // Step 1a — Group fields by targetText
+  const siblingsByTargetText = new Map<string, ReviewField[]>();
+  // Step 1b — Group fields by base name (strips _N suffix)
+  //   e.g. pangkat_golongan_1 and pangkat_golongan_2 → "pangkat_golongan"
+  //   Used as fallback when _2 has no targetText so Step 1a only finds _1.
+  const siblingsByBaseName = new Map<string, ReviewField[]>();
+
+  fields.forEach((field) => {
+    const key = field.targetText?.trim();
+    if (key && key.length >= 2) {
+      const arr = siblingsByTargetText.get(key) ?? [];
+      arr.push(field);
+      siblingsByTargetText.set(key, arr);
+    }
+    const baseName = field.name.replace(/_\d+$/, "");
+    if (baseName !== field.name) {
+      const arr = siblingsByBaseName.get(baseName) ?? [];
+      arr.push(field);
+      siblingsByBaseName.set(baseName, arr);
+    }
+  });
+
+  // Step 2 — Build initial token → fields map (preserving field-array order)
+  const tokenToFields = new Map<string, ReviewField[]>();
+  fields.forEach((field) => {
+    getFieldTokens(field).forEach((token) => {
+      const trimmed = token.trim();
+      if (trimmed.length < 2) return;
+      if (tokenFilter && !tokenFilter(trimmed)) return;
+      const existing = tokenToFields.get(trimmed) ?? [];
+      existing.push(field);
+      tokenToFields.set(trimmed, existing);
+    });
+  });
+
+  // Step 3 — Extend single-field tokens with their same-value siblings so the
+  //   occurrence counter can assign _1 → first match, _2 → second match, etc.
+  //
+  //   Strategy A: same targetText (existing behaviour).
+  //   Strategy B: same base name — fallback for indexed fields where some siblings
+  //     have no targetText (e.g. AI only returned targetText for _1, not _2).
+  //     Without this, {{pangkat_golongan_1}} stays as [_1] and BOTH document
+  //     occurrences end up labelled _1.
+  for (const [, tokenFields] of tokenToFields) {
+    if (tokenFields.length !== 1) continue;
+    const field = tokenFields[0];
+
+    const ttext = field.targetText?.trim();
+    const sibsByTT =
+      ttext && ttext.length >= 2 ? siblingsByTargetText.get(ttext) : undefined;
+
+    const baseName = field.name.replace(/_\d+$/, "");
+    const sibsByBN =
+      baseName !== field.name ? siblingsByBaseName.get(baseName) : undefined;
+
+    // Pick whichever group is larger (more siblings = better coverage)
+    const siblings =
+      (sibsByTT?.length ?? 0) >= (sibsByBN?.length ?? 0) ? sibsByTT : sibsByBN;
+
+    if (!siblings || siblings.length <= 1) continue;
+
+    siblings.forEach((sib) => {
+      if (!tokenFields.some((f) => f.id === sib.id)) tokenFields.push(sib);
+    });
+  }
+
+  return tokenToFields;
+}
+
+// ── DOCX same-value safety net ─────────────────────────────────────────────────
+//
+// After walkAndReplaceAll, indexed fields that share the same targetText
+// (e.g. jabatan_1 / jabatan_2 both → "Dosen Jurusan Teknik Informatika dan
+// Komputer") should be assigned top-to-bottom by visual position.
+// walkAndReplaceAll processes nodes in DOM order which normally matches
+// visual order, but this post-pass corrects any edge cases (e.g. when
+// docx-preview emits table cells in non-sequential DOM order).
+
+function reorderSameValueHighlights(
+  container: HTMLElement,
+  fields: ReviewField[]
+): void {
+  // Group 1: by targetText — catches fields with the same original document value
+  const targetTextToFields = new Map<string, ReviewField[]>();
+  fields.forEach((field) => {
+    const key = field.targetText?.trim();
+    if (!key || key.length < 2) return;
+    const group = targetTextToFields.get(key) ?? [];
+    group.push(field);
+    targetTextToFields.set(key, group);
+  });
+
+  // Group 2: by base name — catches indexed fields even when some lack targetText
+  //   e.g. pangkat_golongan_1 / pangkat_golongan_2 → base "pangkat_golongan"
+  const baseNameToFields = new Map<string, ReviewField[]>();
+  fields.forEach((field) => {
+    const baseName = field.name.replace(/_\d+$/, "");
+    if (baseName === field.name) return;
+    const group = baseNameToFields.get(baseName) ?? [];
+    group.push(field);
+    baseNameToFields.set(baseName, group);
+  });
+
+  // Merge both strategies into one set of groups to process
+  const groupsToProcess = new Map<string, ReviewField[]>();
+  for (const [key, group] of targetTextToFields) {
+    if (group.length > 1) groupsToProcess.set(`tt:${key}`, group);
+  }
+  for (const [baseName, group] of baseNameToFields) {
+    if (group.length > 1) groupsToProcess.set(`bn:${baseName}`, group);
+  }
+  if (groupsToProcess.size === 0) return;
+
+  const fieldOrder = new Map(fields.map((f, i) => [f.id, i]));
+  const allHighlights = Array.from(
+    container.querySelectorAll<HTMLElement>(".field-highlight")
+  );
+
+  for (const [, group] of groupsToProcess) {
+    const groupIds = new Set(group.map((f) => f.id));
+    // Also match by fieldName — critical when walkAndReplaceAll incorrectly assigned
+    // every occurrence of {{pangkat_golongan_1}} to _1's id/name (because the
+    // extension in buildTokenToFieldsMap had no siblings to work with).
+    const groupNames = new Set(group.map((f) => f.name));
+
+    const relevantHighlights = allHighlights.filter((el) => {
+      const fid = el.dataset.fieldId ?? "";
+      const fname = el.dataset.fieldName ?? "";
+      return groupIds.has(fid) || groupNames.has(fname);
+    });
+
+    if (relevantHighlights.length <= 1) continue;
+
+    // Sort top-to-bottom, left-to-right
+    const sorted = [...relevantHighlights].sort((a, b) => {
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+      const dt = ar.top - br.top;
+      if (Math.abs(dt) > 2) return dt;
+      return ar.left - br.left;
+    });
+
+    // Fields in panel order (_1 first, _2 second, …)
+    const sortedFields = [...group].sort(
+      (a, b) => (fieldOrder.get(a.id) ?? 0) - (fieldOrder.get(b.id) ?? 0)
+    );
+
+    sorted.forEach((highlight, i) => {
+      const field = sortedFields[Math.min(i, sortedFields.length - 1)];
+      highlight.dataset.fieldId = field.id;
+      highlight.dataset.fieldName = field.name;
+      highlight.dataset.fieldType = field.type;
+      highlight.dataset.fieldLabel = fieldMarkerLabel(field);
+      highlight.title = field.label;
+    });
+  }
+}
+
+function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
+  unwrapHighlights(container);
+  if (!fields.length) return;
+
+  const tokenToFields = buildTokenToFieldsMap(fields);
+
+  const occurrenceCounters = new Map<string, number>();
+  walkAndReplaceAll(container, tokenToFields, occurrenceCounters);
+
+  // ── FALLBACK for docx-preview text fragmentation ──
+  // docx-preview often splits text into tiny text nodes / spans (per-word
+  // or per-character). walkAndReplaceAll regex on a single text node then
+  // fails to match long targetText values. We do an element-level sweep
+  // to catch any field whose targetText appears inside a block element
+  // but was missed by the per-node walker.
+  const highlightedIds = new Set(
+    Array.from(container.querySelectorAll<HTMLElement>(".field-highlight")).map(
+      (h) => h.dataset.fieldId
+    )
+  );
+
+  for (const field of fields) {
+    if (highlightedIds.has(field.id)) continue;
+    const needle =
+      field.targetText?.trim() || field.originalPlaceholder?.trim();
+    if (!needle || needle.length < 2) continue;
+
+    // Search all leaf elements whose textContent contains the needle
+    const candidates = Array.from(container.querySelectorAll("*")).filter(
+      (el) => {
+        if (el.classList.contains("field-highlight")) return false;
+        if (el.classList.contains("docx-review-field-layer")) return false;
+        const tc = el.textContent || "";
+        return tc.includes(needle);
+      }
+    );
+
+    if (!candidates.length) continue;
+
+    // Pick the deepest (smallest) element that still contains the full needle
+    // Sort by textContent length ascending → most specific match first
+    candidates.sort(
+      (a, b) => (a.textContent?.length || 0) - (b.textContent?.length || 0)
+    );
+    const best = candidates[0] as HTMLElement;
+
+    // Wrap the entire element content in a highlight mark
+    // We preserve children by wrapping only text nodes, or the whole element
+    // if it has no element children.
+    if (best.children.length === 0) {
+      // Simple case: leaf element with only text
+      const mark = document.createElement("span");
+      mark.className = "field-highlight";
+      mark.dataset.fieldId = field.id;
+      mark.dataset.fieldName = field.name;
+      mark.dataset.fieldType = field.type;
+      mark.dataset.fieldLabel = fieldMarkerLabel(field);
+      mark.title = field.label;
+      mark.textContent = best.textContent || "";
+      best.textContent = "";
+      best.appendChild(mark);
+      highlightedIds.add(field.id);
+    } else {
+      // Complex case: element has mixed content.
+      // We wrap each direct text node that contains part of the needle.
+      const childNodes = Array.from(best.childNodes);
+      let found = false;
+      for (const node of childNodes) {
+        if (node.nodeType !== Node.TEXT_NODE) continue;
+        const txt = node.textContent || "";
+        if (!txt.trim()) continue;
+        // Fuzzy: if this text node is part of the needle or the needle is part of it
+        if (needle.includes(txt.trim()) || txt.includes(needle)) {
+          const mark = document.createElement("span");
+          mark.className = "field-highlight";
+          mark.dataset.fieldId = field.id;
+          mark.dataset.fieldName = field.name;
+          mark.dataset.fieldType = field.type;
+          mark.dataset.fieldLabel = fieldMarkerLabel(field);
+          mark.title = field.label;
+          mark.textContent = txt;
+          if (node.parentNode) node.parentNode.replaceChild(mark, node);
+          found = true;
+        }
+      }
+      if (found) highlightedIds.add(field.id);
+    }
+  }
+
+  // Safety net: ensure same-value indexed fields are visually top-to-bottom.
+  reorderSameValueHighlights(container, fields);
 }
 
 function clearPdfFieldOverlays(container: HTMLElement) {
@@ -218,7 +521,6 @@ function clearPdfFieldOverlays(container: HTMLElement) {
 }
 
 function clearDocxFieldOverlays(container: HTMLElement) {
-  // Remove delegated hover listeners before destroying the overlay element.
   const stored = (container as unknown as Record<string, unknown>)[
     DOCX_CHIP_HOVER_KEY
   ] as { over: EventListener; leave: EventListener } | undefined;
@@ -262,9 +564,6 @@ function addPdfFieldBand(
   overlay.appendChild(band);
 }
 
-// Chips are always visible and positioned ABOVE the highlighted rect so they
-// never obscure the text they label. They fall back to below when there is
-// not enough room above, and are centred horizontally over the rect.
 function addFieldChip(
   overlay: HTMLElement,
   field: ReviewField,
@@ -297,8 +596,6 @@ function addFieldChip(
   overlay.appendChild(chip);
 }
 
-// When hovering a band: matching chip pops, others dim.
-// Pass null to reset all to resting state.
 function updateChipStates(
   overlay: HTMLElement,
   chipSelector: string,
@@ -317,6 +614,59 @@ function updateChipStates(
   });
 }
 
+function deconflictChips(overlay: HTMLElement, chipSelector: string) {
+  const chips = Array.from(overlay.querySelectorAll<HTMLElement>(chipSelector));
+  if (chips.length < 2) return;
+
+  chips.sort((a, b) => {
+    const dt = parseFloat(a.style.top || "0") - parseFloat(b.style.top || "0");
+    if (Math.abs(dt) > 2) return dt;
+    return parseFloat(a.style.left || "0") - parseFloat(b.style.left || "0");
+  });
+
+  const chipH = 18;
+  const vGap = 3;
+  const hGap = 4;
+
+  for (let i = 1; i < chips.length; i++) {
+    const prev = chips[i - 1];
+    const curr = chips[i];
+    const pt = parseFloat(prev.style.top || "0");
+    const pl = parseFloat(prev.style.left || "0");
+    const pw = parseFloat(prev.style.width || "60");
+    const ct = parseFloat(curr.style.top || "0");
+    const cl = parseFloat(curr.style.left || "0");
+    const cw = parseFloat(curr.style.width || "60");
+
+    const vertOverlap = ct < pt + chipH + vGap;
+    const horizOverlap = cl < pl + pw + hGap && cl + cw > pl - hGap;
+
+    if (vertOverlap && horizOverlap) {
+      curr.style.top = prev.style.top;
+      curr.style.left = `${pl + pw + hGap}px`;
+    }
+  }
+}
+
+// ── PDF field overlays ─────────────────────────────────────────────────────────
+//
+// FIX (same-value siblings): Same-value indexed fields (e.g. jabatan_1 /
+// jabatan_2 both targeting "Dosen Jurusan …") are handled by two mechanisms:
+//
+//   1. buildTokenToFieldsMap() extends {{jabatan_1}}'s list to
+//      [jabatan_1, jabatan_2] so the occurrence counter can assign them
+//      correctly even when {{jabatan_2}} never appears in the document.
+//
+//   2. Phase 2 sorts all matches by visual rect before incrementing the
+//      counter, ensuring topmost occurrence → _1, next → _2, regardless of
+//      the order pdfjs returned the text spans.
+
+interface PdfPageMatchEntry {
+  token: string;
+  tokenFields: ReviewField[];
+  rects: RelativeRect[];
+}
+
 function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
   clearPdfFieldOverlays(container);
   if (!fields.length) return;
@@ -324,6 +674,27 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
   const pages = Array.from(
     container.querySelectorAll<HTMLElement>(".pdf-review-page")
   );
+
+  // occurrenceCounters is shared across all pages so that indexed fields
+  // spanning multiple pages (jabatan_1 on p1, jabatan_2 on p2) are assigned
+  // correctly without resetting at each page boundary.
+  const occurrenceCounters = new Map<string, number>();
+
+  // console.log("[renderPdfFieldOverlays] pages:", pages.length);
+  // Build token→fields map once for the whole document.
+  // buildTokenToFieldsMap() automatically extends single-field tokens with
+  // their same-targetText siblings (the key fix for identical-value fields).
+  const tokenToFields = buildTokenToFieldsMap(
+    fields,
+    (token) => token.includes("{{") || token.length >= 3
+  );
+  // console.log(
+  //   "[renderPdfFieldOverlays] tokenToFields:",
+  //   Array.from(tokenToFields.entries()).map(([k, v]) => [
+  //     k,
+  //     v.map((f) => f.name),
+  //   ])
+  // );
 
   pages.forEach((pageEl, pageIndex) => {
     const textLayer = pageEl.querySelector<HTMLElement>(
@@ -349,69 +720,119 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
     });
 
     const pageText = ranges.map((r) => r.text).join("");
+    // console.log(
+    //   "[renderPdfFieldOverlays] page",
+    //   pageIndex,
+    //   "text length:",
+    //   pageText.length,
+    //   "sample:",
+    //   pageText.slice(0, 100)
+    // );
     if (!pageText.trim()) return;
 
     const overlay = document.createElement("div");
     overlay.className = "pdf-review-field-layer";
     pageEl.appendChild(overlay);
 
+    // ── Phase 1: collect all matches with their visual rects ────────────────
+    const pageMatchEntries: PdfPageMatchEntry[] = [];
+
+    for (const [token, tokenFields] of tokenToFields) {
+      if (!tokenFields.length) continue;
+      let index = pageText.indexOf(token);
+      while (index !== -1) {
+        const matchEnd = index + token.length;
+        const hitRanges = ranges.filter(
+          (r) => r.end > index && r.start < matchEnd
+        );
+        const rects = hitRanges
+          .flatMap((r) => Array.from(r.span.getClientRects()))
+          .map((r) => relativeRect(r, pageRect))
+          .filter((r) => r.width > 0 && r.height > 0);
+
+        // Only record matches that have valid visual rects. Matches without
+        // rects (invisible / off-canvas text) are intentionally skipped so
+        // they do not consume an occurrence counter slot and displace the
+        // assignment of the next visible occurrence.
+        if (rects.length > 0) {
+          pageMatchEntries.push({ token, tokenFields, rects });
+        }
+
+        index = pageText.indexOf(token, matchEnd);
+      }
+    }
+
+    // console.log(
+    //   "[renderPdfFieldOverlays] page",
+    //   pageIndex,
+    //   "match entries:",
+    //   pageMatchEntries.map((m) => ({
+    //     token: m.token.slice(0, 30),
+    //     rects: m.rects.length,
+    //   }))
+    // );
+    // ── Phase 2: sort by visual position, then assign fields ────────────────
+    //
+    // Sorting top→left guarantees that when jabatan_1 and jabatan_2 share the
+    // same targetText, the one physically higher on the page always gets _1
+    // regardless of how pdfjs ordered the text spans internally.
+    pageMatchEntries.sort((a, b) => {
+      const dt = a.rects[0].top - b.rects[0].top;
+      if (Math.abs(dt) > 2) return dt;
+      return a.rects[0].left - b.rects[0].left;
+    });
+
     const renderedBands = new Set<string>();
     const renderedChips = new Set<string>();
 
-    fields.forEach((field) => {
-      getFieldTokens(field).forEach((token) => {
-        const trimmed = token.trim();
-        if (!trimmed.includes("{{") && trimmed.length < 3) return;
+    for (const { token, tokenFields, rects } of pageMatchEntries) {
+      const consumed = occurrenceCounters.get(token) ?? 0;
+      const field = tokenFields[Math.min(consumed, tokenFields.length - 1)];
+      occurrenceCounters.set(token, consumed + 1);
 
-        let index = pageText.indexOf(token);
-        while (index !== -1) {
-          const matchEnd = index + token.length;
-          const hitRanges = ranges.filter(
-            (r) => r.end > index && r.start < matchEnd
-          );
-          const rects = hitRanges
-            .flatMap((r) => Array.from(r.span.getClientRects()))
-            .map((r) => relativeRect(r, pageRect))
-            .filter((r) => r.width > 0 && r.height > 0);
-
-          rects.forEach((rect) => {
-            const key = [
-              pageIndex,
-              field.id,
-              Math.round(rect.left),
-              Math.round(rect.top),
-              Math.round(rect.width),
-              Math.round(rect.height),
-            ].join(":");
-            if (renderedBands.has(key)) return;
-            renderedBands.add(key);
-            addPdfFieldBand(overlay, field, rect);
-          });
-
-          const firstRect = rects[0];
-          const chipKey = `${pageIndex}:${field.id}`;
-          if (firstRect && !renderedChips.has(chipKey)) {
-            renderedChips.add(chipKey);
-            addFieldChip(
-              overlay,
-              field,
-              firstRect,
-              { width: pageEl.clientWidth, height: pageEl.clientHeight },
-              "pdf-field-chip"
-            );
-          }
-
-          index = pageText.indexOf(token, index + token.length);
-        }
+      rects.forEach((rect) => {
+        const key = [
+          pageIndex,
+          field.id,
+          Math.round(rect.left),
+          Math.round(rect.top),
+          Math.round(rect.width),
+          Math.round(rect.height),
+        ].join(":");
+        if (renderedBands.has(key)) return;
+        renderedBands.add(key);
+        addPdfFieldBand(overlay, field, rect);
       });
-    });
+
+      const firstRect = rects[0];
+      const chipKey = `${pageIndex}:${field.id}`;
+      if (!renderedChips.has(chipKey)) {
+        renderedChips.add(chipKey);
+        addFieldChip(
+          overlay,
+          field,
+          firstRect,
+          { width: pageEl.clientWidth, height: pageEl.clientHeight },
+          "pdf-field-chip"
+        );
+      }
+    }
 
     if (!overlay.childElementCount) {
       overlay.remove();
       return;
     }
 
-    // Bands capture pointer events; chips are passive (pointer-events: none).
+    // console.log(
+    //   "[renderPdfFieldOverlays] page",
+    //   pageIndex,
+    //   "bands:",
+    //   overlay.querySelectorAll(".pdf-field-band").length,
+    //   "chips:",
+    //   overlay.querySelectorAll(".pdf-field-chip").length
+    // );
+    deconflictChips(overlay, ".pdf-field-chip");
+
     overlay.addEventListener("mouseover", (e: MouseEvent) => {
       const band = (e.target as HTMLElement).closest<HTMLElement>(
         ".pdf-field-band"
@@ -473,8 +894,8 @@ function renderDocxFieldOverlays(
     return;
   }
 
-  // Hover delegation via body container — highlights are inside the text flow,
-  // while chips live in the separate overlay div.
+  deconflictChips(overlay, ".docx-field-chip");
+
   const overHandler: EventListener = (e) => {
     const highlight = (e.target as HTMLElement).closest<HTMLElement>(
       ".field-highlight"
@@ -532,7 +953,7 @@ function positionForSelection(rect: DOMRect): { x: number; y: number } {
     margin + menuWidth / 2,
     window.innerWidth - margin - menuWidth / 2
   );
-  return { x, y: Math.max(margin, y) };
+  return { x: Math.max(margin, y), y: Math.max(margin, y) };
 }
 
 async function convertDocxToPdf(buffer: ArrayBuffer): Promise<ArrayBuffer> {
@@ -562,9 +983,6 @@ async function convertDocxToPdf(buffer: ArrayBuffer): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-// ── Wait for the container (or its nearest measured ancestor) to have a real
-// layout width before we calculate the PDF render scale.  Without this, the
-// canvas is sized against clientWidth = 0 and the result looks blurry / tiny.
 function waitForContainerWidth(
   container: HTMLElement,
   minWidth = 160,
@@ -614,7 +1032,6 @@ async function renderPdfPreview(
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-      // Per-page isolation: one bad page must not abort the whole document.
       let page: PdfPage | null = null;
       try {
         page = await pdf.getPage(pageNumber);
@@ -625,7 +1042,6 @@ async function renderPdfPreview(
         continue;
       }
 
-      // Derive scale from the widest measurement available at render time.
       const rawWidth =
         container.clientWidth || container.parentElement?.clientWidth || 0;
       const availableWidth = Math.max(rawWidth - 48, 320);
@@ -670,7 +1086,6 @@ async function renderPdfPreview(
         continue;
       }
 
-      // Text layer is best-effort; overlays degrade gracefully without it.
       try {
         const textContent = await page.getTextContent();
         await new TextLayer({
@@ -773,8 +1188,6 @@ export default function LightDocxPreview({
     const shouldUsePdfFallback = async () => {
       try {
         if (await looksLikePdfConvertedDocx(docxBuffer)) return true;
-
-        // Broken images are a strong signal that docx-preview failed to embed assets.
         const imgs = Array.from(body.querySelectorAll<HTMLImageElement>("img"));
         const brokenRatio =
           imgs.length > 0
@@ -782,11 +1195,9 @@ export default function LightDocxPreview({
                 .length / imgs.length
             : 0;
         if (brokenRatio > 0.3) return true;
-
         const { extractAllText } = await import("@/lib/template-preprocessor");
         const expectedText = (await extractAllText(docxBuffer)).trim();
         const renderedText = body.innerText.trim();
-        // 0.55 threshold: falls back sooner for partially-rendered documents.
         return (
           expectedText.length > 200 &&
           renderedText.length < expectedText.length * 0.55
@@ -901,9 +1312,6 @@ export default function LightDocxPreview({
         .docx-preview-surface {
           --field-text: #2563eb;
           --field-date: #16a34a;
-          --field-number: #ea580c;
-          --field-email: #9333ea;
-          --field-phone: #0891b2;
           --field-loop: #4f46e5;
           --field-condition: #db2777;
           min-height: 100%;
@@ -1006,13 +1414,13 @@ export default function LightDocxPreview({
         .docx-field-chip[data-field-type="date"]   { --marker-color: var(--field-date); }
         .pdf-field-band[data-field-type="number"],
         .pdf-field-chip[data-field-type="number"],
-        .docx-field-chip[data-field-type="number"] { --marker-color: var(--field-number); }
+        .docx-field-chip[data-field-type="number"],
         .pdf-field-band[data-field-type="email"],
         .pdf-field-chip[data-field-type="email"],
-        .docx-field-chip[data-field-type="email"]  { --marker-color: var(--field-email); }
+        .docx-field-chip[data-field-type="email"],
         .pdf-field-band[data-field-type="phone"],
         .pdf-field-chip[data-field-type="phone"],
-        .docx-field-chip[data-field-type="phone"]  { --marker-color: var(--field-phone); }
+        .docx-field-chip[data-field-type="phone"]  { --marker-color: var(--field-text); }
         .pdf-field-band[data-field-type="loop"],
         .pdf-field-chip[data-field-type="loop"],
         .docx-field-chip[data-field-type="loop"]   { --marker-color: var(--field-loop); }
@@ -1034,7 +1442,7 @@ export default function LightDocxPreview({
           pointer-events: auto;
           cursor: default;
         }
-        /* ── Chips: always visible, positioned above the highlighted text ─── */
+        /* ── Chips ────────────────────────────────────────────────────────── */
         .pdf-field-chip,
         .docx-field-chip {
           position: absolute;
@@ -1051,7 +1459,6 @@ export default function LightDocxPreview({
           text-overflow: ellipsis;
           white-space: nowrap;
           pointer-events: none;
-          /* Resting: visible but unobtrusive */
           opacity: 0.82;
           box-shadow: 0 2px 6px rgba(15,23,42,0.10);
           transform: none;
@@ -1060,14 +1467,12 @@ export default function LightDocxPreview({
             transform 0.14s ease,
             box-shadow 0.14s ease;
         }
-        /* Hovered field's chip: pop forward */
         .pdf-field-chip.chip-active,
         .docx-field-chip.chip-active {
           opacity: 1;
           transform: translateY(-1px) scale(1.07);
           box-shadow: 0 5px 14px rgba(15,23,42,0.18);
         }
-        /* Other chips when a field is being hovered: step back */
         .pdf-field-chip.chip-dimmed,
         .docx-field-chip.chip-dimmed {
           opacity: 0.28;
@@ -1082,25 +1487,16 @@ export default function LightDocxPreview({
           font-weight: inherit;
           box-shadow: inset 0 -2px 0 currentColor;
         }
-        .field-highlight[data-field-type="text"] {
+        .field-highlight[data-field-type="text"],
+        .field-highlight[data-field-type="number"],
+        .field-highlight[data-field-type="email"],
+        .field-highlight[data-field-type="phone"] {
           background: color-mix(in srgb, var(--field-text) 16%, transparent);
           color: var(--field-text);
         }
         .field-highlight[data-field-type="date"] {
           background: color-mix(in srgb, var(--field-date) 16%, transparent);
           color: var(--field-date);
-        }
-        .field-highlight[data-field-type="number"] {
-          background: color-mix(in srgb, var(--field-number) 16%, transparent);
-          color: var(--field-number);
-        }
-        .field-highlight[data-field-type="email"] {
-          background: color-mix(in srgb, var(--field-email) 16%, transparent);
-          color: var(--field-email);
-        }
-        .field-highlight[data-field-type="phone"] {
-          background: color-mix(in srgb, var(--field-phone) 16%, transparent);
-          color: var(--field-phone);
         }
         .field-highlight[data-field-type="loop"] {
           background: color-mix(in srgb, var(--field-loop) 16%, transparent);
@@ -1115,7 +1511,6 @@ export default function LightDocxPreview({
           .docx-preview-surface { padding: 12px; }
           .docx-preview-surface .docx-wrapper { overflow-x: auto; }
           .pdf-review-page { margin-bottom: 18px; }
-          /* Touch screens: keep chips fully opaque — hover is unavailable */
           .pdf-field-chip, .docx-field-chip {
             opacity: 0.9 !important;
             transform: none !important;
@@ -1171,25 +1566,32 @@ export default function LightDocxPreview({
                 className="text-[10px] truncate mt-0.5"
                 style={{ color: "var(--text-dim)" }}
               >
-                {selectionMenu.text}
+                &ldquo;{selectionMenu.text}&rdquo;
               </p>
             </div>
           </div>
           {(
             [
-              ["text", "Add as Text Placeholder"],
-              ["loop", "Add as Loop Start"],
-              ["condition", "Add as Condition (Truthy)"],
-              ["condition_inverse", "Add as Condition (Falsy)"],
+              ["text", "Text", "Name, number, etc."],
+              ["date", "Date", "Date or time"],
+              ["loop", "Table / Loop", "Repeating rows {{#…}}"],
+              ["condition", "Condition (if)", "Show if true {{#…}}"],
+              ["condition_inverse", "Condition (else)", "Show if false {{^…}}"],
             ] as const
-          ).map(([type, label]) => (
+          ).map(([type, label, hint]) => (
             <button
               key={type}
               type="button"
-              className="w-full text-left px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)]"
+              className="w-full text-left px-3 py-2.5 transition-colors hover:bg-[var(--accent-soft)] group"
               onClick={() => handleAdd(type)}
             >
-              {label}
+              <p className="text-xs font-medium">{label}</p>
+              <p
+                className="text-[10px] mt-0.5"
+                style={{ color: "var(--text-dim)" }}
+              >
+                {hint}
+              </p>
             </button>
           ))}
         </div>
