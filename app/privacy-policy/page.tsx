@@ -10,7 +10,7 @@ export const metadata: Metadata = buildPageMetadata({
   path: "/privacy-policy",
 });
 
-const LAST_UPDATED = "June 2025";
+const LAST_UPDATED = "May 2026";
 
 const sections = [
   {
@@ -205,7 +205,7 @@ export default function PrivacyPolicyPage() {
         </Link>
 
         <div className="mb-12">
-          <div
+          {/* <div
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-5"
             style={{
               background: "var(--accent-soft)",
@@ -215,7 +215,7 @@ export default function PrivacyPolicyPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
             Legal
-          </div>
+          </div> */}
           <h1
             className="text-[2rem] sm:text-[2.6rem] font-bold leading-tight tracking-tight mb-3"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
