@@ -196,6 +196,7 @@ function CollectionFormDialog({
                     background: "var(--bg-card)",
                     border: `1px solid var(--border-subtle)`,
                     width: 280,
+                    backdropFilter: "blur(16px)",
                   }}
                 >
                   <p

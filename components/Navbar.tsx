@@ -1337,7 +1337,7 @@ export function Navbar() {
         <div
           className="flex items-center h-14 shrink-0"
           style={{
-            borderBottom: "1px solid var(--border-subtle)",
+            // borderBottom: "1px solid var(--border-subtle)",
             padding: collapsed ? "0" : "0 12px",
             justifyContent: collapsed ? "center" : "space-between",
           }}
@@ -1377,12 +1377,12 @@ export function Navbar() {
           </button>
         </div>
 
-        {organization && (
+        {/* {organization && (
           <div
             className="flex items-center shrink-0 transition-all duration-200"
             style={{
               background: "var(--org-strip-bg)",
-              borderBottom: "1px solid var(--org-strip-border)",
+              // borderBottom: "1px solid var(--org-strip-border)",
               padding: collapsed ? "4px 0" : "5px 12px",
               justifyContent: collapsed ? "center" : "flex-start",
               minHeight: collapsed ? 14 : "auto",
@@ -1417,7 +1417,7 @@ export function Navbar() {
               </>
             )}
           </div>
-        )}
+        )} */}
 
         <nav
           className={`flex-1 py-2 px-2 space-y-0.5 ${collapsed ? "overflow-hidden" : "overflow-y-auto"}`}

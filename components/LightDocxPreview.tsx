@@ -2,7 +2,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2Icon, MousePointerClickIcon } from "lucide-react";
+import {
+  Loader2Icon,
+  MousePointerClickIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+  RotateCcwIcon,
+  ChevronUpIcon,
+} from "lucide-react";
 
 export type FieldType =
   | "text"
@@ -105,6 +112,10 @@ interface TextSpanRange {
 }
 
 const DOCX_CHIP_HOVER_KEY = "__lcpDocxChipHover";
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3.0;
+const ZOOM_STEP = 0.25;
+const ZOOM_SNAP_THRESHOLD = 0.04; // snap to 1.0 when close
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -154,8 +165,6 @@ function unwrapHighlights(container: HTMLElement) {
     parent.normalize();
   });
 }
-
-// ── Occurrence-aware DOM walker ────────────────────────────────────────────────
 
 interface MatchEntry {
   index: number;
@@ -242,32 +251,11 @@ function walkAndReplaceAll(
     walkAndReplaceAll(child, tokenToFields, occurrenceCounters);
 }
 
-// ── Same-value sibling-aware token map builder ─────────────────────────────────
-//
-// PROBLEM: indexed fields like pangkat_golongan_1 / pangkat_golongan_2 often
-// share an identical targetText (e.g. both persons have the same pangkat/jabatan).
-// When the document was injected, the injector may have written {{pangkat_golongan_1}}
-// for BOTH occurrences (since it can't distinguish them by value). This leaves
-// {{pangkat_golongan_2}} absent from the document, so _2 never gets a chip.
-//
-// FIX: After building the initial token→fields map, extend any single-field token
-// whose field has same-targetText siblings, so the occurrence counter can assign:
-//   first  {{pangkat_golongan_1}} → pangkat_golongan_1
-//   second {{pangkat_golongan_1}} → pangkat_golongan_2
-//
-// This works equally for both the DOCX inline-highlight path and the PDF overlay
-// path, and does not affect fields with unique values (occurrence counter still
-// advances field[0] → field[0] with no siblings to spill into).
-
 function buildTokenToFieldsMap(
   fields: ReviewField[],
   tokenFilter?: (token: string) => boolean
 ): Map<string, ReviewField[]> {
-  // Step 1a — Group fields by targetText
   const siblingsByTargetText = new Map<string, ReviewField[]>();
-  // Step 1b — Group fields by base name (strips _N suffix)
-  //   e.g. pangkat_golongan_1 and pangkat_golongan_2 → "pangkat_golongan"
-  //   Used as fallback when _2 has no targetText so Step 1a only finds _1.
   const siblingsByBaseName = new Map<string, ReviewField[]>();
 
   fields.forEach((field) => {
@@ -285,7 +273,6 @@ function buildTokenToFieldsMap(
     }
   });
 
-  // Step 2 — Build initial token → fields map (preserving field-array order)
   const tokenToFields = new Map<string, ReviewField[]>();
   fields.forEach((field) => {
     getFieldTokens(field).forEach((token) => {
@@ -298,14 +285,6 @@ function buildTokenToFieldsMap(
     });
   });
 
-  // Step 3 — Extend single-field tokens with their same-value siblings so the
-  //   occurrence counter can assign _1 → first match, _2 → second match, etc.
-  //
-  //   Strategy A: same targetText (existing behaviour).
-  //   Strategy B: same base name — fallback for indexed fields where some siblings
-  //     have no targetText (e.g. AI only returned targetText for _1, not _2).
-  //     Without this, {{pangkat_golongan_1}} stays as [_1] and BOTH document
-  //     occurrences end up labelled _1.
   for (const [, tokenFields] of tokenToFields) {
     if (tokenFields.length !== 1) continue;
     const field = tokenFields[0];
@@ -318,7 +297,6 @@ function buildTokenToFieldsMap(
     const sibsByBN =
       baseName !== field.name ? siblingsByBaseName.get(baseName) : undefined;
 
-    // Pick whichever group is larger (more siblings = better coverage)
     const siblings =
       (sibsByTT?.length ?? 0) >= (sibsByBN?.length ?? 0) ? sibsByTT : sibsByBN;
 
@@ -332,20 +310,10 @@ function buildTokenToFieldsMap(
   return tokenToFields;
 }
 
-// ── DOCX same-value safety net ─────────────────────────────────────────────────
-//
-// After walkAndReplaceAll, indexed fields that share the same targetText
-// (e.g. jabatan_1 / jabatan_2 both → "Dosen Jurusan Teknik Informatika dan
-// Komputer") should be assigned top-to-bottom by visual position.
-// walkAndReplaceAll processes nodes in DOM order which normally matches
-// visual order, but this post-pass corrects any edge cases (e.g. when
-// docx-preview emits table cells in non-sequential DOM order).
-
 function reorderSameValueHighlights(
   container: HTMLElement,
   fields: ReviewField[]
 ): void {
-  // Group 1: by targetText — catches fields with the same original document value
   const targetTextToFields = new Map<string, ReviewField[]>();
   fields.forEach((field) => {
     const key = field.targetText?.trim();
@@ -355,8 +323,6 @@ function reorderSameValueHighlights(
     targetTextToFields.set(key, group);
   });
 
-  // Group 2: by base name — catches indexed fields even when some lack targetText
-  //   e.g. pangkat_golongan_1 / pangkat_golongan_2 → base "pangkat_golongan"
   const baseNameToFields = new Map<string, ReviewField[]>();
   fields.forEach((field) => {
     const baseName = field.name.replace(/_\d+$/, "");
@@ -366,7 +332,6 @@ function reorderSameValueHighlights(
     baseNameToFields.set(baseName, group);
   });
 
-  // Merge both strategies into one set of groups to process
   const groupsToProcess = new Map<string, ReviewField[]>();
   for (const [key, group] of targetTextToFields) {
     if (group.length > 1) groupsToProcess.set(`tt:${key}`, group);
@@ -383,9 +348,6 @@ function reorderSameValueHighlights(
 
   for (const [, group] of groupsToProcess) {
     const groupIds = new Set(group.map((f) => f.id));
-    // Also match by fieldName — critical when walkAndReplaceAll incorrectly assigned
-    // every occurrence of {{pangkat_golongan_1}} to _1's id/name (because the
-    // extension in buildTokenToFieldsMap had no siblings to work with).
     const groupNames = new Set(group.map((f) => f.name));
 
     const relevantHighlights = allHighlights.filter((el) => {
@@ -396,7 +358,6 @@ function reorderSameValueHighlights(
 
     if (relevantHighlights.length <= 1) continue;
 
-    // Sort top-to-bottom, left-to-right
     const sorted = [...relevantHighlights].sort((a, b) => {
       const ar = a.getBoundingClientRect();
       const br = b.getBoundingClientRect();
@@ -405,7 +366,6 @@ function reorderSameValueHighlights(
       return ar.left - br.left;
     });
 
-    // Fields in panel order (_1 first, _2 second, …)
     const sortedFields = [...group].sort(
       (a, b) => (fieldOrder.get(a.id) ?? 0) - (fieldOrder.get(b.id) ?? 0)
     );
@@ -430,12 +390,6 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
   const occurrenceCounters = new Map<string, number>();
   walkAndReplaceAll(container, tokenToFields, occurrenceCounters);
 
-  // ── FALLBACK for docx-preview text fragmentation ──
-  // docx-preview often splits text into tiny text nodes / spans (per-word
-  // or per-character). walkAndReplaceAll regex on a single text node then
-  // fails to match long targetText values. We do an element-level sweep
-  // to catch any field whose targetText appears inside a block element
-  // but was missed by the per-node walker.
   const highlightedIds = new Set(
     Array.from(container.querySelectorAll<HTMLElement>(".field-highlight")).map(
       (h) => h.dataset.fieldId
@@ -448,7 +402,6 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
       field.targetText?.trim() || field.originalPlaceholder?.trim();
     if (!needle || needle.length < 2) continue;
 
-    // Search all leaf elements whose textContent contains the needle
     const candidates = Array.from(container.querySelectorAll("*")).filter(
       (el) => {
         if (el.classList.contains("field-highlight")) return false;
@@ -460,18 +413,12 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
 
     if (!candidates.length) continue;
 
-    // Pick the deepest (smallest) element that still contains the full needle
-    // Sort by textContent length ascending → most specific match first
     candidates.sort(
       (a, b) => (a.textContent?.length || 0) - (b.textContent?.length || 0)
     );
     const best = candidates[0] as HTMLElement;
 
-    // Wrap the entire element content in a highlight mark
-    // We preserve children by wrapping only text nodes, or the whole element
-    // if it has no element children.
     if (best.children.length === 0) {
-      // Simple case: leaf element with only text
       const mark = document.createElement("span");
       mark.className = "field-highlight";
       mark.dataset.fieldId = field.id;
@@ -484,15 +431,12 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
       best.appendChild(mark);
       highlightedIds.add(field.id);
     } else {
-      // Complex case: element has mixed content.
-      // We wrap each direct text node that contains part of the needle.
       const childNodes = Array.from(best.childNodes);
       let found = false;
       for (const node of childNodes) {
         if (node.nodeType !== Node.TEXT_NODE) continue;
         const txt = node.textContent || "";
         if (!txt.trim()) continue;
-        // Fuzzy: if this text node is part of the needle or the needle is part of it
         if (needle.includes(txt.trim()) || txt.includes(needle)) {
           const mark = document.createElement("span");
           mark.className = "field-highlight";
@@ -510,7 +454,6 @@ function applyHighlights(container: HTMLElement, fields: ReviewField[]) {
     }
   }
 
-  // Safety net: ensure same-value indexed fields are visually top-to-bottom.
   reorderSameValueHighlights(container, fields);
 }
 
@@ -547,20 +490,28 @@ function relativeRect(rect: DOMRect, parentRect: DOMRect): RelativeRect {
   };
 }
 
+// ── Zoom-aware overlay helpers ─────────────────────────────────────────────────
+// rect values come from getBoundingClientRect() which returns post-zoom viewport
+// coordinates. The overlay elements are positioned inside zoomed containers, so
+// CSS position values must be divided by the zoom factor.
+// Chip dimensions (font-size, height, width) are also scaled so chips maintain
+// a consistent visual appearance regardless of zoom level.
+
 function addPdfFieldBand(
   overlay: HTMLElement,
   field: ReviewField,
-  rect: RelativeRect
+  rect: RelativeRect,
+  zoom = 1
 ) {
   const band = document.createElement("div");
   band.className = "pdf-field-band";
   band.dataset.fieldId = field.id;
   band.dataset.fieldName = field.name;
   band.dataset.fieldType = field.type;
-  band.style.left = `${rect.left}px`;
-  band.style.top = `${rect.top}px`;
-  band.style.width = `${rect.width}px`;
-  band.style.height = `${Math.max(rect.height, 6)}px`;
+  band.style.left = `${rect.left / zoom}px`;
+  band.style.top = `${rect.top / zoom}px`;
+  band.style.width = `${rect.width / zoom}px`;
+  band.style.height = `${Math.max(rect.height, 6) / zoom}px`;
   overlay.appendChild(band);
 }
 
@@ -569,19 +520,31 @@ function addFieldChip(
   field: ReviewField,
   rect: RelativeRect,
   bounds: { width: number; height: number },
-  className: string
+  className: string,
+  zoom = 1
 ) {
   const label = fieldMarkerLabel(field);
-  const chipWidth = clamp(label.length * 5.8 + 22, 54, 140);
-  const chipHeight = 18;
-  const gap = 4;
 
-  let top = rect.top - chipHeight - gap;
-  if (top < 4) top = rect.bottom + gap;
-  top = clamp(top, 4, bounds.height - chipHeight - 4);
+  // All sizes and positions in CSS units (divide viewport px by zoom)
+  const chipWidth = clamp(label.length * 5.8 + 22, 54, 140) / zoom;
+  const chipHeight = 18 / zoom;
+  const fontSize = 9 / zoom;
+  const gap = 4 / zoom;
+  const padH = 6 / zoom;
+  const borderRadius = 999;
 
-  let left = rect.left + rect.width / 2 - chipWidth / 2;
-  left = clamp(left, 4, bounds.width - chipWidth - 4);
+  // rect is in viewport-relative coords; convert to CSS coords
+  const rTop = rect.top / zoom;
+  const rBottom = rect.bottom / zoom;
+  const rLeft = rect.left / zoom;
+  const rWidth = rect.width / zoom;
+
+  let top = rTop - chipHeight - gap;
+  if (top < gap) top = rBottom + gap;
+  top = clamp(top, gap, bounds.height - chipHeight - gap);
+
+  let left = rLeft + rWidth / 2 - chipWidth / 2;
+  left = clamp(left, gap, bounds.width - chipWidth - gap);
 
   const chip = document.createElement("div");
   chip.className = className;
@@ -593,6 +556,11 @@ function addFieldChip(
   chip.style.left = `${left}px`;
   chip.style.top = `${top}px`;
   chip.style.width = `${chipWidth}px`;
+  chip.style.height = `${chipHeight}px`;
+  chip.style.lineHeight = `${chipHeight - 2 / zoom}px`;
+  chip.style.fontSize = `${fontSize}px`;
+  chip.style.padding = `0 ${padH}px`;
+  chip.style.borderRadius = `${borderRadius}px`;
   overlay.appendChild(chip);
 }
 
@@ -614,7 +582,7 @@ function updateChipStates(
   });
 }
 
-function deconflictChips(overlay: HTMLElement, chipSelector: string) {
+function deconflictChips(overlay: HTMLElement, chipSelector: string, zoom = 1) {
   const chips = Array.from(overlay.querySelectorAll<HTMLElement>(chipSelector));
   if (chips.length < 2) return;
 
@@ -624,19 +592,20 @@ function deconflictChips(overlay: HTMLElement, chipSelector: string) {
     return parseFloat(a.style.left || "0") - parseFloat(b.style.left || "0");
   });
 
-  const chipH = 18;
-  const vGap = 3;
-  const hGap = 4;
+  // All positions/sizes in CSS units (already divided by zoom in addFieldChip)
+  const chipH = 18 / zoom;
+  const vGap = 3 / zoom;
+  const hGap = 4 / zoom;
 
   for (let i = 1; i < chips.length; i++) {
     const prev = chips[i - 1];
     const curr = chips[i];
     const pt = parseFloat(prev.style.top || "0");
     const pl = parseFloat(prev.style.left || "0");
-    const pw = parseFloat(prev.style.width || "60");
+    const pw = parseFloat(prev.style.width || `${60 / zoom}`);
     const ct = parseFloat(curr.style.top || "0");
     const cl = parseFloat(curr.style.left || "0");
-    const cw = parseFloat(curr.style.width || "60");
+    const cw = parseFloat(curr.style.width || `${60 / zoom}`);
 
     const vertOverlap = ct < pt + chipH + vGap;
     const horizOverlap = cl < pl + pw + hGap && cl + cw > pl - hGap;
@@ -648,26 +617,17 @@ function deconflictChips(overlay: HTMLElement, chipSelector: string) {
   }
 }
 
-// ── PDF field overlays ─────────────────────────────────────────────────────────
-//
-// FIX (same-value siblings): Same-value indexed fields (e.g. jabatan_1 /
-// jabatan_2 both targeting "Dosen Jurusan …") are handled by two mechanisms:
-//
-//   1. buildTokenToFieldsMap() extends {{jabatan_1}}'s list to
-//      [jabatan_1, jabatan_2] so the occurrence counter can assign them
-//      correctly even when {{jabatan_2}} never appears in the document.
-//
-//   2. Phase 2 sorts all matches by visual rect before incrementing the
-//      counter, ensuring topmost occurrence → _1, next → _2, regardless of
-//      the order pdfjs returned the text spans.
-
 interface PdfPageMatchEntry {
   token: string;
   tokenFields: ReviewField[];
   rects: RelativeRect[];
 }
 
-function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
+function renderPdfFieldOverlays(
+  container: HTMLElement,
+  fields: ReviewField[],
+  zoom = 1
+) {
   clearPdfFieldOverlays(container);
   if (!fields.length) return;
 
@@ -675,26 +635,12 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
     container.querySelectorAll<HTMLElement>(".pdf-review-page")
   );
 
-  // occurrenceCounters is shared across all pages so that indexed fields
-  // spanning multiple pages (jabatan_1 on p1, jabatan_2 on p2) are assigned
-  // correctly without resetting at each page boundary.
   const occurrenceCounters = new Map<string, number>();
 
-  // console.log("[renderPdfFieldOverlays] pages:", pages.length);
-  // Build token→fields map once for the whole document.
-  // buildTokenToFieldsMap() automatically extends single-field tokens with
-  // their same-targetText siblings (the key fix for identical-value fields).
   const tokenToFields = buildTokenToFieldsMap(
     fields,
     (token) => token.includes("{{") || token.length >= 3
   );
-  // console.log(
-  //   "[renderPdfFieldOverlays] tokenToFields:",
-  //   Array.from(tokenToFields.entries()).map(([k, v]) => [
-  //     k,
-  //     v.map((f) => f.name),
-  //   ])
-  // );
 
   pages.forEach((pageEl, pageIndex) => {
     const textLayer = pageEl.querySelector<HTMLElement>(
@@ -720,21 +666,12 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
     });
 
     const pageText = ranges.map((r) => r.text).join("");
-    // console.log(
-    //   "[renderPdfFieldOverlays] page",
-    //   pageIndex,
-    //   "text length:",
-    //   pageText.length,
-    //   "sample:",
-    //   pageText.slice(0, 100)
-    // );
     if (!pageText.trim()) return;
 
     const overlay = document.createElement("div");
     overlay.className = "pdf-review-field-layer";
     pageEl.appendChild(overlay);
 
-    // ── Phase 1: collect all matches with their visual rects ────────────────
     const pageMatchEntries: PdfPageMatchEntry[] = [];
 
     for (const [token, tokenFields] of tokenToFields) {
@@ -750,10 +687,6 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
           .map((r) => relativeRect(r, pageRect))
           .filter((r) => r.width > 0 && r.height > 0);
 
-        // Only record matches that have valid visual rects. Matches without
-        // rects (invisible / off-canvas text) are intentionally skipped so
-        // they do not consume an occurrence counter slot and displace the
-        // assignment of the next visible occurrence.
         if (rects.length > 0) {
           pageMatchEntries.push({ token, tokenFields, rects });
         }
@@ -762,20 +695,6 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
       }
     }
 
-    // console.log(
-    //   "[renderPdfFieldOverlays] page",
-    //   pageIndex,
-    //   "match entries:",
-    //   pageMatchEntries.map((m) => ({
-    //     token: m.token.slice(0, 30),
-    //     rects: m.rects.length,
-    //   }))
-    // );
-    // ── Phase 2: sort by visual position, then assign fields ────────────────
-    //
-    // Sorting top→left guarantees that when jabatan_1 and jabatan_2 share the
-    // same targetText, the one physically higher on the page always gets _1
-    // regardless of how pdfjs ordered the text spans internally.
     pageMatchEntries.sort((a, b) => {
       const dt = a.rects[0].top - b.rects[0].top;
       if (Math.abs(dt) > 2) return dt;
@@ -801,7 +720,7 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
         ].join(":");
         if (renderedBands.has(key)) return;
         renderedBands.add(key);
-        addPdfFieldBand(overlay, field, rect);
+        addPdfFieldBand(overlay, field, rect, zoom);
       });
 
       const firstRect = rects[0];
@@ -813,7 +732,8 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
           field,
           firstRect,
           { width: pageEl.clientWidth, height: pageEl.clientHeight },
-          "pdf-field-chip"
+          "pdf-field-chip",
+          zoom
         );
       }
     }
@@ -823,15 +743,7 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
       return;
     }
 
-    // console.log(
-    //   "[renderPdfFieldOverlays] page",
-    //   pageIndex,
-    //   "bands:",
-    //   overlay.querySelectorAll(".pdf-field-band").length,
-    //   "chips:",
-    //   overlay.querySelectorAll(".pdf-field-chip").length
-    // );
-    deconflictChips(overlay, ".pdf-field-chip");
+    deconflictChips(overlay, ".pdf-field-chip", zoom);
 
     overlay.addEventListener("mouseover", (e: MouseEvent) => {
       const band = (e.target as HTMLElement).closest<HTMLElement>(
@@ -851,7 +763,8 @@ function renderPdfFieldOverlays(container: HTMLElement, fields: ReviewField[]) {
 
 function renderDocxFieldOverlays(
   container: HTMLElement,
-  fields: ReviewField[]
+  fields: ReviewField[],
+  zoom = 1
 ) {
   clearDocxFieldOverlays(container);
   if (!fields.length) return;
@@ -885,7 +798,8 @@ function renderDocxFieldOverlays(
         width: Math.max(container.scrollWidth, container.clientWidth),
         height: Math.max(container.scrollHeight, container.clientHeight),
       },
-      "docx-field-chip"
+      "docx-field-chip",
+      zoom
     );
   });
 
@@ -894,7 +808,7 @@ function renderDocxFieldOverlays(
     return;
   }
 
-  deconflictChips(overlay, ".docx-field-chip");
+  deconflictChips(overlay, ".docx-field-chip", zoom);
 
   const overHandler: EventListener = (e) => {
     const highlight = (e.target as HTMLElement).closest<HTMLElement>(
@@ -918,15 +832,19 @@ function renderDocxFieldOverlays(
   container.addEventListener("mouseleave", leaveHandler);
 }
 
-function refreshFieldMarkers(container: HTMLElement, fields: ReviewField[]) {
+function refreshFieldMarkers(
+  container: HTMLElement,
+  fields: ReviewField[],
+  zoom = 1
+) {
   clearDocxFieldOverlays(container);
   if (container.querySelector(".pdf-review-page")) {
-    renderPdfFieldOverlays(container, fields);
+    renderPdfFieldOverlays(container, fields, zoom);
     return;
   }
   clearPdfFieldOverlays(container);
   applyHighlights(container, fields);
-  renderDocxFieldOverlays(container, fields);
+  renderDocxFieldOverlays(container, fields, zoom);
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -1120,6 +1038,32 @@ async function looksLikePdfConvertedDocx(
   }
 }
 
+// ── Field type label helpers for bottom sheet ──────────────────────────────────
+const FIELD_TYPE_METADATA = [
+  ["text", "Text", "Name, number, etc.", "bg-blue-50 text-blue-700"],
+  ["date", "Date", "Date or time", "bg-green-50 text-green-700"],
+  [
+    "loop",
+    "Table / Loop",
+    "Repeating rows {{#…}}",
+    "bg-indigo-50 text-indigo-700",
+  ],
+  [
+    "condition",
+    "Condition (if)",
+    "Show if true {{#…}}",
+    "bg-pink-50 text-pink-700",
+  ],
+  [
+    "condition_inverse",
+    "Condition (else)",
+    "Show if false {{^…}}",
+    "bg-pink-50 text-pink-700",
+  ],
+] as const;
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function LightDocxPreview({
   docxBuffer,
   fields,
@@ -1131,17 +1075,107 @@ export default function LightDocxPreview({
   const styleRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const fieldsRef = useRef(fields);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(
     null
   );
   const [loadingLabel, setLoadingLabel] = useState("Loading preview...");
+  const [zoom, setZoom] = useState(1.0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
+
+  const zoomRef = useRef(1.0);
+
+  // Pinch-to-zoom refs (used in non-passive event listeners)
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(1.0);
+  const isPinchingRef = useRef(false);
 
   useEffect(() => {
     fieldsRef.current = fields;
   }, [fields]);
 
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Animate bottom sheet when selection menu opens on mobile
+  useEffect(() => {
+    if (selectionMenu && isMobile) {
+      requestAnimationFrame(() => setBottomSheetVisible(true));
+    } else {
+      setBottomSheetVisible(false);
+    }
+  }, [selectionMenu, isMobile]);
+
+  // Pinch-to-zoom via non-passive touch listeners (must use addEventListener)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchStartDistRef.current = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        pinchStartZoomRef.current = zoomRef.current;
+        isPinchingRef.current = true;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || pinchStartDistRef.current === null) return;
+      e.preventDefault(); // Prevent viewport zoom during pinch
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const ratio = dist / pinchStartDistRef.current;
+      let newZoom = pinchStartZoomRef.current * ratio;
+      // Snap to 1.0 when very close
+      if (Math.abs(newZoom - 1.0) < ZOOM_SNAP_THRESHOLD) newZoom = 1.0;
+      newZoom = parseFloat(clamp(newZoom, MIN_ZOOM, MAX_ZOOM).toFixed(2));
+      zoomRef.current = newZoom;
+      setZoom(newZoom);
+    };
+
+    const onTouchEnd = () => {
+      // Small delay so we can check isPinchingRef in the touch selection handler
+      setTimeout(() => {
+        isPinchingRef.current = false;
+      }, 80);
+      pinchStartDistRef.current = null;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []); // run once; refs keep values current
+
+  // Re-render field markers when zoom changes
+  useEffect(() => {
+    zoomRef.current = zoom;
+    if (!bodyRef.current || loading) return;
+    requestAnimationFrame(() => {
+      if (bodyRef.current)
+        refreshFieldMarkers(bodyRef.current, fieldsRef.current, zoom);
+    });
+  }, [zoom, loading]);
+
+  // Render document when buffer changes
   useEffect(() => {
     if (!docxBuffer || !bodyRef.current || !styleRef.current) return;
     let cancelled = false;
@@ -1159,7 +1193,8 @@ export default function LightDocxPreview({
       await renderPdfPreview(pdfBuffer, body);
       if (cancelled) return;
       requestAnimationFrame(() => {
-        if (!cancelled) renderPdfFieldOverlays(body, fieldsRef.current);
+        if (!cancelled)
+          renderPdfFieldOverlays(body, fieldsRef.current, zoomRef.current);
       });
     };
 
@@ -1218,7 +1253,9 @@ export default function LightDocxPreview({
         await renderPdfFallback();
         return;
       }
-      requestAnimationFrame(() => refreshFieldMarkers(body, fieldsRef.current));
+      requestAnimationFrame(() =>
+        refreshFieldMarkers(body, fieldsRef.current, zoomRef.current)
+      );
     })()
       .catch((err) => {
         if (cancelled) return;
@@ -1237,13 +1274,16 @@ export default function LightDocxPreview({
     };
   }, [docxBuffer, preferPdfPreview]);
 
+  // Re-render markers when fields change
   useEffect(() => {
     if (!bodyRef.current || loading) return;
     requestAnimationFrame(() => {
-      if (bodyRef.current) refreshFieldMarkers(bodyRef.current, fields);
+      if (bodyRef.current)
+        refreshFieldMarkers(bodyRef.current, fields, zoomRef.current);
     });
   }, [fields, loading]);
 
+  // Open selection menu after text selection
   const openSelectionMenu = useCallback(() => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0)
@@ -1265,21 +1305,31 @@ export default function LightDocxPreview({
     });
   }, []);
 
+  // Handle touch end for text selection (only if not pinching)
+  const handleTouchEndSelection = useCallback(() => {
+    window.setTimeout(() => {
+      if (!isPinchingRef.current) openSelectionMenu();
+    }, 180);
+  }, [openSelectionMenu]);
+
+  // Dismiss selection menu on outside interaction
   useEffect(() => {
-    const onMouseDown = (event: MouseEvent) => {
-      if (!selectionMenu) return;
+    if (!selectionMenu) return;
+    const onDown = (event: MouseEvent | TouchEvent) => {
       if (menuRef.current?.contains(event.target as Node)) return;
-      if (Date.now() - selectionMenu.openedAt < 3000) return;
+      if (Date.now() - selectionMenu.openedAt < 200) return;
       setSelectionMenu(null);
     };
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSelectionMenu(null);
     };
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onDown as EventListener);
+    document.addEventListener("touchstart", onDown as EventListener);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onDown as EventListener);
+      document.removeEventListener("touchstart", onDown as EventListener);
+      document.removeEventListener("keydown", onKey);
     };
   }, [selectionMenu]);
 
@@ -1293,6 +1343,32 @@ export default function LightDocxPreview({
     [onAddPlaceholder, selectionMenu]
   );
 
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    setZoom((z) => {
+      let nz = parseFloat((z + ZOOM_STEP).toFixed(2));
+      if (Math.abs(nz - 1.0) < ZOOM_SNAP_THRESHOLD) nz = 1.0;
+      nz = clamp(nz, MIN_ZOOM, MAX_ZOOM);
+      zoomRef.current = nz;
+      return nz;
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((z) => {
+      let nz = parseFloat((z - ZOOM_STEP).toFixed(2));
+      if (Math.abs(nz - 1.0) < ZOOM_SNAP_THRESHOLD) nz = 1.0;
+      nz = clamp(nz, MIN_ZOOM, MAX_ZOOM);
+      zoomRef.current = nz;
+      return nz;
+    });
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    zoomRef.current = 1.0;
+    setZoom(1.0);
+  }, []);
+
   if (!docxBuffer) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-[var(--text-muted)]">
@@ -1301,244 +1377,343 @@ export default function LightDocxPreview({
     );
   }
 
-  return (
-    <div
-      ref={scrollRef}
-      className="relative h-full overflow-auto"
-      onMouseUp={openSelectionMenu}
-      onTouchEnd={() => window.setTimeout(openSelectionMenu, 0)}
-    >
-      <style>{`
-        .docx-preview-surface {
-          --field-text: #2563eb;
-          --field-date: #16a34a;
-          --field-loop: #4f46e5;
-          --field-condition: #db2777;
-          min-height: 100%;
-          background: var(--bg-muted);
-          color: #111827;
-          padding: 24px;
-          user-select: text;
-        }
-        .docx-preview-surface > div { position: relative; }
-        .docx-preview-surface .docx-wrapper { background: transparent; padding: 0; }
-        .docx-preview-surface .docx-review {
-          box-shadow: 0 18px 50px rgba(15,23,42,0.16);
-          margin: 0 auto 28px auto;
-        }
-        .pdf-review-page {
-          position: relative;
-          background: #fff;
-          box-shadow: 0 18px 50px rgba(15,23,42,0.16);
-          margin: 0 auto 28px auto;
-          overflow: hidden;
-          isolation: isolate;
-        }
-        .pdf-review-page--error {
-          min-height: 80px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .pdf-review-page--error::after {
-          content: 'Page could not be rendered';
-          font-size: 11px;
-          color: #9ca3af;
-        }
-        .pdf-review-canvas {
-          display: block;
-          background: #fff;
-          position: relative;
-          z-index: 1;
-          pointer-events: none;
-          user-select: none;
-        }
-        .pdf-review-text-layer {
-          --min-font-size: 1;
-          --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
-          --min-font-size-inv: calc(1 / var(--min-font-size));
-          position: absolute;
-          inset: 0;
-          overflow: clip;
-          line-height: 1;
-          text-align: initial;
-          transform-origin: 0 0;
-          z-index: 3;
-          pointer-events: auto;
-          user-select: text;
-          text-size-adjust: none;
-          forced-color-adjust: none;
-          caret-color: transparent;
-        }
-        .pdf-review-text-layer span,
-        .pdf-review-text-layer br {
-          color: transparent;
-          position: absolute;
-          white-space: pre;
-          cursor: text;
-          transform-origin: 0% 0%;
-          user-select: text;
-        }
-        .pdf-review-text-layer > :not(.markedContent),
-        .pdf-review-text-layer .markedContent span:not(.markedContent) {
-          z-index: 1;
-          --font-height: 0;
-          font-size: calc(var(--text-scale-factor) * var(--font-height));
-          --scale-x: 1;
-          --rotate: 0deg;
-          transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
-        }
-        .pdf-review-text-layer .markedContent { display: contents; }
-        .pdf-review-text-layer span[role="img"] { user-select: none; cursor: default; }
-        .pdf-review-text-layer ::selection { background: rgba(37,99,235,0.28); }
-        .pdf-review-field-layer {
-          position: absolute;
-          inset: 0;
-          z-index: 2;
-          pointer-events: none;
-          overflow: hidden;
-        }
-        .docx-review-field-layer {
-          position: absolute;
-          inset: 0;
-          z-index: 5;
-          pointer-events: none;
-          overflow: hidden;
-        }
-        /* ── Shared colour tokens ─────────────────────────────────────────── */
-        .pdf-field-band, .pdf-field-chip, .docx-field-chip {
-          --marker-color: var(--field-text);
-        }
-        .pdf-field-band[data-field-type="date"],
-        .pdf-field-chip[data-field-type="date"],
-        .docx-field-chip[data-field-type="date"]   { --marker-color: var(--field-date); }
-        .pdf-field-band[data-field-type="number"],
-        .pdf-field-chip[data-field-type="number"],
-        .docx-field-chip[data-field-type="number"],
-        .pdf-field-band[data-field-type="email"],
-        .pdf-field-chip[data-field-type="email"],
-        .docx-field-chip[data-field-type="email"],
-        .pdf-field-band[data-field-type="phone"],
-        .pdf-field-chip[data-field-type="phone"],
-        .docx-field-chip[data-field-type="phone"]  { --marker-color: var(--field-text); }
-        .pdf-field-band[data-field-type="loop"],
-        .pdf-field-chip[data-field-type="loop"],
-        .docx-field-chip[data-field-type="loop"]   { --marker-color: var(--field-loop); }
-        .pdf-field-band[data-field-type="condition"],
-        .pdf-field-band[data-field-type="condition_inverse"],
-        .pdf-field-chip[data-field-type="condition"],
-        .pdf-field-chip[data-field-type="condition_inverse"],
-        .docx-field-chip[data-field-type="condition"],
-        .docx-field-chip[data-field-type="condition_inverse"] { --marker-color: var(--field-condition); }
-        /* ── Bands ────────────────────────────────────────────────────────── */
-        .pdf-field-band {
-          position: absolute;
-          border-radius: 3px;
-          background: color-mix(in srgb, var(--marker-color) 13%, transparent);
-          box-shadow:
-            inset 0 0 0 1px color-mix(in srgb, var(--marker-color) 18%, transparent),
-            inset 0 -2px 0 color-mix(in srgb, var(--marker-color) 42%, transparent);
-          mix-blend-mode: multiply;
-          pointer-events: auto;
-          cursor: default;
-        }
-        /* ── Chips ────────────────────────────────────────────────────────── */
-        .pdf-field-chip,
-        .docx-field-chip {
-          position: absolute;
-          height: 18px;
-          line-height: 16px;
-          padding: 0 6px;
-          border-radius: 999px;
-          border: 1px solid color-mix(in srgb, var(--marker-color) 40%, white);
-          background: color-mix(in srgb, white 86%, var(--marker-color) 14%);
-          color: var(--marker-color);
-          font-size: 9px;
-          font-weight: 700;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          pointer-events: none;
-          opacity: 0.82;
-          box-shadow: 0 2px 6px rgba(15,23,42,0.10);
-          transform: none;
-          transition:
-            opacity 0.14s ease,
-            transform 0.14s ease,
-            box-shadow 0.14s ease;
-        }
-        .pdf-field-chip.chip-active,
-        .docx-field-chip.chip-active {
-          opacity: 1;
-          transform: translateY(-1px) scale(1.07);
-          box-shadow: 0 5px 14px rgba(15,23,42,0.18);
-        }
-        .pdf-field-chip.chip-dimmed,
-        .docx-field-chip.chip-dimmed {
-          opacity: 0.28;
-          transform: scale(0.95);
-        }
-        /* ── DOCX inline highlight marks ──────────────────────────────────── */
-        .field-highlight {
-          border-radius: 2px;
-          box-decoration-break: clone;
-          -webkit-box-decoration-break: clone;
-          padding: 0;
-          font-weight: inherit;
-          box-shadow: inset 0 -2px 0 currentColor;
-        }
-        .field-highlight[data-field-type="text"],
-        .field-highlight[data-field-type="number"],
-        .field-highlight[data-field-type="email"],
-        .field-highlight[data-field-type="phone"] {
-          background: color-mix(in srgb, var(--field-text) 16%, transparent);
-          color: var(--field-text);
-        }
-        .field-highlight[data-field-type="date"] {
-          background: color-mix(in srgb, var(--field-date) 16%, transparent);
-          color: var(--field-date);
-        }
-        .field-highlight[data-field-type="loop"] {
-          background: color-mix(in srgb, var(--field-loop) 16%, transparent);
-          color: var(--field-loop);
-        }
-        .field-highlight[data-field-type="condition"],
-        .field-highlight[data-field-type="condition_inverse"] {
-          background: color-mix(in srgb, var(--field-condition) 16%, transparent);
-          color: var(--field-condition);
-        }
-        @media (max-width: 640px) {
-          .docx-preview-surface { padding: 12px; }
-          .docx-preview-surface .docx-wrapper { overflow-x: auto; }
-          .pdf-review-page { margin-bottom: 18px; }
-          .pdf-field-chip, .docx-field-chip {
-            opacity: 0.9 !important;
-            transform: none !important;
-          }
-        }
-      `}</style>
+  const zoomPercent = Math.round(zoom * 100);
+  const canZoomIn = zoom < MAX_ZOOM - 0.01;
+  const canZoomOut = zoom > MIN_ZOOM + 0.01;
 
-      <div ref={styleRef} />
-      <div className="docx-preview-surface">
-        <div ref={bodyRef} />
+  return (
+    <div className="relative h-full flex flex-col overflow-hidden">
+      {/* ── Scrollable document area ── */}
+      <div
+        ref={scrollRef}
+        className="relative flex-1 overflow-auto"
+        onMouseUp={openSelectionMenu}
+        onTouchEnd={handleTouchEndSelection}
+      >
+        <style>{`
+          .docx-preview-surface {
+            --field-text: #2563eb;
+            --field-date: #16a34a;
+            --field-loop: #4f46e5;
+            --field-condition: #db2777;
+            min-height: 100%;
+            background: var(--bg-muted);
+            color: #111827;
+            padding: 24px;
+            user-select: text;
+            transform-origin: top left;
+          }
+          .docx-preview-surface > div { position: relative; }
+          .docx-preview-surface .docx-wrapper { background: transparent; padding: 0; }
+          .docx-preview-surface .docx-review {
+            box-shadow: 0 18px 50px rgba(15,23,42,0.16);
+            margin: 0 auto 28px auto;
+          }
+          .pdf-review-page {
+            position: relative;
+            background: #fff;
+            box-shadow: 0 18px 50px rgba(15,23,42,0.16);
+            margin: 0 auto 28px auto;
+            overflow: hidden;
+            isolation: isolate;
+          }
+          .pdf-review-page--error {
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .pdf-review-page--error::after {
+            content: 'Page could not be rendered';
+            font-size: 11px;
+            color: #9ca3af;
+          }
+          .pdf-review-canvas {
+            display: block;
+            background: #fff;
+            position: relative;
+            z-index: 1;
+            pointer-events: none;
+            user-select: none;
+          }
+          .pdf-review-text-layer {
+            --min-font-size: 1;
+            --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+            --min-font-size-inv: calc(1 / var(--min-font-size));
+            position: absolute;
+            inset: 0;
+            overflow: clip;
+            line-height: 1;
+            text-align: initial;
+            transform-origin: 0 0;
+            z-index: 3;
+            pointer-events: auto;
+            user-select: text;
+            text-size-adjust: none;
+            forced-color-adjust: none;
+            caret-color: transparent;
+          }
+          .pdf-review-text-layer span,
+          .pdf-review-text-layer br {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+            user-select: text;
+          }
+          .pdf-review-text-layer > :not(.markedContent),
+          .pdf-review-text-layer .markedContent span:not(.markedContent) {
+            z-index: 1;
+            --font-height: 0;
+            font-size: calc(var(--text-scale-factor) * var(--font-height));
+            --scale-x: 1;
+            --rotate: 0deg;
+            transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+          }
+          .pdf-review-text-layer .markedContent { display: contents; }
+          .pdf-review-text-layer span[role="img"] { user-select: none; cursor: default; }
+          .pdf-review-text-layer ::selection { background: rgba(37,99,235,0.28); }
+          .pdf-review-field-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            overflow: hidden;
+          }
+          .docx-review-field-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            overflow: hidden;
+          }
+          .pdf-field-band, .pdf-field-chip, .docx-field-chip {
+            --marker-color: var(--field-text);
+          }
+          .pdf-field-band[data-field-type="date"],
+          .pdf-field-chip[data-field-type="date"],
+          .docx-field-chip[data-field-type="date"]   { --marker-color: var(--field-date); }
+          .pdf-field-band[data-field-type="number"],
+          .pdf-field-chip[data-field-type="number"],
+          .docx-field-chip[data-field-type="number"],
+          .pdf-field-band[data-field-type="email"],
+          .pdf-field-chip[data-field-type="email"],
+          .docx-field-chip[data-field-type="email"],
+          .pdf-field-band[data-field-type="phone"],
+          .pdf-field-chip[data-field-type="phone"],
+          .docx-field-chip[data-field-type="phone"]  { --marker-color: var(--field-text); }
+          .pdf-field-band[data-field-type="loop"],
+          .pdf-field-chip[data-field-type="loop"],
+          .docx-field-chip[data-field-type="loop"]   { --marker-color: var(--field-loop); }
+          .pdf-field-band[data-field-type="condition"],
+          .pdf-field-band[data-field-type="condition_inverse"],
+          .pdf-field-chip[data-field-type="condition"],
+          .pdf-field-chip[data-field-type="condition_inverse"],
+          .docx-field-chip[data-field-type="condition"],
+          .docx-field-chip[data-field-type="condition_inverse"] { --marker-color: var(--field-condition); }
+          .pdf-field-band {
+            position: absolute;
+            border-radius: 3px;
+            background: color-mix(in srgb, var(--marker-color) 13%, transparent);
+            box-shadow:
+              inset 0 0 0 1px color-mix(in srgb, var(--marker-color) 18%, transparent),
+              inset 0 -2px 0 color-mix(in srgb, var(--marker-color) 42%, transparent);
+            mix-blend-mode: multiply;
+            pointer-events: auto;
+            cursor: default;
+          }
+          .pdf-field-chip,
+          .docx-field-chip {
+            position: absolute;
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0.82;
+            border: 1px solid color-mix(in srgb, var(--marker-color) 40%, white);
+            background: color-mix(in srgb, white 86%, var(--marker-color) 14%);
+            color: var(--marker-color);
+            box-shadow: 0 2px 6px rgba(15,23,42,0.10);
+            transition:
+              opacity 0.14s ease,
+              transform 0.14s ease,
+              box-shadow 0.14s ease;
+          }
+          .pdf-field-chip.chip-active,
+          .docx-field-chip.chip-active {
+            opacity: 1;
+            transform: translateY(-1px) scale(1.07);
+            box-shadow: 0 5px 14px rgba(15,23,42,0.18);
+          }
+          .pdf-field-chip.chip-dimmed,
+          .docx-field-chip.chip-dimmed {
+            opacity: 0.28;
+            transform: scale(0.95);
+          }
+          .field-highlight {
+            border-radius: 2px;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+            padding: 0;
+            font-weight: inherit;
+            box-shadow: inset 0 -2px 0 currentColor;
+          }
+          .field-highlight[data-field-type="text"],
+          .field-highlight[data-field-type="number"],
+          .field-highlight[data-field-type="email"],
+          .field-highlight[data-field-type="phone"] {
+            background: color-mix(in srgb, var(--field-text) 16%, transparent);
+            color: var(--field-text);
+          }
+          .field-highlight[data-field-type="date"] {
+            background: color-mix(in srgb, var(--field-date) 16%, transparent);
+            color: var(--field-date);
+          }
+          .field-highlight[data-field-type="loop"] {
+            background: color-mix(in srgb, var(--field-loop) 16%, transparent);
+            color: var(--field-loop);
+          }
+          .field-highlight[data-field-type="condition"],
+          .field-highlight[data-field-type="condition_inverse"] {
+            background: color-mix(in srgb, var(--field-condition) 16%, transparent);
+            color: var(--field-condition);
+          }
+        `}</style>
+
+        <div ref={styleRef} />
+
+        <div
+          className="docx-preview-surface"
+          style={zoom !== 1 ? { zoom } : undefined}
+        >
+          <div ref={bodyRef} />
+        </div>
+
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-muted)]/80">
+            <Loader2Icon className="w-6 h-6 animate-spin text-[var(--accent-light)]" />
+            <span className="ml-2 text-xs text-[var(--text-muted)]">
+              {loadingLabel}
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--danger)] bg-[var(--bg-muted)]">
+            {error}
+          </div>
+        )}
       </div>
 
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-muted)]/80">
-          <Loader2Icon className="w-6 h-6 animate-spin text-[var(--accent-light)]" />
-          <span className="ml-2 text-xs text-[var(--text-muted)]">
-            {loadingLabel}
-          </span>
-        </div>
-      )}
+      {/* ── Zoom toolbar — always visible at bottom ── */}
+      <div
+        className="shrink-0 flex items-center justify-between px-3 py-2 gap-2"
+        style={{
+          borderTop: "1px solid var(--border-subtle)",
+          background: "var(--bg-sidebar)",
+        }}
+      >
+        {/* Left: hint text */}
+        <p
+          className="text-[10px] truncate flex-1 min-w-0"
+          style={{ color: "var(--text-dim)" }}
+        >
+          {isMobile
+            ? "Long-press to select text · Pinch to zoom"
+            : "Select text in the document to add a field"}
+        </p>
 
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--danger)] bg-[var(--bg-muted)]">
-          {error}
-        </div>
-      )}
+        {/* Right: zoom controls */}
+        <div
+          className="flex items-center gap-0.5 rounded-lg overflow-hidden shrink-0"
+          style={{
+            border: "1px solid var(--border-subtle)",
+            background: "var(--bg-input)",
+          }}
+        >
+          <button
+            onClick={handleZoomOut}
+            disabled={!canZoomOut}
+            aria-label="Zoom out"
+            className="flex items-center justify-center transition-colors"
+            style={{
+              width: isMobile ? 36 : 28,
+              height: isMobile ? 36 : 28,
+              color: canZoomOut ? "var(--text-muted)" : "var(--text-dim)",
+              opacity: canZoomOut ? 1 : 0.4,
+              cursor: canZoomOut ? "pointer" : "default",
+            }}
+            onMouseEnter={(e) => {
+              if (canZoomOut)
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--accent-soft)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
+          >
+            <ZoomOutIcon className={isMobile ? "w-4 h-4" : "w-3.5 h-3.5"} />
+          </button>
 
-      {selectionMenu && (
+          <button
+            onClick={handleZoomReset}
+            aria-label="Reset zoom"
+            title="Reset to 100%"
+            className="flex items-center justify-center transition-colors tabular-nums"
+            style={{
+              minWidth: isMobile ? 52 : 42,
+              height: isMobile ? 36 : 28,
+              fontSize: isMobile ? 12 : 10,
+              fontWeight: 600,
+              color: zoom !== 1 ? "var(--accent-light)" : "var(--text-muted)",
+              borderLeft: "1px solid var(--border-subtle)",
+              borderRight: "1px solid var(--border-subtle)",
+              background: zoom !== 1 ? "var(--accent-soft)" : "transparent",
+              letterSpacing: "-0.01em",
+            }}
+            onMouseEnter={(e) => {
+              if (zoom !== 1)
+                (e.currentTarget as HTMLElement).style.background =
+                  "color-mix(in srgb, var(--accent-light) 18%, transparent)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background =
+                zoom !== 1 ? "var(--accent-soft)" : "transparent";
+            }}
+          >
+            {zoomPercent}%
+          </button>
+
+          <button
+            onClick={handleZoomIn}
+            disabled={!canZoomIn}
+            aria-label="Zoom in"
+            className="flex items-center justify-center transition-colors"
+            style={{
+              width: isMobile ? 36 : 28,
+              height: isMobile ? 36 : 28,
+              color: canZoomIn ? "var(--text-muted)" : "var(--text-dim)",
+              opacity: canZoomIn ? 1 : 0.4,
+              cursor: canZoomIn ? "pointer" : "default",
+            }}
+            onMouseEnter={(e) => {
+              if (canZoomIn)
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--accent-soft)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
+          >
+            <ZoomInIcon className={isMobile ? "w-4 h-4" : "w-3.5 h-3.5"} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Desktop floating selection menu ── */}
+      {selectionMenu && !isMobile && (
         <div
           ref={menuRef}
           className="fixed z-[9999] w-72 rounded-xl shadow-2xl overflow-hidden"
@@ -1595,6 +1770,163 @@ export default function LightDocxPreview({
             </button>
           ))}
         </div>
+      )}
+
+      {/* ── Mobile bottom sheet selection menu ── */}
+      {selectionMenu && isMobile && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[9998]"
+            style={{
+              background: "rgba(0,0,0,0.4)",
+              opacity: bottomSheetVisible ? 1 : 0,
+              transition: "opacity 0.22s ease",
+            }}
+            onPointerDown={() => setSelectionMenu(null)}
+          />
+
+          {/* Sheet */}
+          <div
+            ref={menuRef}
+            className="fixed inset-x-0 bottom-0 z-[9999] rounded-t-2xl overflow-hidden"
+            style={{
+              background: "var(--popover)",
+              border: "1px solid var(--accent-border)",
+              borderBottom: "none",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.25)",
+              transform: bottomSheetVisible
+                ? "translateY(0)"
+                : "translateY(100%)",
+              transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
+              paddingBottom: "env(safe-area-inset-bottom, 8px)",
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div
+                className="w-10 h-1 rounded-full"
+                style={{ background: "var(--border-hover)" }}
+              />
+            </div>
+
+            {/* Selected text */}
+            <div
+              className="flex items-center gap-2.5 px-4 py-3"
+              style={{ borderBottom: "1px solid var(--border-subtle)" }}
+            >
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: "var(--accent-soft)",
+                  border: "1px solid var(--accent-border)",
+                }}
+              >
+                <MousePointerClickIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--accent-light)" }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  Add as placeholder
+                </p>
+                <p
+                  className="text-[11px] truncate mt-0.5"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  &ldquo;{selectionMenu.text}&rdquo;
+                </p>
+              </div>
+            </div>
+
+            {/* Type options — two columns on mobile for easier thumb reach */}
+            <div className="grid grid-cols-2 gap-2 p-3">
+              {(
+                [
+                  ["text", "Text", "Name, address, etc.", "#2563eb", "#eff6ff"],
+                  ["date", "Date", "Date or time value", "#16a34a", "#f0fdf4"],
+                  [
+                    "loop",
+                    "Table / Loop",
+                    "Repeating rows",
+                    "#4f46e5",
+                    "#eef2ff",
+                  ],
+                  [
+                    "condition",
+                    "Condition (if)",
+                    "Show when truthy",
+                    "#db2777",
+                    "#fdf2f8",
+                  ],
+                  [
+                    "condition_inverse",
+                    "Condition (else)",
+                    "Show when empty",
+                    "#db2777",
+                    "#fdf2f8",
+                  ],
+                ] as const
+              ).map(([type, label, hint, color, bg]) => (
+                <button
+                  key={type}
+                  type="button"
+                  className="flex flex-col items-start gap-1 rounded-xl px-3 py-3 text-left transition-all active:scale-95"
+                  style={{
+                    background: bg,
+                    border: `1.5px solid color-mix(in srgb, ${color} 25%, transparent)`,
+                    minHeight: 72,
+                  }}
+                  onClick={() => handleAdd(type)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <p
+                    className="text-[13px] font-semibold leading-tight"
+                    style={{ color }}
+                  >
+                    {label}
+                  </p>
+                  <p
+                    className="text-[10px] leading-relaxed"
+                    style={{
+                      color: `color-mix(in srgb, ${color} 70%, #374151)`,
+                    }}
+                  >
+                    {hint}
+                  </p>
+                </button>
+              ))}
+
+              {/* Cancel button in the last cell */}
+              <button
+                type="button"
+                className="flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-3 transition-all active:scale-95"
+                style={{
+                  background: "var(--bg-muted)",
+                  border: "1.5px solid var(--border-subtle)",
+                  minHeight: 72,
+                }}
+                onClick={() => setSelectionMenu(null)}
+              >
+                <ChevronUpIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--text-dim)" }}
+                />
+                <p
+                  className="text-[12px] font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Cancel
+                </p>
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

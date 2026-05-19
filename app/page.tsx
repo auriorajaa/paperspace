@@ -267,7 +267,7 @@ export default async function LandingPage() {
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     />
                   </svg>
-                  paperspace.app/home
+                  paperspace.work/home
                 </div>
               </div>
             </div>
@@ -1064,7 +1064,7 @@ export default async function LandingPage() {
                       >
                         {row.date}
                       </span>
-                      <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                      
                     </div>
                   ))}
                 </div>
@@ -1438,7 +1438,7 @@ export default async function LandingPage() {
                   border: "1px solid var(--border-subtle)",
                 }}
               >
-                <div className="text-2xl mb-2">{step.icon}</div>
+                {/* <div className="text-2xl mb-2">{step.icon}</div> */}
                 <p
                   className="text-[12.5px] font-semibold mb-1"
                   style={{ color: "var(--text)" }}
