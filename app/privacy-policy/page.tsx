@@ -41,7 +41,7 @@ const sections = [
       },
       {
         subtitle: "AI Features",
-        text: "Document content may be transmitted to third-party AI providers for the sole purpose of generating summaries. Paperspace makes no warranties regarding the accuracy or completeness of AI-generated summaries. You assume full responsibility for any reliance on such summaries. Paperspace is not liable for any loss or damage arising from inaccurate, incomplete, or misleading AI-generated content.",
+        text: "Paperspace uses two distinct AI functions: (1) Document summaries — document content may be transmitted to third-party AI providers solely to generate summaries; (2) Placeholder detection — as a fallback, Paperspace may use Google Gemini Flash Lite 2.5 flash lite to detect and identify placeholders within document templates. This function operates exclusively on document content you create within Paperspace and does not access, process, or interact with any data obtained via Google API scopes (including Google Drive or Google Forms data). Paperspace makes no warranties regarding the accuracy of AI-generated outputs, and you assume full responsibility for any reliance on them.",
       },
       {
         subtitle: "Service Improvement",
@@ -72,6 +72,24 @@ const sections = [
       {
         subtitle: "Business Transfers",
         text: "In the event of a merger, acquisition, reorganisation, or sale of assets, your information may be transferred to the acquiring entity without your consent. We will not provide separate notice of such transfers.",
+      },
+    ],
+  },
+  {
+    id: "google-api",
+    title: "Google API Services & Limited Use",
+    content: [
+      {
+        subtitle: "Google API Compliance",
+        text: "Paperspace's use and transfer of information received from Google APIs to any other app will adhere to the Google API Services User Data Policy, including the Limited Use requirements. See https://developers.google.com/terms/api-services-user-data-policy.",
+      },
+      {
+        subtitle: "Google Scopes We Request",
+        text: "When you connect your Google account, Paperspace requests access to: (1) specific Google Drive files you use with the app (drive.file), to read and import documents; (2) your Google Forms structure (forms.body.readonly), to display form templates; and (3) responses to your Google Forms (forms.responses.readonly), to display submission data. We do not request broader Drive or account access.",
+      },
+      {
+        subtitle: "Limited Use",
+        text: "Data obtained via Google APIs is used solely to provide and improve the in-app features you explicitly activate. We do not use Google user data to serve advertisements, transfer it to third parties except as necessary to provide the service, allow humans to read it except with your affirmative consent or as required by law, or use it for any purpose incompatible with these limited use restrictions.",
       },
     ],
   },
