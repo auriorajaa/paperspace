@@ -39,14 +39,14 @@ const features = [
     title: "Smart templates",
     desc: "Build reusable templates with dynamic placeholders and field types.",
   },
-  {
-    icon: ZapIcon,
-    color: "#fb923c",
-    bg: "rgba(251,146,60,0.1)",
-    border: "rgba(251,146,60,0.18)",
-    title: "Mail merge & bulk generate",
-    desc: "Generate hundreds of personalised documents in a single click.",
-  },
+  // {
+  //   icon: ZapIcon,
+  //   color: "#fb923c",
+  //   bg: "rgba(251,146,60,0.1)",
+  //   border: "rgba(251,146,60,0.18)",
+  //   title: "Mail merge & bulk generate",
+  //   desc: "Generate hundreds of personalised documents in a single click.",
+  // },
   {
     icon: FolderIcon,
     color: "#a78bfa",
@@ -187,7 +187,7 @@ export default async function SignInPage() {
             </div>
 
             {/* Footer row */}
-            <div
+            {/* <div
               className="flex items-center gap-4 mt-6 pt-5"
               style={{ borderTop: "1px solid var(--border-subtle)" }}
             >
@@ -210,7 +210,7 @@ export default async function SignInPage() {
                   </p>
                 </div>
               ))}
-              {/* <div
+              <div
                 className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium"
                 style={{
                   background: "var(--success-bg)",
@@ -221,8 +221,8 @@ export default async function SignInPage() {
               >
                 <ShieldCheckIcon className="w-3 h-3" />
                 Secured by Clerk
-              </div> */}
-            </div>
+              </div>
+            </div> */}
           </div>
         </div>
 

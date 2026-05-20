@@ -301,7 +301,7 @@ export default async function LandingPage() {
                           : "var(--text-muted)",
                       }}
                     >
-                      <span className="text-sm">{item.icon}</span>
+                      {/* <span className="text-sm">{item.icon}</span> */}
                       <span className="text-[12px] font-medium">
                         {item.label}
                       </span>
@@ -564,7 +564,7 @@ export default async function LandingPage() {
               color: "#818cf8",
               bg: "rgba(99,102,241,0.1)",
               border: "rgba(99,102,241,0.2)",
-              title: "Real-time ONLYOFFICE Editor",
+              title: "Real-time Document Editor",
               desc: "A full-featured word processor right in your browser. Edit, format, and collaborate on .docx files with no downloads or plugins needed.",
               tags: ["Track changes", "Comments", ".docx native"],
             },
@@ -623,7 +623,7 @@ export default async function LandingPage() {
               }}
             >
               <div className="flex items-start gap-3.5">
-                <div
+                {/* <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
                   style={{
                     background: feat.bg,
@@ -631,7 +631,7 @@ export default async function LandingPage() {
                   }}
                 >
                   {feat.emoji}
-                </div>
+                </div> */}
                 <div>
                   <h3
                     className="text-[13.5px] font-semibold pt-2"
@@ -881,7 +881,7 @@ export default async function LandingPage() {
                   }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-base">📑</span>
+                    {/* <span className="text-base">📑</span> */}
                     <span
                       className="text-[12px] font-semibold"
                       style={{ color: "var(--text)" }}
@@ -889,7 +889,7 @@ export default async function LandingPage() {
                       Employee Contract Template
                     </span>
                   </div>
-                  <span
+                  {/* <span
                     className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                     style={{
                       background: "var(--accent-soft)",
@@ -898,7 +898,7 @@ export default async function LandingPage() {
                     }}
                   >
                     6 fields
-                  </span>
+                  </span> */}
                 </div>
                 {/* Preview text with fields highlighted */}
                 <div
@@ -967,7 +967,7 @@ export default async function LandingPage() {
                   </p>
                 </div>
                 {/* Field legend */}
-                <div className="px-5 pb-4 flex flex-wrap gap-2">
+                {/* <div className="px-5 pb-4 flex flex-wrap gap-2">
                   {[
                     { name: "employee_name", color: "#60a5fa", type: "text" },
                     { name: "position", color: "#f472b6", type: "text" },
@@ -986,7 +986,7 @@ export default async function LandingPage() {
                       <span className="opacity-60">{f.type}</span> · {f.name}
                     </span>
                   ))}
-                </div>
+                </div> */}
               </div>
 
               {/* Bulk generate card */}
@@ -1069,13 +1069,13 @@ export default async function LandingPage() {
                   ))}
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <span
+                  {/* <span
                     className="text-[10px]"
                     style={{ color: "var(--text-muted)" }}
                   >
                     +139 more rows
-                  </span>
-                  <div
+                  </span> */}
+                  {/* <div
                     className="flex items-center gap-2 text-[11px] font-semibold px-3 py-1.5 rounded-lg"
                     style={{
                       background: "rgba(251,146,60,0.12)",
@@ -1084,7 +1084,7 @@ export default async function LandingPage() {
                     }}
                   >
                     ⚡ Generate 142 docs
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>

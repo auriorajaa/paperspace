@@ -113,7 +113,7 @@ const sections = [
       },
       {
         subtitle: "Google Integration",
-        text: "By connecting your Google account, you authorise Paperspace to access your Google Forms and related data. Paperspace is not responsible for any consequences arising from this authorisation, including data shared with or by Google.",
+        text: "By connecting your Google account, you authorise Paperspace to access specific Google Drive files and Google Forms data (read-only) solely to provide the features you activate. Paperspace's use of data received from Google APIs complies with the Google API Services User Data Policy, including its Limited Use requirements. We do not transfer, sell, or use Google user data beyond what is necessary to operate the service.",
       },
       {
         subtitle: "Third-Party Terms",
@@ -145,7 +145,7 @@ const sections = [
       },
       {
         subtitle: "AI Content Disclaimer",
-        text: "AI-generated summaries and outputs are provided for informational convenience only. Paperspace makes no representation as to their accuracy, completeness, or reliability. You assume all risk associated with any reliance on AI-generated content. Paperspace is not liable for any decisions made based on AI outputs.",
+        text: "AI-generated summaries and outputs are provided for informational convenience only. Paperspace also uses Google Gemini Flash Lite 2.5 in a limited fallback capacity for document placeholder detection; this function operates solely on in-app document content and does not interact with data obtained via Google API scopes. Paperspace makes no representation as to the accuracy, completeness, or reliability of any AI-generated content. You assume all risk associated with reliance on AI outputs, and Paperspace is not liable for any decisions made based on them.",
       },
       {
         subtitle: "Limitation of Liability",
