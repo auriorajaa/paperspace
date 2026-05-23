@@ -185,7 +185,7 @@ export default function PrivacyPolicyPage() {
       className="min-h-screen"
       style={{ background: "var(--bg)", color: "var(--text)" }}
     >
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+      {/* <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute inset-0 opacity-[0.022]"
           style={{
@@ -198,7 +198,7 @@ export default function PrivacyPolicyPage() {
           className="absolute top-[-20%] left-[5%] w-[500px] h-[500px] rounded-full"
           style={{ background: "var(--ambient-glow)", filter: "blur(140px)" }}
         />
-      </div>
+      </div> */}
 
       <div className="relative z-10 max-w-3xl mx-auto px-5 py-16 sm:py-24">
         <Link
@@ -258,6 +258,7 @@ export default function PrivacyPolicyPage() {
           style={{
             background: "var(--bg-card)",
             border: "1px solid var(--border-subtle)",
+            backdropFilter: "blur(16px)",
           }}
         >
           <p
