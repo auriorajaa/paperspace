@@ -76,14 +76,14 @@ export default async function SignInPage() {
       <PreAuthNavbar page="sign-in" />
 
       {/* Ambient glow — subtle, theme-aware */}
-      <div
+      {/* <div
         className="fixed top-[-15%] left-[5%] w-[520px] h-[520px] rounded-full pointer-events-none"
         style={{ background: "var(--ambient-glow)", filter: "blur(130px)" }}
       />
       <div
         className="fixed bottom-[-10%] right-[5%] w-[380px] h-[380px] rounded-full pointer-events-none"
         style={{ background: "rgba(139,92,246,0.04)", filter: "blur(110px)" }}
-      />
+      /> */}
 
       {/* Noise */}
       <div
@@ -101,14 +101,14 @@ export default async function SignInPage() {
           style={{ borderRight: "1px solid var(--border-subtle)" }}
         >
           {/* Grid */}
-          <div
+          {/* <div
             className="absolute inset-0 pointer-events-none"
             style={{
               backgroundImage:
                 "linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px)",
               backgroundSize: "52px 52px",
             }}
-          />
+          /> */}
 
           {/* Centred content block */}
           <div className="relative w-full max-w-[460px] px-10 xl:px-0">
@@ -156,6 +156,7 @@ export default async function SignInPage() {
                     style={{
                       background: "var(--bg-card)",
                       border: "1px solid var(--border-subtle)",
+                      backdropFilter: "blur(16px)",
                     }}
                   >
                     <div

@@ -4,9 +4,9 @@ import { auth } from "@clerk/nextjs/server";
 import { PreAuthNavbar } from "@/components/PreAuthNavbar";
 
 export default async function LandingPage() {
-    // throw new Error("Test error");
+  // throw new Error("Test error");
 
-    // return <div>Hello</div>;
+  // return <div>Hello</div>;
   const { userId } = await auth();
   const isSignedIn = !!userId;
 
@@ -45,14 +45,14 @@ export default async function LandingPage() {
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {/* Grid */}
-        <div
+        {/* <div
           className="absolute inset-0 opacity-[0.028]"
           style={{
             backgroundImage:
               "linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
-        />
+        /> */}
         {/* Noise */}
         <div
           className="absolute inset-0 opacity-[0.022]"
@@ -61,7 +61,7 @@ export default async function LandingPage() {
           }}
         />
         {/* Glows */}
-        <div
+        {/* <div
           className="absolute top-[-20%] left-[5%] w-[640px] h-[640px] rounded-full"
           style={{ background: "var(--ambient-glow)", filter: "blur(140px)" }}
         />
@@ -75,7 +75,7 @@ export default async function LandingPage() {
         <div
           className="absolute bottom-[-10%] left-[30%] w-[480px] h-[480px] rounded-full"
           style={{ background: "rgba(52,211,153,0.03)", filter: "blur(110px)" }}
-        />
+        /> */}
       </div>
 
       <PreAuthNavbar page="landing" isSignedIn={isSignedIn} />
@@ -124,7 +124,7 @@ export default async function LandingPage() {
                 style={{
                   background: "var(--text)",
                   color: "var(--bg)",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
                   transition: "all .18s ease",
                 }}
               >
@@ -150,6 +150,7 @@ export default async function LandingPage() {
                   color: "var(--text-muted)",
                   border: "1px solid var(--border-subtle)",
                   background: "var(--bg-muted)",
+                  backdropFilter: "blur(16px)",
                 }}
               >
                 Sign in
@@ -219,7 +220,8 @@ export default async function LandingPage() {
               border: "1px solid var(--border-subtle)",
               background: "var(--bg-card)",
               boxShadow:
-                "0 40px 100px rgba(0,0,0,0.28), 0 0 0 1px var(--border-subtle)",
+                "0 40px 90px rgba(0,0,0,0.01), 0 0 0 1px var(--border-subtle)",
+              backdropFilter: "blur(16px)",
             }}
           >
             {/* Window chrome */}
@@ -620,6 +622,7 @@ export default async function LandingPage() {
               style={{
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-subtle)",
+                backdropFilter: "blur(16px)",
               }}
             >
               <div className="flex items-start gap-3.5">
@@ -738,10 +741,11 @@ export default async function LandingPage() {
 
             {/* Editor mockup */}
             <div
-              className="rounded-2xl overflow-hidden shadow-2xl"
+              className="rounded-2xl overflow-hidden shadow-sm"
               style={{
                 border: "1px solid var(--border-subtle)",
                 background: "var(--bg-card)",
+                backdropFilter: "blur(16px)",
               }}
             >
               {/* Toolbar */}
@@ -867,10 +871,11 @@ export default async function LandingPage() {
             {/* Template mockup */}
             <div className="order-2 lg:order-1">
               <div
-                className="rounded-2xl overflow-hidden shadow-xl"
+                className="rounded-2xl overflow-hidden shadow-sm"
                 style={{
                   border: "1px solid var(--border-subtle)",
                   background: "var(--bg-card)",
+                  backdropFilter: "blur(16px)",
                 }}
               >
                 <div
@@ -995,6 +1000,7 @@ export default async function LandingPage() {
                 style={{
                   background: "var(--bg-card)",
                   border: "1px solid var(--border-subtle)",
+                  backdropFilter: "blur(16px)",
                 }}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -1064,7 +1070,6 @@ export default async function LandingPage() {
                       >
                         {row.date}
                       </span>
-                      
                     </div>
                   ))}
                 </div>
@@ -1239,6 +1244,7 @@ export default async function LandingPage() {
                   style={{
                     background: "var(--bg-card)",
                     border: "1px solid var(--border-subtle)",
+                    backdropFilter: "blur(16px)",
                   }}
                 >
                   <div className="flex items-start justify-between">
@@ -1436,6 +1442,7 @@ export default async function LandingPage() {
                 style={{
                   background: "var(--bg-card)",
                   border: "1px solid var(--border-subtle)",
+                  backdropFilter: "blur(16px)",
                 }}
               >
                 {/* <div className="text-2xl mb-2">{step.icon}</div> */}
@@ -1525,6 +1532,7 @@ export default async function LandingPage() {
                     border: `2px solid ${step.color}30`,
                     color: step.color,
                     fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    backdropFilter: "blur(16px)",
                   }}
                 >
                   {step.step}
@@ -1552,7 +1560,7 @@ export default async function LandingPage() {
         className="relative z-10 py-24 sm:py-32 overflow-hidden"
         style={{ borderTop: "1px solid var(--border-subtle)" }}
       >
-        <div className="absolute inset-0 pointer-events-none">
+        {/* <div className="absolute inset-0 pointer-events-none">
           <div
             className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full"
             style={{
@@ -1561,7 +1569,7 @@ export default async function LandingPage() {
               opacity: 0.6,
             }}
           />
-        </div>
+        </div> */}
         <div className="relative max-w-2xl mx-auto px-5 text-center">
           <h2
             className="text-[2rem] sm:text-[2.6rem] font-bold leading-tight tracking-tight mb-5"
@@ -1586,7 +1594,7 @@ export default async function LandingPage() {
                 style={{
                   background: "var(--text)",
                   color: "var(--bg)",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
                   transition: "all .18s ease",
                 }}
               >
@@ -1612,6 +1620,7 @@ export default async function LandingPage() {
                   color: "var(--text-muted)",
                   border: "1px solid var(--border-subtle)",
                   background: "var(--bg-muted)",
+                  backdropFilter: "blur(16px)",
                 }}
               >
                 Already have an account? Sign in
@@ -1638,6 +1647,7 @@ export default async function LandingPage() {
         style={{
           borderTop: "1px solid var(--border-subtle)",
           background: "var(--bg-sidebar)",
+          backdropFilter: "blur(16px)",
         }}
       >
         <div className="max-w-6xl mx-auto px-5 py-10">
