@@ -416,3 +416,61 @@ export const updateFileStorageInternal = internalMutation({
     });
   },
 });
+
+// Called by the client when the user clicks "Generate Summary".
+// Marks the document as pending so the UI can show the spinner immediately.
+export const setAiSummaryPending = mutation({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+ 
+    const doc = await ctx.db.get(args.id);
+    if (!doc) throw new ConvexError("Document not found");
+    if (!hasAccess(doc, identity))
+      throw new ConvexError("You don't have access to this document");
+ 
+    await ctx.db.patch(args.id, {
+      aiSummaryStatus: "pending",
+      // Clear any previous summary so stale data is not shown
+      aiSummary: undefined,
+      aiSummaryGeneratedAt: undefined,
+    });
+  },
+});
+
+// Add this after setAiSummaryPending
+export const setAiSummaryError = mutation({
+  args: { id: v.id("documents") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
+    const doc = await ctx.db.get(args.id);
+    if (!doc) throw new ConvexError("Document not found");
+    if (!hasAccess(doc, identity))
+      throw new ConvexError("You don't have access to this document");
+
+    await ctx.db.patch(args.id, {
+      aiSummaryStatus: "error",
+    });
+  },
+});
+ 
+// Called by the Convex HTTP action after the Python API sends its callback.
+// This must be an internalMutation so it cannot be called from the browser.
+export const updateAiSummary = internalMutation({
+  args: {
+    id: v.id("documents"),
+    status: v.string(),               // "done" | "error"
+    summary: v.optional(v.string()),
+    generatedAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      aiSummaryStatus: args.status,
+      aiSummary: args.summary,
+      aiSummaryGeneratedAt: args.generatedAt,
+    });
+  },
+});

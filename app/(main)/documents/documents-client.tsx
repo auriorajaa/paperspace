@@ -1,4 +1,4 @@
-// app\(main)\documents\documents-client.tsx
+// app/(main)/documents/documents-client.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -39,6 +39,9 @@ import {
   RefreshCwIcon,
   AlertCircleIcon,
   Loader2Icon,
+  ClockIcon,
+  WandSparklesIcon,
+  RotateCcwIcon,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInHours } from "date-fns";
 import { Doc, Id } from "@/convex/_generated/dataModel";
@@ -158,7 +161,7 @@ const UPLOAD_STAGES_DOCX: UploadStage[] = ["uploading", "saving"];
 
 const MAX_UPLOAD_MB = 10;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
-const PDF_CONVERT_TIMEOUT_MS = 65_000; // slightly above the API's 60 s
+const PDF_CONVERT_TIMEOUT_MS = 65_000;
 
 function UploadDocumentDialog({
   open,
@@ -188,7 +191,6 @@ function UploadDocumentDialog({
     nameRef.current = name;
   }, [name]);
 
-  // ── Reset on open / close ──────────────────────────────────────────────────
   useEffect(() => {
     if (open) {
       setFile(null);
@@ -203,7 +205,6 @@ function UploadDocumentDialog({
     }
   }, [open]);
 
-  // ── File validation & acceptance ───────────────────────────────────────────
   const acceptFile = useCallback(
     (f: File) => {
       if (processing) return;
@@ -237,7 +238,6 @@ function UploadDocumentDialog({
 
       setFile(f);
       setFileKind(isPdf ? "pdf" : "docx");
-      // Only pre-fill name if the user hasn't typed one yet
       if (!nameRef.current) {
         setName(f.name.replace(/\.(pdf|docx)$/i, ""));
       }
@@ -254,7 +254,6 @@ function UploadDocumentDialog({
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  // ── Core upload handler ────────────────────────────────────────────────────
   const handleUpload = useCallback(async () => {
     if (processing || !file) return;
     setErrorMsg("");
@@ -269,7 +268,6 @@ function UploadDocumentDialog({
     try {
       let docxFile: File = file;
 
-      // ── Step 1 (PDF only): convert to DOCX via OnlyOffice ─────────────────
       if (fileKind === "pdf") {
         setStage("converting");
 
@@ -325,7 +323,6 @@ function UploadDocumentDialog({
 
         const docxBlob = await convertRes.blob();
 
-        // Validate DOCX magic bytes (PK zip header)
         const header = new Uint8Array(await docxBlob.slice(0, 4).arrayBuffer());
         if (
           header[0] !== 0x50 ||
@@ -343,7 +340,6 @@ function UploadDocumentDialog({
         });
       }
 
-      // ── Step 2: upload DOCX to Convex storage ─────────────────────────────
       setStage("uploading");
 
       let uploadUrl: string;
@@ -371,7 +367,6 @@ function UploadDocumentDialog({
         throw new Error("Upload succeeded but no storage ID was returned.");
       }
 
-      // ── Step 3: create document record ────────────────────────────────────
       setStage("saving");
       const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
       const docId = await createDocument({
@@ -424,7 +419,6 @@ function UploadDocumentDialog({
           backdropFilter: "blur(16px)",
         }}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4 shrink-0"
           style={{ borderBottom: "1px solid var(--border-subtle)" }}
@@ -454,9 +448,7 @@ function UploadDocumentDialog({
           </p>
         </div>
 
-        {/* Body */}
-        <div className="px-5 py-4 space-y-4">
-          {/* Error banner */}
+        <div className="px-5 py-4 space-y-4 w-full min-w-0">
           {errorMsg && (
             <div
               className="flex items-start gap-3 p-3.5 rounded-xl"
@@ -470,9 +462,9 @@ function UploadDocumentDialog({
                 className="w-4 h-4 shrink-0 mt-0.5"
                 style={{ color: "var(--danger)" }}
               />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <p
-                  className="text-[12px] leading-relaxed"
+                  className="text-[12px] leading-relaxed break-words"
                   style={{ color: "var(--danger)" }}
                 >
                   {errorMsg}
@@ -498,7 +490,7 @@ function UploadDocumentDialog({
               <button
                 type="button"
                 onClick={() => setErrorMsg("")}
-                className="w-6 h-6 flex items-center justify-center rounded-lg"
+                className="w-6 h-6 flex items-center justify-center rounded-lg shrink-0"
                 style={{ color: "var(--danger)", opacity: 0.7 }}
               >
                 <XIcon className="w-3.5 h-3.5" />
@@ -506,14 +498,12 @@ function UploadDocumentDialog({
             </div>
           )}
 
-          {/* Drop zone / file row */}
           <div
             className={`transition-opacity duration-200 ${
               processing ? "pointer-events-none opacity-50" : ""
             }`}
           >
             {!file ? (
-              /* ── Drop zone ───────────────────────────────────────────────── */
               <div
                 role="button"
                 tabIndex={0}
@@ -606,15 +596,13 @@ function UploadDocumentDialog({
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) acceptFile(f);
-                    // allow re-selecting the same file
                     e.target.value = "";
                   }}
                 />
               </div>
             ) : (
-              /* ── File chip ─────────────────────────────────────────────── */
               <div
-                className="flex items-center gap-3 p-3.5 rounded-xl"
+                className="flex items-center gap-3 p-3.5 rounded-xl overflow-hidden"
                 style={{
                   background:
                     fileKind === "pdf"
@@ -648,16 +636,21 @@ function UploadDocumentDialog({
                     />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                   <p
-                    className="text-[12px] font-medium truncate"
-                    style={{ color: "var(--text)" }}
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      color: "var(--text)",
+                    }}
+                    className="text-[12px] font-medium"
                   >
                     {file.name}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span
-                      className="text-[10px] font-bold px-1.5 py-px rounded uppercase tracking-wide"
+                      className="text-[10px] font-bold px-1.5 py-px rounded uppercase tracking-wide shrink-0"
                       style={{
                         background:
                           fileKind === "pdf"
@@ -672,14 +665,14 @@ function UploadDocumentDialog({
                       {fileKind}
                     </span>
                     <span
-                      className="text-[11px]"
+                      className="text-[11px] shrink-0"
                       style={{ color: "var(--text-muted)" }}
                     >
                       {(file.size / 1024 / 1024).toFixed(1)} MB
                     </span>
                     {fileKind === "pdf" && (
                       <span
-                        className="text-[10px] font-medium px-1.5 py-px rounded"
+                        className="text-[10px] font-medium px-1.5 py-px rounded shrink-0"
                         style={{
                           background:
                             "color-mix(in srgb, var(--warning) 10%, transparent)",
@@ -697,7 +690,7 @@ function UploadDocumentDialog({
                   type="button"
                   onClick={resetFile}
                   disabled={processing}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-70 active:scale-90 disabled:opacity-30"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-70 active:scale-90 disabled:opacity-30 shrink-0"
                   style={{ color: "var(--text-muted)" }}
                   title="Remove file"
                 >
@@ -707,7 +700,6 @@ function UploadDocumentDialog({
             )}
           </div>
 
-          {/* PDF conversion notice */}
           {fileKind === "pdf" && file && !processing && (
             <div
               className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl"
@@ -722,7 +714,7 @@ function UploadDocumentDialog({
                 style={{ color: "var(--warning)" }}
               />
               <p
-                className="text-[11px] leading-relaxed"
+                className="text-[11px] leading-relaxed break-words"
                 style={{ color: "var(--warning)" }}
               >
                 <span className="font-semibold">Conversion note:</span> Complex
@@ -732,7 +724,6 @@ function UploadDocumentDialog({
             </div>
           )}
 
-          {/* Name input */}
           {file && (
             <div
               className={`space-y-1.5 transition-opacity duration-200 ${
@@ -748,6 +739,7 @@ function UploadDocumentDialog({
               <input
                 autoFocus
                 value={name}
+                maxLength={80}
                 onChange={(e) => {
                   setName(e.target.value);
                   if (e.target.value.trim()) setNameError("");
@@ -786,7 +778,10 @@ function UploadDocumentDialog({
                     className="w-3 h-3 shrink-0"
                     style={{ color: "var(--danger)" }}
                   />
-                  <p className="text-[11px]" style={{ color: "var(--danger)" }}>
+                  <p
+                    className="text-[11px] break-words"
+                    style={{ color: "var(--danger)" }}
+                  >
                     {nameError}
                   </p>
                 </div>
@@ -794,14 +789,13 @@ function UploadDocumentDialog({
             </div>
           )}
 
-          {/* Upload button */}
           {file && (
             <div className="space-y-3 pb-1">
               <button
                 type="button"
                 onClick={handleUpload}
                 disabled={!canUpload}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[48px]"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[48px] overflow-hidden"
                 style={{
                   background: canUpload
                     ? "var(--accent-strong-bg)"
@@ -820,31 +814,34 @@ function UploadDocumentDialog({
                       className="w-4 h-4 animate-spin shrink-0"
                       style={{ color: "var(--accent-light)" }}
                     />
-                    <span className="truncate">
+                    <span className="truncate max-w-full">
                       {UPLOAD_STAGE_LABELS[stage] || "Processing…"}
                     </span>
                   </>
                 ) : !name.trim() ? (
-                  "Enter a paper name to continue"
+                  <span className="truncate max-w-full">
+                    Enter a paper name to continue
+                  </span>
                 ) : (
                   <>
                     <UploadCloudIcon className="w-4 h-4 shrink-0" />
-                    Upload &amp; open
+                    <span className="truncate max-w-full">
+                      Upload &amp; open
+                    </span>
                   </>
                 )}
               </button>
 
-              {/* Progress stage pills */}
               {processing && stage && (
-                <div className="flex items-center justify-center gap-1 flex-wrap">
+                <div className="flex items-center justify-center gap-1 flex-wrap w-full overflow-hidden">
                   {activeStages.map((s, i) => {
                     const currentIdx = activeStages.indexOf(stage);
                     const isDone = currentIdx > i;
                     const isActive = stage === s;
                     return (
-                      <div key={s} className="flex items-center gap-1">
+                      <div key={s} className="flex items-center gap-1 min-w-0">
                         <div
-                          className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300"
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300 min-w-0"
                           style={{
                             background: isDone
                               ? "var(--success-bg)"
@@ -865,7 +862,7 @@ function UploadDocumentDialog({
                             }}
                           />
                           <span
-                            className="text-[10px] font-medium whitespace-nowrap"
+                            className="text-[10px] font-medium truncate"
                             style={{
                               color: isDone
                                 ? "var(--success)"
@@ -889,10 +886,9 @@ function UploadDocumentDialog({
                 </div>
               )}
 
-              {/* Hint text */}
               {!processing && fileKind === "docx" && (
                 <p
-                  className="text-[10px] text-center"
+                  className="text-[10px] text-center break-words"
                   style={{ color: "var(--text-dim)" }}
                 >
                   Your .docx will be stored as-is and opened in the editor
@@ -907,7 +903,7 @@ function UploadDocumentDialog({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bulk add-to-collection dialog — adds ALL selected docs at once
+// Bulk add-to-collection dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BulkAddToCollectionDialog({
@@ -928,7 +924,6 @@ function BulkAddToCollectionDialog({
   const [loading, setLoading] = useState<string | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
 
-  // Reset when dialog re-opens
   useEffect(() => {
     if (open) setDone(new Set());
   }, [open]);
@@ -942,7 +937,6 @@ function BulkAddToCollectionDialog({
         )
       );
       const succeeded = results.filter((r) => r.status === "fulfilled").length;
-      // "already in collection" errors are not real failures
       const realFailed = results.filter(
         (r) =>
           r.status === "rejected" &&
@@ -1300,6 +1294,580 @@ function RenameDialog({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SummarySectionGrid — used inside GridCard
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function SummarySectionGrid({
+  document,
+  onGenerateSummary,
+  onCancelSummary,
+}: {
+  document: Doc<"documents">;
+  onGenerateSummary: () => void;
+  onCancelSummary: () => void;
+}) {
+  const status = document.aiSummaryStatus;
+
+  // ── Done ──────────────────────────────────────────────────────────────────
+  if (status === "done" && document.aiSummary) {
+    return (
+      <div className="flex flex-col gap-1.5 flex-1 min-h-[36px]">
+        <div className="flex items-start gap-1.5 pl-4">
+          <SparklesIcon
+            className="w-2.5 h-2.5 shrink-0 mt-[3px]"
+            style={{ color: "var(--accent-light)" }}
+          />
+          <p
+            className="text-[11px] leading-relaxed line-clamp-3 flex-1"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {document.aiSummary}
+          </p>
+        </div>
+
+        {document.aiSummaryGeneratedAt && (
+          <div className="flex items-center justify-between gap-2 pl-4">
+            <span
+              className="flex items-center gap-1 text-[10px] tabular-nums"
+              style={{ color: "var(--text-placeholder)" }}
+            >
+              <ClockIcon
+                className="w-2.5 h-2.5 shrink-0"
+                style={{ color: "var(--text-dim)" }}
+              />
+              Summarize {smartDate(document.aiSummaryGeneratedAt)}
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onGenerateSummary();
+              }}
+              className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded-md transition-all active:scale-95"
+              style={{
+                color: "var(--text-dim)",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-subtle)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--accent-light)";
+                e.currentTarget.style.borderColor = "var(--accent-border)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--text-dim)";
+                e.currentTarget.style.borderColor = "var(--border-subtle)";
+              }}
+              title="Regenerate summary"
+            >
+              <RotateCcwIcon className="w-2.5 h-2.5" />
+              Regenerate
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Pending ───────────────────────────────────────────────────────────────
+  if (status === "pending") {
+    return (
+      <div
+        className="flex flex-col gap-2 flex-1 min-h-[36px] px-3 py-2.5 rounded-xl"
+        style={{
+          background: "color-mix(in srgb, var(--warning) 6%, transparent)",
+          border:
+            "1px solid color-mix(in srgb, var(--warning) 14%, transparent)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Loader2Icon
+              className="w-3 h-3 animate-spin shrink-0"
+              style={{ color: "var(--warning)" }}
+            />
+            <span
+              className="text-[11px] font-medium"
+              style={{ color: "var(--warning)" }}
+            >
+              Generating summary…
+            </span>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelSummary();
+            }}
+            className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-all active:scale-95 shrink-0"
+            style={{
+              color: "var(--text-muted)",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-subtle)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--danger)";
+              e.currentTarget.style.borderColor =
+                "color-mix(in srgb, var(--danger) 30%, transparent)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.borderColor = "var(--border-subtle)";
+            }}
+          >
+            <XIcon className="w-2.5 h-2.5" />
+            Cancel
+          </button>
+        </div>
+
+        {/* Animated progress track */}
+        <div
+          className="w-full h-0.5 rounded-full overflow-hidden"
+          style={{
+            background: "color-mix(in srgb, var(--warning) 15%, transparent)",
+          }}
+        >
+          <div
+            className="h-full rounded-full"
+            style={{
+              background: "var(--warning)",
+              width: "40%",
+              animation: "summaryProgress 1.6s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        <style>{`
+          @keyframes summaryProgress {
+            0%   { margin-left: -40%; width: 40%; }
+            50%  { margin-left: 60%; width: 40%; }
+            100% { margin-left: 110%; width: 40%; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ── Error ─────────────────────────────────────────────────────────────────
+  if (status === "error") {
+    return (
+      <div
+        className="flex items-start gap-2.5 flex-1 min-h-[36px] px-3 py-2.5 rounded-xl"
+        style={{
+          background: "color-mix(in srgb, var(--danger) 6%, transparent)",
+          border:
+            "1px solid color-mix(in srgb, var(--danger) 16%, transparent)",
+        }}
+      >
+        <AlertCircleIcon
+          className="w-3.5 h-3.5 shrink-0 mt-px"
+          style={{ color: "var(--danger)", opacity: 0.8 }}
+        />
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p
+            className="text-[11px] leading-snug"
+            style={{ color: "var(--danger)" }}
+          >
+            Summary generation failed.
+          </p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerateSummary();
+            }}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+            style={{
+              color: "var(--danger)",
+              background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+              border:
+                "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background =
+                "color-mix(in srgb, var(--danger) 16%, transparent)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background =
+                "color-mix(in srgb, var(--danger) 10%, transparent)";
+            }}
+          >
+            <RotateCcwIcon className="w-3 h-3" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Idle — has file but no summary ────────────────────────────────────────
+  if (document.fileUrl) {
+    return (
+      <div className="flex-1 min-h-[36px] flex items-center">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onGenerateSummary();
+          }}
+          className="group flex items-center gap-2 px-2.5 py-2 rounded-xl w-full text-left transition-all active:scale-[0.98]"
+          style={{
+            background:
+              "color-mix(in srgb, var(--accent-light) 5%, transparent)",
+            border:
+              "1px dashed color-mix(in srgb, var(--accent-light) 20%, transparent)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--accent-light) 10%, transparent)";
+            e.currentTarget.style.borderColor =
+              "color-mix(in srgb, var(--accent-light) 35%, transparent)";
+            e.currentTarget.style.borderStyle = "solid";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--accent-light) 5%, transparent)";
+            e.currentTarget.style.borderColor =
+              "color-mix(in srgb, var(--accent-light) 20%, transparent)";
+            e.currentTarget.style.borderStyle = "dashed";
+          }}
+        >
+          <WandSparklesIcon
+            className="w-3 h-3 shrink-0 transition-transform group-hover:scale-110"
+            style={{ color: "var(--accent-light)", opacity: 0.7 }}
+          />
+          <span
+            className="text-[11px] font-medium"
+            style={{ color: "var(--text-dim)" }}
+          >
+            Generate AI summary
+          </span>
+          <span
+            className="ml-auto text-[10px] transition-opacity opacity-0 group-hover:opacity-100"
+            style={{ color: "var(--accent-light)" }}
+          >
+            →
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  // ── No file ───────────────────────────────────────────────────────────────
+  return (
+    <div className="flex-1 min-h-[36px] flex items-center">
+      <p
+        className="text-[11px] italic pl-1"
+        style={{ color: "var(--text-placeholder)" }}
+      >
+        No summary available
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SummarySectionList — used inside ListRow
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function SummarySectionList({
+  document,
+  onGenerateSummary,
+  onCancelSummary,
+}: {
+  document: Doc<"documents">;
+  onGenerateSummary: () => void;
+  onCancelSummary: () => void;
+}) {
+  const status = document.aiSummaryStatus;
+
+  // ── Done ──────────────────────────────────────────────────────────────────
+  if (status === "done" && document.aiSummary) {
+    return (
+      <div className="flex items-start gap-1.5">
+        <SparklesIcon
+          className="w-2.5 h-2.5 shrink-0 mt-1"
+          style={{ color: "var(--accent-light)" }}
+        />
+        <p
+          className="text-[11px] leading-relaxed line-clamp-2 flex-1"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {document.aiSummary}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Pending ───────────────────────────────────────────────────────────────
+  if (status === "pending") {
+    return (
+      <div className="flex items-center gap-2.5">
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+          style={{
+            background: "color-mix(in srgb, var(--warning) 8%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--warning) 16%, transparent)",
+          }}
+        >
+          <Loader2Icon
+            className="w-3 h-3 animate-spin shrink-0"
+            style={{ color: "var(--warning)" }}
+          />
+          <span
+            className="text-[11px] font-medium"
+            style={{ color: "var(--warning)" }}
+          >
+            Generating…
+          </span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancelSummary();
+          }}
+          className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-all active:scale-95"
+          style={{
+            color: "var(--text-dim)",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-subtle)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--danger)";
+            e.currentTarget.style.borderColor =
+              "color-mix(in srgb, var(--danger) 30%, transparent)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--text-dim)";
+            e.currentTarget.style.borderColor = "var(--border-subtle)";
+          }}
+        >
+          <XIcon className="w-2.5 h-2.5" />
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  // ── Error ─────────────────────────────────────────────────────────────────
+  if (status === "error") {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <AlertCircleIcon
+            className="w-3 h-3 shrink-0"
+            style={{ color: "var(--danger)", opacity: 0.8 }}
+          />
+          <span className="text-[11px]" style={{ color: "var(--danger)" }}>
+            Summary failed
+          </span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onGenerateSummary();
+          }}
+          className="flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-lg transition-all active:scale-95"
+          style={{
+            color: "var(--danger)",
+            background: "color-mix(in srgb, var(--danger) 9%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--danger) 16%, transparent)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--danger) 9%, transparent)";
+          }}
+        >
+          <RotateCcwIcon className="w-2.5 h-2.5" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // ── Idle — has file but no summary ────────────────────────────────────────
+  if (document.fileUrl) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onGenerateSummary();
+        }}
+        className="group flex items-center gap-1.5 text-[11px] font-medium transition-all active:scale-95"
+        style={{ color: "var(--text-placeholder)" }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "var(--accent-light)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "var(--text-placeholder)";
+        }}
+      >
+        <WandSparklesIcon className="w-2.5 h-2.5 shrink-0" />
+        Generate AI summary
+      </button>
+    );
+  }
+
+  // ── No file ───────────────────────────────────────────────────────────────
+  return (
+    <p className="text-[11px] italic" style={{ color: "var(--text-dim)" }}>
+      No summary available
+    </p>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SummaryMenuItem — drop-in replacement for the summary section
+//    inside PaperMenu's DropdownMenuContent
+//
+// USAGE in PaperMenu — replace the two separators + DropdownMenuItem block:
+//
+//   <DropdownMenuSeparator />
+//   <SummaryMenuItem document={document} onGenerateSummary={onGenerateSummary} />
+//   <DropdownMenuSeparator />
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function SummaryMenuItem({
+  document,
+  onGenerateSummary,
+}: {
+  document: Doc<"documents">;
+  onGenerateSummary: () => void;
+}) {
+  const hasSummary = document.aiSummaryStatus === "done";
+  const isPending = document.aiSummaryStatus === "pending";
+  const hasError = document.aiSummaryStatus === "error";
+  const hasFile = !!document.fileUrl;
+
+  if (isPending) {
+    return (
+      <DropdownMenuItem
+        disabled
+        className="opacity-60 cursor-not-allowed gap-2"
+      >
+        <Loader2Icon
+          className="w-3.5 h-3.5 animate-spin shrink-0"
+          style={{ color: "var(--warning)" }}
+        />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[12px]" style={{ color: "var(--warning)" }}>
+            Generating summary…
+          </span>
+          <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
+            This may take a moment
+          </span>
+        </div>
+      </DropdownMenuItem>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <DropdownMenuItem
+        onClick={(e) => {
+          e.stopPropagation();
+          if (hasFile) onGenerateSummary();
+        }}
+        disabled={!hasFile}
+        className="gap-2"
+      >
+        <div
+          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+          style={{
+            background: "color-mix(in srgb, var(--danger) 12%, transparent)",
+          }}
+        >
+          <RotateCcwIcon
+            className="w-3 h-3"
+            style={{ color: "var(--danger)" }}
+          />
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[12px]" style={{ color: "var(--danger)" }}>
+            Retry summary
+          </span>
+          <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
+            Previous attempt failed
+          </span>
+        </div>
+      </DropdownMenuItem>
+    );
+  }
+
+  if (hasSummary) {
+    return (
+      <DropdownMenuItem
+        onClick={(e) => {
+          e.stopPropagation();
+          onGenerateSummary();
+        }}
+        className="gap-2"
+      >
+        <div
+          className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+          style={
+            {
+              // background:
+              //   "color-mix(in srgb, var(--accent-light) 12%, transparent)",
+            }
+          }
+        >
+          <RotateCcwIcon
+            className="w-3 h-3"
+            // style={{ color: "var(--accent-light)" }}
+          />
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[12px]">Regenerate summary</span>
+          {document.aiSummaryGeneratedAt && (
+            <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
+              Last: {smartDate(document.aiSummaryGeneratedAt)}
+            </span>
+          )}
+        </div>
+      </DropdownMenuItem>
+    );
+  }
+
+  // Idle (no summary yet)
+  return (
+    <DropdownMenuItem
+      onClick={(e) => {
+        e.stopPropagation();
+        if (hasFile) onGenerateSummary();
+      }}
+      disabled={!hasFile}
+      className="gap-2"
+    >
+      <div
+        className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+        style={
+          {
+            // background: hasFile
+            //   ? "color-mix(in srgb, var(--accent-light) 10%, transparent)"
+            //   : "var(--bg-input)",
+          }
+        }
+      >
+        <WandSparklesIcon
+          className="w-3 h-3"
+          // style={{ color: hasFile ? "var(--accent-light)" : "var(--text-dim)" }}
+        />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[12px]">Generate AI summary</span>
+        {!hasFile && (
+          <span className="text-[10px]" style={{ color: "var(--text-dim)" }}>
+            No file available
+          </span>
+        )}
+      </div>
+    </DropdownMenuItem>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bulk delete confirm
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1610,7 +2178,6 @@ function CollectionExpandedDocs({
           }
         >
           <span className="text-sm shrink-0">
-            {" "}
             <FileTextIcon
               className="w-4 h-4"
               style={{ color: "var(--text-muted)" }}
@@ -1682,24 +2249,79 @@ function SelectCheckbox({
   );
 }
 
-function AIDot({ status }: { status?: string }) {
+// ─── AIDot: status indicator dot ─────────────────────────────────────────────
+export function AIDot({ status }: { status?: string }) {
   if (status === "done")
     return (
       <span
-        className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: "var(--accent-light)" }}
+        className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[9px] font-semibold tracking-wide uppercase shrink-0"
+        style={{
+          background:
+            "color-mix(in srgb, var(--accent-light) 12%, transparent)",
+          color: "var(--accent-light)",
+          border:
+            "1px solid color-mix(in srgb, var(--accent-light) 20%, transparent)",
+        }}
         title="AI summary ready"
-      />
+      >
+        <SparklesIcon style={{ width: 8, height: 8 }} />
+        AI
+      </span>
     );
   if (status === "pending")
     return (
       <span
-        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-        style={{ background: "var(--warning)" }}
-        title="Generating…"
-      />
+        className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[9px] font-semibold shrink-0"
+        style={{
+          background: "color-mix(in srgb, var(--warning) 10%, transparent)",
+          color: "var(--warning)",
+          border:
+            "1px solid color-mix(in srgb, var(--warning) 18%, transparent)",
+        }}
+        title="Generating summary…"
+      >
+        <span
+          className="w-1.5 h-1.5 rounded-full animate-pulse"
+          style={{ background: "var(--warning)" }}
+        />
+        Gen…
+      </span>
+    );
+  if (status === "error")
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 px-1 py-px rounded-md text-[9px] font-semibold shrink-0"
+        style={{
+          background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+          color: "var(--danger)",
+          border:
+            "1px solid color-mix(in srgb, var(--danger) 18%, transparent)",
+        }}
+        title="Summary failed"
+      >
+        <AlertCircleIcon style={{ width: 8, height: 8 }} />
+      </span>
     );
   return null;
+}
+
+// ─── SummaryTimestamp: tanggal/waktu summary digenerate ──────────────────────
+function SummaryTimestamp({ ts, status }: { ts?: number; status?: string }) {
+  if (!ts || status !== "done") return null;
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      <ClockIcon
+        className="w-2.5 h-2.5 shrink-0"
+        style={{ color: "var(--text-placeholder)" }}
+      />
+      <span
+        className="text-[10px] tabular-nums"
+        style={{ color: "var(--text-placeholder)" }}
+      >
+        Generated {smartDate(ts)}
+      </span>
+    </div>
+  );
 }
 
 function CollectionBadges({
@@ -1757,6 +2379,10 @@ function CollectionBadges({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PaperMenu — now includes Generate / Regenerate Summary
+// ─────────────────────────────────────────────────────────────────────────────
+
 function PaperMenu({
   document,
   onAddToCollection,
@@ -1766,6 +2392,7 @@ function PaperMenu({
   onRestore,
   onDelete,
   onExport,
+  onGenerateSummary,
 }: {
   document: Doc<"documents">;
   onAddToCollection: () => void;
@@ -1775,7 +2402,13 @@ function PaperMenu({
   onRestore: () => void;
   onDelete: () => void;
   onExport: (fmt: "docx" | "pdf") => void;
+  onGenerateSummary: () => void;
 }) {
+  const hasSummary = document.aiSummaryStatus === "done";
+  const isPending = document.aiSummaryStatus === "pending";
+  const hasError = document.aiSummaryStatus === "error";
+  const hasFile = !!document.fileUrl;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1830,7 +2463,17 @@ function PaperMenu({
           <FolderPlusIcon className="w-3.5 h-3.5 mr-2" />
           Add to collection
         </DropdownMenuItem>
+
         <DropdownMenuSeparator />
+
+        {/* ── Generate / Regenerate Summary ──────────────────────────────── */}
+        <SummaryMenuItem
+          document={document}
+          onGenerateSummary={onGenerateSummary}
+        />
+
+        <DropdownMenuSeparator />
+
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
@@ -1887,7 +2530,7 @@ function PaperMenu({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Grid card — callbacks from parent (no internal mutations)
+// Grid card
 // ─────────────────────────────────────────────────────────────────────────────
 
 function GridCard({
@@ -1901,6 +2544,8 @@ function GridCard({
   onRestore,
   onDelete,
   onDuplicate,
+  onGenerateSummary,
+  onCancelSummary,
   canEnterEditor,
   getCooldownMs,
 }: {
@@ -1914,6 +2559,8 @@ function GridCard({
   onRestore: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onGenerateSummary: () => void;
+  onCancelSummary: () => void;
   canEnterEditor: () => boolean;
   getCooldownMs: () => number;
 }) {
@@ -1935,7 +2582,6 @@ function GridCard({
   const isOnCooldown = !canEnterEditor();
   const remainingMs = getCooldownMs();
 
-  // Live countdown for sync overlay
   useEffect(() => {
     if (!isOnCooldown) return;
     setSyncDisplayMs(remainingMs);
@@ -1959,10 +2605,13 @@ function GridCard({
     router.push(`/documents/${document._id}`);
   };
 
+  const summaryStatus = document.aiSummaryStatus;
+  const hasError = summaryStatus === "error";
+
   return (
     <>
       <div
-        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200 h-full overflow-hidden relative"
+        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200  overflow-hidden relative"
         style={{
           background: selected
             ? "rgba(99,102,241,0.09)"
@@ -1984,9 +2633,7 @@ function GridCard({
         {isOnCooldown && (
           <div
             className="absolute inset-0 z-10 rounded-2xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px]"
-            style={{
-              background: "rgba(10, 10, 14, 0.55)",
-            }}
+            style={{ background: "rgba(10, 10, 14, 0.55)" }}
           >
             <div
               className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
@@ -2048,7 +2695,7 @@ function GridCard({
                 >
                   {smartDate(document._creationTime)}
                 </span>
-                <AIDot status={document.aiSummaryStatus} />
+                <AIDot status={summaryStatus} />
                 {document.isArchived && (
                   <span
                     className="text-[9px] font-semibold px-1.5 py-px rounded"
@@ -2099,52 +2746,24 @@ function GridCard({
                 onRestore={onRestore}
                 onDelete={() => setConfirmDelete(true)}
                 onExport={(fmt) => handleExportDoc(document, fmt)}
+                onGenerateSummary={onGenerateSummary}
               />
             </div>
           </div>
 
-          <div className="flex items-start gap-1.5 flex-1 min-h-[36px]">
-            <SparklesIcon
-              className="w-2.5 h-2.5 shrink-0 mt-0.5"
-              style={{
-                color:
-                  document.aiSummaryStatus === "done"
-                    ? "var(--accent-light)"
-                    : "var(--border-hover)",
-              }}
+          {/* ── Summary section ──────────────────────────────────────────── */}
+          <div className="mt-auto space-y-2">
+            <SummarySectionGrid
+              document={document}
+              onGenerateSummary={onGenerateSummary}
+              onCancelSummary={onCancelSummary}
             />
-            {document.aiSummaryStatus === "done" && document.aiSummary ? (
-              <p
-                className="text-[11px] leading-relaxed line-clamp-3"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {document.aiSummary}
-              </p>
-            ) : document.aiSummaryStatus === "pending" ? (
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
-                  style={{ color: "var(--accent-light)" }}
-                />
-                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-                  Generating summary…
-                </p>
+            {cols.length > 0 && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <CollectionBadges collections={cols} maxVisible={2} />
               </div>
-            ) : (
-              <p
-                className="text-[11px] italic"
-                style={{ color: "var(--text-placeholder)" }}
-              >
-                No summary yet
-              </p>
             )}
           </div>
-
-          {cols.length > 0 && (
-            <div onClick={(e) => e.stopPropagation()}>
-              <CollectionBadges collections={cols} maxVisible={2} />
-            </div>
-          )}
         </div>
       </div>
 
@@ -2175,7 +2794,7 @@ function GridCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// List row — callbacks from parent (no internal mutations)
+// List row
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ListRow({
@@ -2189,6 +2808,8 @@ function ListRow({
   onRestore,
   onDelete,
   onDuplicate,
+  onGenerateSummary,
+  onCancelSummary,
   canEnterEditor,
   getCooldownMs,
 }: {
@@ -2202,6 +2823,8 @@ function ListRow({
   onRestore: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onGenerateSummary: () => void;
+  onCancelSummary: () => void;
   canEnterEditor: () => boolean;
   getCooldownMs: () => number;
 }) {
@@ -2222,8 +2845,9 @@ function ListRow({
 
   const isOnCooldown = !canEnterEditor();
   const remainingMs = getCooldownMs();
+  const summaryStatus = document.aiSummaryStatus;
+  const hasError = summaryStatus === "error";
 
-  // Live countdown
   useEffect(() => {
     if (!isOnCooldown) return;
     setSyncDisplayMs(remainingMs);
@@ -2264,7 +2888,6 @@ function ListRow({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Right-side sync badge */}
         {isOnCooldown && (
           <div
             className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2 py-1 rounded-lg z-10"
@@ -2357,43 +2980,14 @@ function ListRow({
             )}
           </div>
 
-          <div className="flex items-start gap-1.5">
-            <SparklesIcon
-              className="w-2.5 h-2.5 shrink-0 mt-px"
-              style={{
-                color:
-                  document.aiSummaryStatus === "done"
-                    ? "var(--accent-light)"
-                    : "var(--border-subtle)",
-              }}
-            />
-            {document.aiSummaryStatus === "done" && document.aiSummary ? (
-              <p
-                className="text-[11px] leading-relaxed line-clamp-2"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {document.aiSummary}
-              </p>
-            ) : document.aiSummaryStatus === "pending" ? (
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin shrink-0"
-                  style={{ color: "var(--accent-light)" }}
-                />
-                <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-                  Generating summary…
-                </p>
-              </div>
-            ) : (
-              <p
-                className="text-[11px] italic"
-                style={{ color: "var(--text-dim)" }}
-              >
-                No summary yet
-              </p>
-            )}
-          </div>
+          {/* Summary row */}
+          <SummarySectionList
+            document={document}
+            onGenerateSummary={onGenerateSummary}
+            onCancelSummary={onCancelSummary}
+          />
 
+          {/* Meta row: collections + created date + generated date */}
           <div
             className="flex items-center gap-2 pt-0.5 flex-wrap"
             onClick={(e) => e.stopPropagation()}
@@ -2401,12 +2995,28 @@ function ListRow({
             {cols.length > 0 && (
               <CollectionBadges collections={cols} maxVisible={2} />
             )}
-            <span
-              className="text-[11px] ml-auto shrink-0 tabular-nums"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {smartDate(document._creationTime)}
-            </span>
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              {/* Generated timestamp */}
+              {summaryStatus === "done" && document.aiSummaryGeneratedAt && (
+                <span
+                  className="flex items-center gap-1 text-[10px] tabular-nums"
+                  style={{ color: "var(--text-placeholder)" }}
+                  title="AI summary generated"
+                >
+                  <SparklesIcon
+                    className="w-2.5 h-2.5"
+                    style={{ color: "var(--accent-light)" }}
+                  />
+                  {smartDate(document.aiSummaryGeneratedAt)}
+                </span>
+              )}
+              <span
+                className="text-[11px] tabular-nums"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {smartDate(document._creationTime)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -2439,6 +3049,7 @@ function ListRow({
             onRestore={onRestore}
             onDelete={() => setConfirmDelete(true)}
             onExport={(fmt) => handleExportDoc(document, fmt)}
+            onGenerateSummary={onGenerateSummary}
           />
         </div>
       </div>
@@ -2470,7 +3081,7 @@ function ListRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bulk action floating bar — smart archive vs restore
+// Bulk action floating bar
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BulkBar({
@@ -2543,7 +3154,6 @@ function BulkBar({
         <span className="hidden sm:inline">Collection</span>
       </button>
 
-      {/* Export ZIP */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -2577,7 +3187,6 @@ function BulkBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Smart archive / restore button */}
       {allArchived ? (
         <button
           onClick={onRestore}
@@ -2906,6 +3515,7 @@ export default function DocumentsPage() {
   const restoreMutation = useMutation(api.documents.restore);
   const removeMutation = useMutation(api.documents.remove);
   const duplicateMutation = useMutation(api.documents.duplicate);
+  const setAiSummaryPending = useMutation(api.documents.setAiSummaryPending);
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [renameDialog, setRenameDialog] = useState<{
@@ -2921,7 +3531,7 @@ export default function DocumentsPage() {
   } | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [collectionsPanelOpen, setCollectionsPanelOpen] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false); // ← NEW
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 250);
   const [filter, setFilter] = useState<Filter>("all");
@@ -2935,15 +3545,13 @@ export default function DocumentsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
 
-  // Optimistic removal — items hidden immediately before Convex reacts
   const [pendingRemoval, setPendingRemoval] = useState<Set<string>>(new Set());
 
   const lastSelectedIdx = useRef<number>(-1);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Page-load cooldown — cards non-interactive for ~2.5s
   useEffect(() => {
-    const t = setTimeout(() => setPageReady(true), 2800);
+    const t = setTimeout(() => setPageReady(true), 1900);
     return () => clearTimeout(t);
   }, []);
 
@@ -2998,7 +3606,6 @@ export default function DocumentsPage() {
     organization,
   ]);
 
-  // Exclude optimistically-removed items
   const visibleDocs = useMemo(
     () => filteredDocs.filter((d) => !pendingRemoval.has(d._id)),
     [filteredDocs, pendingRemoval]
@@ -3028,7 +3635,6 @@ export default function DocumentsPage() {
     page * PAGE_SIZE
   );
 
-  // For smart bulk archive/restore button
   const selectedDocs = useMemo(
     () => filteredDocs.filter((d) => selected.has(d._id)),
     [filteredDocs, selected]
@@ -3054,7 +3660,62 @@ export default function DocumentsPage() {
   const archivedCount = archivedDocs?.length ?? 0;
   const sharedCount = allDocs?.filter((d) => d.organizationId).length ?? 0;
 
-  // ── Centralised single-doc handlers with optimistic UI + undo ──────────────
+  const setAiSummaryError = useMutation(api.documents.setAiSummaryError);
+
+  const handleCancelSummary = useCallback(
+    async (doc: Doc<"documents">) => {
+      await setAiSummaryError({ id: doc._id }).catch(() => null);
+    },
+    [setAiSummaryError]
+  );
+
+  // ── Generate AI Summary ───────────────────────────────────────────────────
+  const handleGenerateSummary = useCallback(
+    async (doc: Doc<"documents">) => {
+      if (!doc.fileUrl) {
+        toast.error("No file available for this document.");
+        return;
+      }
+      if (doc.aiSummaryStatus === "pending") return;
+
+      const toastId = `summary-${doc._id}`;
+
+      try {
+        await setAiSummaryPending({ id: doc._id });
+        toast.loading("Sending to AI…", { id: toastId });
+
+        const res = await fetch("/api/generate-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documentId: doc._id,
+            fileUrl: doc.fileUrl,
+            filename: `${doc.title}.docx`,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error ?? "Failed to reach summarizer.");
+        }
+
+        toast.success("Processing — summary will appear automatically.", {
+          id: toastId,
+          duration: 5000,
+        });
+      } catch (err: any) {
+        // ← KEY FIX: reset status to "error" so UI shows "Retry" not spinner
+        await setAiSummaryError({ id: doc._id }).catch(() => null);
+
+        toast.error(err?.message ?? "Failed to generate summary.", {
+          id: toastId,
+        });
+      }
+    },
+    [setAiSummaryPending, setAiSummaryError]
+  );
+
+  // ── Centralised single-doc handlers ───────────────────────────────────────
 
   const handleArchiveDoc = useCallback(
     async (id: Id<"documents">) => {
@@ -3185,7 +3846,7 @@ export default function DocumentsPage() {
   const somePageSelected =
     displayDocs.some((d) => selected.has(d._id)) && !allPageSelected;
 
-  // ── Bulk handlers with undo ────────────────────────────────────────────────
+  // ── Bulk handlers ──────────────────────────────────────────────────────────
 
   const handleBulkArchive = async () => {
     const ids = Array.from(selected) as Id<"documents">[];
@@ -3355,7 +4016,6 @@ export default function DocumentsPage() {
     } catch (err) {
       toast.dismiss(toastId);
       toast.error("ZIP export failed.");
-      //console.error("[bulk-export-zip]", err);
     }
   };
 
@@ -3430,7 +4090,6 @@ export default function DocumentsPage() {
     showArchived
   );
 
-  // ── Empty state copy per context ───────────────────────────────────────────
   const emptyTitle = debouncedSearch
     ? "No papers found"
     : filter === "mine"
@@ -3488,9 +4147,7 @@ export default function DocumentsPage() {
           )}
         </div>
 
-        {/* Action buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Upload button */}
           <button
             onClick={() => setUploadDialogOpen(true)}
             className="flex items-center gap-1.5 text-[13px] font-medium px-3 sm:px-4 py-2 rounded-xl transition-all duration-150"
@@ -3515,7 +4172,6 @@ export default function DocumentsPage() {
             <span className="hidden sm:inline">Upload</span>
           </button>
 
-          {/* New paper button */}
           <button
             onClick={handleNewPaper}
             disabled={isCreating}
@@ -3557,7 +4213,6 @@ export default function DocumentsPage() {
           background: "var(--bg-muted)",
         }}
       >
-        {/* Row 1: search + view + select */}
         <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5">
           <div className="relative flex-1 max-w-md">
             <SearchIcon
@@ -3592,7 +4247,6 @@ export default function DocumentsPage() {
             )}
           </div>
 
-          {/* View toggle */}
           <div
             className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
             style={{
@@ -3602,7 +4256,6 @@ export default function DocumentsPage() {
           >
             {[
               { v: "grid" as ViewMode, Icon: LayoutGridIcon, t: "Grid" },
-
               { v: "list" as ViewMode, Icon: ListIcon, t: "List" },
             ].map(({ v, Icon, t }) => (
               <button
@@ -3621,7 +4274,6 @@ export default function DocumentsPage() {
             ))}
           </div>
 
-          {/* Select mode toggle */}
           <button
             onClick={() => {
               setSelectMode((v) => {
@@ -3642,7 +4294,6 @@ export default function DocumentsPage() {
           </button>
         </div>
 
-        {/* Row 2: filters */}
         <div
           className="flex items-center gap-2 px-4 sm:px-6 pb-2.5 overflow-x-auto"
           style={{ scrollbarWidth: "none" }}
@@ -3915,7 +4566,7 @@ export default function DocumentsPage() {
                 )}
               </div>
             ) : view === "grid" ? (
-              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
+              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch auto-rows-fr">
                 {displayDocs.map((doc) => (
                   <GridCard
                     key={doc._id}
@@ -3931,6 +4582,8 @@ export default function DocumentsPage() {
                     onRestore={() => handleRestoreDoc(doc._id)}
                     onDelete={() => handleDeleteDoc(doc._id)}
                     onDuplicate={() => handleDuplicateDoc(doc._id)}
+                    onGenerateSummary={() => handleGenerateSummary(doc)}
+                    onCancelSummary={() => handleCancelSummary(doc)}
                     canEnterEditor={canEnter}
                     getCooldownMs={getRemainingMs}
                   />
@@ -3953,6 +4606,8 @@ export default function DocumentsPage() {
                     onRestore={() => handleRestoreDoc(doc._id)}
                     onDelete={() => handleDeleteDoc(doc._id)}
                     onDuplicate={() => handleDuplicateDoc(doc._id)}
+                    onGenerateSummary={() => handleGenerateSummary(doc)}
+                    onCancelSummary={() => handleCancelSummary(doc)}
                     canEnterEditor={canEnter}
                     getCooldownMs={getRemainingMs}
                   />
@@ -3961,7 +4616,6 @@ export default function DocumentsPage() {
             )}
           </div>
 
-          {/* Pagination */}
           {!isLoading && visibleDocs.length > PAGE_SIZE && (
             <div className="pb-[calc(env(safe-area-inset-bottom)+52px)] md:pb-0">
               <Pagination

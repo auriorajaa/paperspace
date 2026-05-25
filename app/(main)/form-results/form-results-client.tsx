@@ -553,13 +553,13 @@ function EmptyState({
       </div>
       <div>
         <p
-          className="text-sm font-semibold mb-1"
+          className="text-[14px] font-semibold mb-1"
           style={{ color: "var(--text-secondary)" }}
         >
           {title}
         </p>
         <p
-          className="text-xs max-w-xs mx-auto leading-relaxed"
+          className="text-[12px] max-w-xs mx-auto leading-relaxed"
           style={{ color: "var(--text-dim)" }}
         >
           {description}
