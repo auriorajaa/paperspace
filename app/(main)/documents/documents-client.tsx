@@ -42,6 +42,7 @@ import {
   ClockIcon,
   WandSparklesIcon,
   RotateCcwIcon,
+  Maximize2Icon,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInHours } from "date-fns";
 import { Doc, Id } from "@/convex/_generated/dataModel";
@@ -184,6 +185,10 @@ function UploadDocumentDialog({
   const [stage, setStage] = useState<UploadStage>("");
   const [processing, setProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [uploadedDoc, setUploadedDoc] = useState<{
+    id: Id<"documents">;
+    title: string;
+  } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef(name);
@@ -258,7 +263,8 @@ function UploadDocumentDialog({
     if (processing || !file) return;
     setErrorMsg("");
 
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setNameError("Paper name is required.");
       return;
     }
@@ -335,7 +341,7 @@ function UploadDocumentDialog({
           );
         }
 
-        docxFile = new File([docxBlob], `${name.trim()}.docx`, {
+        docxFile = new File([docxBlob], `${trimmedName}.docx`, {
           type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         });
       }
@@ -370,7 +376,7 @@ function UploadDocumentDialog({
       setStage("saving");
       const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
       const docId = await createDocument({
-        title: name.trim(),
+        title: trimmedName,
         organizationId: organization?.id,
         storageId,
       });
@@ -381,11 +387,11 @@ function UploadDocumentDialog({
 
       toast.success(
         fileKind === "pdf"
-          ? "PDF converted & uploaded — ready to edit"
+          ? "PDF converted and uploaded"
           : "Paper uploaded successfully"
       );
       onOpenChange(false);
-      router.push(`/documents/${docId}`);
+      setUploadedDoc({ id: docId, title: trimmedName });
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Something went wrong. Please try again.");
     } finally {
@@ -401,7 +407,6 @@ function UploadDocumentDialog({
     createDocument,
     updateDocument,
     organization,
-    router,
     onOpenChange,
   ]);
 
@@ -410,7 +415,8 @@ function UploadDocumentDialog({
     fileKind === "pdf" ? UPLOAD_STAGES_PDF : UPLOAD_STAGES_DOCX;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !processing && onOpenChange(v)}>
+    <>
+      <Dialog open={open} onOpenChange={(v) => !processing && onOpenChange(v)}>
       <DialogContent
         className="w-[calc(100vw-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl"
         style={{
@@ -826,7 +832,7 @@ function UploadDocumentDialog({
                   <>
                     <UploadCloudIcon className="w-4 h-4 shrink-0" />
                     <span className="truncate max-w-full">
-                      Upload &amp; open
+                      Upload paper
                     </span>
                   </>
                 )}
@@ -891,14 +897,94 @@ function UploadDocumentDialog({
                   className="text-[10px] text-center break-words"
                   style={{ color: "var(--text-dim)" }}
                 >
-                  Your .docx will be stored as-is and opened in the editor
+                  Your .docx will be stored as-is. You can open it after upload
                 </p>
               )}
             </div>
           )}
         </div>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <AlertDialog
+        open={!!uploadedDoc}
+        onOpenChange={(v) => {
+          if (!v) setUploadedDoc(null);
+        }}
+      >
+        <AlertDialogContent
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-hover)",
+            backdropFilter: "blur(16px)",
+          }}
+        >
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: "var(--success-bg)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--success) 22%, transparent)",
+                }}
+              >
+                <CheckIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--success)" }}
+                />
+              </div>
+              <div className="min-w-0">
+                <AlertDialogTitle
+                  className="text-[14px] font-semibold"
+                  style={{ color: "var(--text)" }}
+                >
+                  Open editor now?
+                </AlertDialogTitle>
+                <AlertDialogDescription
+                  className="text-[12px] leading-relaxed mt-1"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {uploadedDoc?.title
+                    ? `"${uploadedDoc.title}" uploaded successfully. `
+                    : "Upload completed successfully. "}
+                  Opening the editor immediately can take a while, so you can
+                  stay on documents and open it when you are ready.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="rounded-xl text-[12px] font-medium"
+              style={{
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: "1px solid var(--border-subtle)",
+              }}
+              onClick={() => setUploadedDoc(null)}
+            >
+              Stay on documents
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl text-[12px] font-semibold"
+              style={{
+                background: "var(--accent-bg)",
+                color: "var(--accent-pale)",
+                border: "1px solid var(--accent-border)",
+              }}
+              onClick={() => {
+                const id = uploadedDoc?.id;
+                setUploadedDoc(null);
+                if (id) router.push(`/documents/${id}`);
+              }}
+            >
+              Open editor
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -1301,48 +1387,75 @@ export function SummarySectionGrid({
   document,
   onGenerateSummary,
   onCancelSummary,
+  onViewFullSummary,
 }: {
   document: Doc<"documents">;
   onGenerateSummary: () => void;
   onCancelSummary: () => void;
+  onViewFullSummary?: () => void;
 }) {
   const status = document.aiSummaryStatus;
 
   // ── Done ──────────────────────────────────────────────────────────────────
   if (status === "done" && document.aiSummary) {
     return (
-      <div className="flex flex-col gap-1.5 flex-1 min-h-[36px]">
-        <div className="flex items-start gap-1.5 pl-4">
+      <div className="grid h-full grid-rows-[minmax(0,1fr)_20px] gap-1 min-w-0">
+        <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
           <SparklesIcon
             className="w-2.5 h-2.5 shrink-0 mt-[3px]"
             style={{ color: "var(--accent-light)" }}
           />
           <p
-            className="text-[11px] leading-relaxed line-clamp-3 flex-1"
+            className="text-[11px] leading-[15px] line-clamp-2 flex-1 min-w-0 break-words"
             style={{ color: "var(--text-muted)" }}
           >
             {document.aiSummary}
           </p>
         </div>
 
-        {document.aiSummaryGeneratedAt && (
-          <div className="flex items-center justify-between gap-2 pl-4">
+        <div className="flex items-center gap-2 min-w-0">
+          {document.aiSummaryGeneratedAt ? (
             <span
-              className="flex items-center gap-1 text-[10px] tabular-nums"
+              className="flex items-center gap-1 text-[10px] tabular-nums flex-1 min-w-0 truncate"
               style={{ color: "var(--text-placeholder)" }}
             >
               <ClockIcon
                 className="w-2.5 h-2.5 shrink-0"
                 style={{ color: "var(--text-dim)" }}
               />
-              Summarize {smartDate(document.aiSummaryGeneratedAt)}
+              <span className="truncate">
+                Summarized {smartDate(document.aiSummaryGeneratedAt)}
+              </span>
             </span>
+          ) : (
+            <span className="flex-1" />
+          )}
+          <div className="flex items-center gap-1 shrink-0 h-5">
+            {onViewFullSummary && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewFullSummary();
+                }}
+                className="flex items-center gap-1 h-[18px] text-[10px] font-medium px-1.5 rounded-md transition-all active:scale-95"
+                style={{
+                  color: "var(--accent-light)",
+                  background:
+                    "color-mix(in srgb, var(--accent-light) 8%, transparent)",
+                  border: "1px solid var(--accent-border)",
+                }}
+                title="View full summary"
+              >
+                <Maximize2Icon className="w-2.5 h-2.5" />
+                Full
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onGenerateSummary();
               }}
-              className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-px rounded-md transition-all active:scale-95"
+              className="flex items-center gap-1 h-[18px] text-[10px] font-medium px-1.5 rounded-md transition-all active:scale-95"
               style={{
                 color: "var(--text-dim)",
                 background: "var(--bg-input)",
@@ -1362,7 +1475,7 @@ export function SummarySectionGrid({
               Regenerate
             </button>
           </div>
-        )}
+        </div>
       </div>
     );
   }
@@ -1569,27 +1682,48 @@ export function SummarySectionList({
   document,
   onGenerateSummary,
   onCancelSummary,
+  onViewFullSummary,
 }: {
   document: Doc<"documents">;
   onGenerateSummary: () => void;
   onCancelSummary: () => void;
+  onViewFullSummary?: () => void;
 }) {
   const status = document.aiSummaryStatus;
 
   // ── Done ──────────────────────────────────────────────────────────────────
   if (status === "done" && document.aiSummary) {
     return (
-      <div className="flex items-start gap-1.5">
+      <div className="flex items-start gap-1.5 min-w-0">
         <SparklesIcon
           className="w-2.5 h-2.5 shrink-0 mt-1"
           style={{ color: "var(--accent-light)" }}
         />
         <p
-          className="text-[11px] leading-relaxed line-clamp-2 flex-1"
+          className="text-[11px] leading-relaxed line-clamp-2 flex-1 min-w-0 break-words"
           style={{ color: "var(--text-muted)" }}
         >
           {document.aiSummary}
         </p>
+        {onViewFullSummary && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewFullSummary();
+            }}
+            className="mt-0.5 flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md transition-all active:scale-95 shrink-0"
+            style={{
+              color: "var(--accent-light)",
+              background:
+                "color-mix(in srgb, var(--accent-light) 8%, transparent)",
+              border: "1px solid var(--accent-border)",
+            }}
+            title="View full summary"
+          >
+            <Maximize2Icon className="w-2.5 h-2.5" />
+            View full
+          </button>
+        )}
       </div>
     );
   }
@@ -2327,20 +2461,33 @@ function SummaryTimestamp({ ts, status }: { ts?: number; status?: string }) {
 function CollectionBadges({
   collections,
   maxVisible = 2,
+  singleLine = false,
 }: {
   collections: Doc<"collections">[];
   maxVisible?: number;
+  singleLine?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? collections : collections.slice(0, maxVisible);
+  const visible = singleLine
+    ? collections.slice(0, maxVisible)
+    : expanded
+      ? collections
+      : collections.slice(0, maxVisible);
   const overflow = collections.length - maxVisible;
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div
+      className={`flex items-center gap-1 min-w-0 max-w-full ${
+        singleLine ? "flex-nowrap overflow-hidden" : "flex-wrap"
+      }`}
+    >
       {visible.map((col) => (
         <span
           key={col._id}
-          className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium whitespace-nowrap"
+          title={col.name}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-px rounded-md text-[10px] font-medium whitespace-nowrap min-w-0 ${
+            singleLine ? "max-w-[7.25rem]" : "max-w-[9.5rem]"
+          }`}
           style={{
             background: col.color ? `${col.color}18` : "var(--bg-input)",
             color: col.color ?? "var(--text-muted)",
@@ -2351,15 +2498,27 @@ function CollectionBadges({
             const Icon = getIconComponent(col.icon ?? "folder");
             return (
               <Icon
-                className="w-3 h-3"
+                className="w-3 h-3 shrink-0"
                 style={{ color: col.color ?? "#6366f1" }}
               />
             );
-          })()}{" "}
-          {col.name}
+          })()}
+          <span className="truncate min-w-0">{col.name}</span>
         </span>
       ))}
-      {!expanded && overflow > 0 && (
+      {singleLine && overflow > 0 && (
+        <span
+          className="text-[10px] px-1.5 py-px rounded-md font-medium shrink-0"
+          style={{
+            background: "var(--bg-input)",
+            color: "var(--text-dim)",
+            border: `1px solid var(--border-subtle)`,
+          }}
+        >
+          +{overflow}
+        </span>
+      )}
+      {!singleLine && !expanded && overflow > 0 && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -2376,6 +2535,102 @@ function CollectionBadges({
         </button>
       )}
     </div>
+  );
+}
+
+function FullSummaryDialog({
+  open,
+  onOpenChange,
+  document,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  document: Doc<"documents">;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="w-[calc(100vw-2rem)] sm:max-w-2xl p-0 overflow-hidden"
+        style={{
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-hover)",
+          backdropFilter: "blur(16px)",
+        }}
+      >
+        <div
+          className="flex items-center gap-2.5 px-5 py-4 shrink-0"
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: "var(--accent-soft)",
+              border: "1px solid var(--accent-border)",
+            }}
+          >
+            <SparklesIcon
+              className="w-4 h-4"
+              style={{ color: "var(--accent-light)" }}
+            />
+          </div>
+          <div className="min-w-0">
+            <DialogTitle
+              className="text-[14px] font-semibold"
+              style={{ color: "var(--text)" }}
+            >
+              AI summary
+            </DialogTitle>
+            <p
+              className="text-[11px] truncate mt-0.5"
+              style={{ color: "var(--text-dim)" }}
+            >
+              {document.title}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 max-h-[60vh] overflow-y-auto">
+          <p
+            className="text-[13px] leading-relaxed whitespace-pre-wrap break-words"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {document.aiSummary}
+          </p>
+        </div>
+
+        <div
+          className="flex items-center justify-between gap-3 px-5 py-3 shrink-0"
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
+        >
+          {document.aiSummaryGeneratedAt ? (
+            <span
+              className="flex items-center gap-1.5 text-[10px] tabular-nums min-w-0"
+              style={{ color: "var(--text-placeholder)" }}
+            >
+              <ClockIcon className="w-3 h-3 shrink-0" />
+              <span className="truncate">
+                Summarized {smartDate(document.aiSummaryGeneratedAt)}
+              </span>
+            </span>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium shrink-0"
+            style={{
+              background: "var(--bg-muted)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
+            <XIcon className="w-3 h-3" />
+            Close
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2567,6 +2822,7 @@ function GridCard({
   const router = useRouter();
   const { organization } = useOrganization();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fullSummaryOpen, setFullSummaryOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [syncDisplayMs, setSyncDisplayMs] = useState(0);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
@@ -2611,7 +2867,7 @@ function GridCard({
   return (
     <>
       <div
-        className="rounded-2xl flex flex-col cursor-pointer transition-all duration-200  overflow-hidden relative"
+        className="h-full min-h-[166px] rounded-2xl flex flex-col cursor-pointer transition-all duration-200 overflow-hidden relative"
         style={{
           background: selected
             ? "rgba(99,102,241,0.09)"
@@ -2633,7 +2889,7 @@ function GridCard({
         {isOnCooldown && (
           <div
             className="absolute inset-0 z-10 rounded-2xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px]"
-            style={{ background: "rgba(10, 10, 14, 0.55)" }}
+            style={{ background: "rgba(10, 10, 14, 0.05)" }}
           >
             <div
               className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
@@ -2656,8 +2912,8 @@ function GridCard({
           </div>
         )}
 
-        <div className="p-3.5 flex flex-col gap-2.5 flex-1">
-          <div className="flex items-start gap-2.5">
+        <div className="p-3 flex flex-col gap-2 flex-1 min-h-0">
+          <div className="flex items-start gap-2.5 min-h-[50px] max-h-[50px] overflow-hidden">
             {selectMode && (
               <div
                 className="mt-0.5 shrink-0"
@@ -2683,14 +2939,14 @@ function GridCard({
             </div>
             <div className="flex-1 min-w-0">
               <p
-                className="text-[13px] font-semibold leading-snug line-clamp-2"
+                className="text-[13px] font-semibold leading-snug line-clamp-2 break-words min-h-[32px]"
                 style={{ color: "var(--text)" }}
               >
                 {document.title}
               </p>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-nowrap min-w-0 overflow-hidden">
                 <span
-                  className="text-[11px]"
+                  className="text-[11px] shrink-0"
                   style={{ color: "var(--text-muted)" }}
                 >
                   {smartDate(document._creationTime)}
@@ -2709,14 +2965,14 @@ function GridCard({
                 )}
                 {orgLabel && (
                   <span
-                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded"
+                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded min-w-0 max-w-[92px]"
                     style={{
                       background: "var(--accent-bg)",
                       color: "var(--accent-light)",
                     }}
                   >
-                    <UsersIcon style={{ width: 9, height: 9 }} />
-                    {orgLabel}
+                    <UsersIcon className="shrink-0" style={{ width: 9, height: 9 }} />
+                    <span className="truncate min-w-0">{orgLabel}</span>
                   </span>
                 )}
                 {isOnCooldown && (
@@ -2752,20 +3008,38 @@ function GridCard({
           </div>
 
           {/* ── Summary section ──────────────────────────────────────────── */}
-          <div className="mt-auto space-y-2">
-            <SummarySectionGrid
-              document={document}
-              onGenerateSummary={onGenerateSummary}
-              onCancelSummary={onCancelSummary}
-            />
-            {cols.length > 0 && (
-              <div onClick={(e) => e.stopPropagation()}>
-                <CollectionBadges collections={cols} maxVisible={2} />
-              </div>
-            )}
+          <div className="mt-auto space-y-1.5">
+            <div className="h-[56px] overflow-hidden">
+              <SummarySectionGrid
+                document={document}
+                onGenerateSummary={onGenerateSummary}
+                onCancelSummary={onCancelSummary}
+                onViewFullSummary={() => setFullSummaryOpen(true)}
+              />
+            </div>
+            <div
+              className="min-h-[18px] max-h-[18px] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {cols.length > 0 && (
+                <CollectionBadges
+                  collections={cols}
+                  maxVisible={2}
+                  singleLine
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {fullSummaryOpen && (
+        <FullSummaryDialog
+          open={fullSummaryOpen}
+          onOpenChange={setFullSummaryOpen}
+          document={document}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -2831,6 +3105,7 @@ function ListRow({
   const router = useRouter();
   const { organization } = useOrganization();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fullSummaryOpen, setFullSummaryOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [syncDisplayMs, setSyncDisplayMs] = useState(0);
   const collections = useQuery(api.documents.getCollectionsForDocument, {
@@ -2937,7 +3212,7 @@ function ListRow({
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <p
-              className="text-[13px] font-semibold"
+              className="text-[13px] font-semibold leading-snug line-clamp-1 break-words flex-1 min-w-[160px] max-w-full"
               style={{ color: "var(--text)" }}
             >
               {document.title}
@@ -2985,6 +3260,7 @@ function ListRow({
             document={document}
             onGenerateSummary={onGenerateSummary}
             onCancelSummary={onCancelSummary}
+            onViewFullSummary={() => setFullSummaryOpen(true)}
           />
 
           {/* Meta row: collections + created date + generated date */}
@@ -3053,6 +3329,14 @@ function ListRow({
           />
         </div>
       </div>
+
+      {fullSummaryOpen && (
+        <FullSummaryDialog
+          open={fullSummaryOpen}
+          onOpenChange={setFullSummaryOpen}
+          document={document}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
