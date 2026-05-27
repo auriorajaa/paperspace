@@ -49,23 +49,15 @@ function InvitationRow({
   compact?: boolean;
 }) {
   const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
-  const router = useRouter();
 
   const handleAccept = async () => {
     setLoading("accept");
     try {
       await invitation.accept();
       onDone();
-      // Refresh halaman setelah accept berhasil agar Clerk state ter-update
-      // dan user langsung masuk ke organisasi baru
-      setTimeout(() => {
-        router.refresh();
-        // Kalau router.refresh() tidak cukup (misal state Clerk masih stale),
-        // uncomment baris di bawah untuk hard reload:
-        // window.location.reload();
-      }, 300);
+      window.location.reload(); // ← langsung reload
     } catch (e) {
-      //console.error("Failed to accept invitation", e);
+      // console.error(e)
     } finally {
       setLoading(null);
     }
@@ -75,7 +67,7 @@ function InvitationRow({
   const handleDecline = () => {
     setLoading("decline");
     onDone();
-    setLoading(null);
+    window.location.reload();
   };
 
   const orgName =
@@ -737,7 +729,11 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
         organization={organization}
         onPersonal={async () => setActive?.({ organization: null })}
         onOrg={async (id) => setActive?.({ organization: id })}
-        onCreateOrg={() => openCreateOrganization({})}
+        onCreateOrg={() =>
+          openCreateOrganization({
+            afterCreateOrganizationUrl: window.location.href,
+          })
+        }
         onOrgSettings={() => openOrganizationProfile({})}
       />
     </div>
@@ -1087,7 +1083,13 @@ function MobileAccountSheet({
           <button
             onClick={() => {
               onClose();
-              setTimeout(() => openCreateOrganization({}), 100);
+              setTimeout(
+                () =>
+                  openCreateOrganization({
+                    afterCreateOrganizationUrl: window.location.href,
+                  }),
+                100
+              );
             }}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2"
             style={{
