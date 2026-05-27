@@ -1401,12 +1401,12 @@ export function SummarySectionGrid({
     return (
       <div className="grid h-full grid-rows-[minmax(0,1fr)_20px] gap-1 min-w-0">
         <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
-          <SparklesIcon
+          {/* <SparklesIcon
             className="w-2.5 h-2.5 shrink-0 mt-[3px]"
             style={{ color: "var(--accent-light)" }}
-          />
+          /> */}
           <p
-            className="text-[11px] leading-[15px] line-clamp-2 flex-1 min-w-0 break-words"
+            className="text-[11px] opacity-95 italic leading-[15px] line-clamp-2 flex-1 min-w-0 break-words"
             style={{ color: "var(--text-muted)" }}
           >
             {document.aiSummary}
@@ -1562,49 +1562,49 @@ export function SummarySectionGrid({
   if (status === "error") {
     return (
       <div
-        className="flex items-start gap-2.5 flex-1 min-h-[36px] px-3 py-2.5 rounded-xl"
+        className="flex items-center justify-between gap-2 h-full min-h-0 px-2.5 py-2 rounded-xl"
         style={{
           background: "color-mix(in srgb, var(--danger) 6%, transparent)",
           border:
             "1px solid color-mix(in srgb, var(--danger) 16%, transparent)",
         }}
       >
-        <AlertCircleIcon
-          className="w-3.5 h-3.5 shrink-0 mt-px"
-          style={{ color: "var(--danger)", opacity: 0.8 }}
-        />
-        <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <AlertCircleIcon
+            className="w-3.5 h-3.5 shrink-0"
+            style={{ color: "var(--danger)", opacity: 0.8 }}
+          />
           <p
-            className="text-[11px] leading-snug"
+            className="text-[11px] leading-snug line-clamp-1 min-w-0"
             style={{ color: "var(--danger)" }}
           >
             Summary generation failed.
           </p>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onGenerateSummary();
-            }}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
-            style={{
-              color: "var(--danger)",
-              background: "color-mix(in srgb, var(--danger) 10%, transparent)",
-              border:
-                "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background =
-                "color-mix(in srgb, var(--danger) 16%, transparent)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background =
-                "color-mix(in srgb, var(--danger) 10%, transparent)";
-            }}
-          >
-            <RotateCcwIcon className="w-3 h-3" />
-            Retry
-          </button>
         </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onGenerateSummary();
+          }}
+          className="flex items-center gap-1 h-[22px] text-[10px] font-semibold px-2 rounded-lg transition-all active:scale-95 shrink-0"
+          style={{
+            color: "var(--danger)",
+            background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--danger) 22%, transparent)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--danger) 16%, transparent)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              "color-mix(in srgb, var(--danger) 10%, transparent)";
+          }}
+        >
+          <RotateCcwIcon className="w-2.5 h-2.5" />
+          Retry
+        </button>
       </div>
     );
   }
@@ -2913,7 +2913,7 @@ function GridCard({
         )}
 
         <div className="p-3 flex flex-col gap-2 flex-1 min-h-0">
-          <div className="flex items-start gap-2.5 min-h-[50px] max-h-[50px] overflow-hidden">
+          <div className="flex items-start gap-2.5 min-h-[52px] max-h-[52px] overflow-hidden">
             {selectMode && (
               <div
                 className="mt-0.5 shrink-0"
@@ -2939,12 +2939,12 @@ function GridCard({
             </div>
             <div className="flex-1 min-w-0">
               <p
-                className="text-[13px] font-semibold leading-snug line-clamp-2 break-words min-h-[32px]"
+                className="text-[13px] font-semibold leading-snug line-clamp-2 break-words min-h-[28px]"
                 style={{ color: "var(--text)" }}
               >
                 {document.title}
               </p>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-nowrap min-w-0 overflow-hidden">
+              <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden">
                 <span
                   className="text-[11px] shrink-0"
                   style={{ color: "var(--text-muted)" }}
@@ -3009,7 +3009,7 @@ function GridCard({
 
           {/* ── Summary section ──────────────────────────────────────────── */}
           <div className="mt-auto space-y-1.5">
-            <div className="h-[56px] overflow-hidden">
+            <div className="h-[68px] overflow-hidden">
               <SummarySectionGrid
                 document={document}
                 onGenerateSummary={onGenerateSummary}
