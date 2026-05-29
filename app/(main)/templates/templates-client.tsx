@@ -2063,7 +2063,7 @@ export default function TemplatesPage() {
   );
 
   useEffect(() => {
-    const t = setTimeout(() => setPageReady(true), 2800);
+    const t = setTimeout(() => setPageReady(true), 2700);
     return () => clearTimeout(t);
   }, []);
 
