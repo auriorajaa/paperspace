@@ -3835,7 +3835,7 @@ export default function DocumentsPage() {
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setPageReady(true), 1900);
+    const t = setTimeout(() => setPageReady(true), 2700);
     return () => clearTimeout(t);
   }, []);
 
