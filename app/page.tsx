@@ -246,7 +246,7 @@ export default async function LandingPage() {
                   style={{ background: "#22c55e", opacity: 0.7 }}
                 />
               </div>
-              <div className="flex-1 flex justify-center">
+              {/* <div className="flex-1 flex justify-center">
                 <div
                   className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs"
                   style={{
@@ -271,7 +271,7 @@ export default async function LandingPage() {
                   </svg>
                   paperspace.work/home
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {/* App chrome */}

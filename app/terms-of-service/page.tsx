@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/metadata";
 import Link from "next/link";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Terms of Service",
@@ -244,26 +245,34 @@ export default function TermsOfServicePage() {
       </div> */}
 
       <div className="relative z-10 max-w-3xl mx-auto px-5 py-16 sm:py-24">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium mb-10 transition-colors"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="mb-10 flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors"
+            style={{ color: "var(--text-muted)" }}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back to Paperspace
-        </Link>
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back to Paperspace
+          </Link>
+          <ThemeSwitcher
+            collapsed
+            size="sm"
+            contentSide="bottom"
+            contentAlign="end"
+          />
+        </div>
 
         <div className="mb-12">
           {/* <div

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 interface ErrorPageProps {
@@ -277,9 +278,16 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
             Paperspace
           </span>
         </Link>
+        <div className="flex items-center gap-2">
+          <ThemeSwitcher
+            collapsed
+            size="sm"
+            contentSide="bottom"
+            contentAlign="end"
+          />
         <Link
           href="/home"
-          className="btn-hover text-[13px] font-medium px-4 py-1.5 rounded-lg"
+          className="btn-hover text-[13px] font-medium px-3 sm:px-4 py-1.5 rounded-lg"
           style={{
             background: "var(--bg-muted)",
             border: "1px solid var(--border-subtle)",
@@ -288,6 +296,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
         >
           ← Back to home
         </Link>
+        </div>
       </nav>
 
       {/* ─── Main ────────────────────────────────────────────────── */}
