@@ -1399,14 +1399,14 @@ export function SummarySectionGrid({
   // ── Done ──────────────────────────────────────────────────────────────────
   if (status === "done" && document.aiSummary) {
     return (
-      <div className="grid h-full grid-rows-[minmax(0,1fr)_20px] gap-1 min-w-0">
-        <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+      <div className="grid min-h-[72px] grid-rows-[minmax(0,1fr)_auto] gap-1.5 min-w-0">
+        <div className="flex items-start gap-1.5 min-w-0">
           {/* <SparklesIcon
             className="w-2.5 h-2.5 shrink-0 mt-[3px]"
             style={{ color: "var(--accent-light)" }}
           /> */}
           <p
-            className="text-[11px] opacity-95 italic leading-[15px] line-clamp-2 flex-1 min-w-0 break-words"
+            className="text-[11px] opacity-95 italic leading-[1.35] line-clamp-2 flex-1 min-w-0 break-words"
             style={{ color: "var(--text-muted)" }}
           >
             {document.aiSummary}
@@ -1430,14 +1430,14 @@ export function SummarySectionGrid({
           ) : (
             <span className="flex-1" />
           )}
-          <div className="flex items-center gap-1 shrink-0 h-5">
+          <div className="flex items-center gap-1 shrink-0">
             {onViewFullSummary && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onViewFullSummary();
                 }}
-                className="flex items-center gap-1 h-[18px] text-[10px] font-medium px-1.5 rounded-md transition-all active:scale-95"
+                className="flex items-center gap-1 min-h-6 text-[10px] font-medium px-1.5 py-0.5 rounded-md transition-all active:scale-95"
                 style={{
                   color: "var(--accent-light)",
                   background:
@@ -1455,7 +1455,7 @@ export function SummarySectionGrid({
                 e.stopPropagation();
                 onGenerateSummary();
               }}
-              className="flex items-center gap-1 h-[18px] text-[10px] font-medium px-1.5 rounded-md transition-all active:scale-95"
+              className="flex items-center gap-1 min-h-6 text-[10px] font-medium px-1.5 py-0.5 rounded-md transition-all active:scale-95"
               style={{
                 color: "var(--text-dim)",
                 background: "var(--bg-input)",
@@ -1484,7 +1484,7 @@ export function SummarySectionGrid({
   if (status === "pending") {
     return (
       <div
-        className="flex flex-col gap-2 flex-1 min-h-[36px] px-3 py-2.5 rounded-xl"
+        className="flex flex-col gap-2 flex-1 min-h-[58px] px-3 py-2 rounded-xl"
         style={{
           background: "color-mix(in srgb, var(--warning) 6%, transparent)",
           border:
@@ -1509,7 +1509,7 @@ export function SummarySectionGrid({
               e.stopPropagation();
               onCancelSummary();
             }}
-            className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-all active:scale-95 shrink-0"
+            className="flex items-center gap-1 min-h-6 text-[10px] font-medium px-2 py-0.5 rounded-lg transition-all active:scale-95 shrink-0"
             style={{
               color: "var(--text-muted)",
               background: "var(--bg-input)",
@@ -1562,7 +1562,7 @@ export function SummarySectionGrid({
   if (status === "error") {
     return (
       <div
-        className="flex items-center justify-between gap-2 h-full min-h-0 px-2.5 py-2 rounded-xl"
+        className="flex items-center justify-between gap-2 min-h-[50px] px-2.5 py-2 rounded-xl"
         style={{
           background: "color-mix(in srgb, var(--danger) 6%, transparent)",
           border:
@@ -1586,7 +1586,7 @@ export function SummarySectionGrid({
             e.stopPropagation();
             onGenerateSummary();
           }}
-          className="flex items-center gap-1 h-[22px] text-[10px] font-semibold px-2 rounded-lg transition-all active:scale-95 shrink-0"
+          className="flex items-center gap-1 min-h-6 text-[10px] font-semibold px-2 py-0.5 rounded-lg transition-all active:scale-95 shrink-0"
           style={{
             color: "var(--danger)",
             background: "color-mix(in srgb, var(--danger) 10%, transparent)",
@@ -2867,7 +2867,7 @@ function GridCard({
   return (
     <>
       <div
-        className="h-full min-h-[166px] rounded-2xl flex flex-col cursor-pointer transition-all duration-200 overflow-hidden relative"
+        className="h-full min-h-[188px] rounded-2xl flex flex-col cursor-pointer transition-all duration-200 overflow-hidden relative"
         style={{
           background: selected
             ? "rgba(99,102,241,0.09)"
@@ -2912,8 +2912,8 @@ function GridCard({
           </div>
         )}
 
-        <div className="p-3 flex flex-col gap-2 flex-1 min-h-0">
-          <div className="flex items-start gap-2.5 min-h-[52px] max-h-[52px] overflow-hidden">
+        <div className="p-3 flex flex-col gap-2.5 flex-1 min-h-0">
+          <div className="flex items-start gap-2.5 min-h-[58px]">
             {selectMode && (
               <div
                 className="mt-0.5 shrink-0"
@@ -2939,12 +2939,12 @@ function GridCard({
             </div>
             <div className="flex-1 min-w-0">
               <p
-                className="text-[13px] font-semibold leading-snug line-clamp-2 break-words min-h-[28px]"
+                className="text-[13px] font-semibold leading-snug line-clamp-2 break-words min-h-[2.7em]"
                 style={{ color: "var(--text)" }}
               >
                 {document.title}
               </p>
-              <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden">
+              <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap min-w-0">
                 <span
                   className="text-[11px] shrink-0"
                   style={{ color: "var(--text-muted)" }}
@@ -2965,7 +2965,7 @@ function GridCard({
                 )}
                 {orgLabel && (
                   <span
-                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded min-w-0 max-w-[92px]"
+                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded min-w-0 max-w-[8rem]"
                     style={{
                       background: "var(--accent-bg)",
                       color: "var(--accent-light)",
@@ -3008,8 +3008,8 @@ function GridCard({
           </div>
 
           {/* ── Summary section ──────────────────────────────────────────── */}
-          <div className="mt-auto space-y-1.5">
-            <div className="h-[68px] overflow-hidden">
+          <div className="mt-auto space-y-1.5 pt-0.5">
+            <div className="min-h-[76px]">
               <SummarySectionGrid
                 document={document}
                 onGenerateSummary={onGenerateSummary}
@@ -3018,7 +3018,7 @@ function GridCard({
               />
             </div>
             <div
-              className="min-h-[18px] max-h-[18px] overflow-hidden"
+              className="min-h-[22px] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {cols.length > 0 && (
@@ -4850,7 +4850,7 @@ export default function DocumentsPage() {
                 )}
               </div>
             ) : view === "grid" ? (
-              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch auto-rows-fr">
+              <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch auto-rows-[minmax(188px,auto)]">
                 {displayDocs.map((doc) => (
                   <GridCard
                     key={doc._id}
