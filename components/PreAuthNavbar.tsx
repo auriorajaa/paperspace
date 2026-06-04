@@ -2,8 +2,8 @@
 "use client";
 
 import Link from "next/link";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useTheme } from "@/contexts/ThemeContext";
-import { SunIcon, MoonIcon } from "lucide-react";
 
 interface PreAuthNavbarProps {
   page?: "landing" | "sign-in" | "sign-up";
@@ -11,7 +11,7 @@ interface PreAuthNavbarProps {
 }
 
 export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
   return (
@@ -50,23 +50,12 @@ export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-1.5 sm:gap-2">
-        {/* Theme toggle */}
-        <button
-          onClick={() => setTheme(isDark ? "light" : "dark")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150"
-          style={{
-            background: "var(--bg-muted)",
-            border: "1px solid var(--border-subtle)",
-            color: "var(--text-muted)",
-          }}
-          title={isDark ? "Switch to light" : "Switch to dark"}
-        >
-          {isDark ? (
-            <SunIcon className="w-3.5 h-3.5" />
-          ) : (
-            <MoonIcon className="w-3.5 h-3.5" />
-          )}
-        </button>
+        <ThemeSwitcher
+          collapsed
+          size="sm"
+          contentSide="bottom"
+          contentAlign="end"
+        />
 
         {isSignedIn ? (
           <Link

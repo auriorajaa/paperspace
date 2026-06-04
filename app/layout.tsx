@@ -53,11 +53,17 @@ const themeInitScript = `
 (function() {
   try {
     var savedTheme = localStorage.getItem("theme");
+    var savedFontSize = localStorage.getItem("font-size");
     var theme = savedTheme === "light" ? "light" : "dark";
+    var fontSize =
+      savedFontSize === "compact" || savedFontSize === "large"
+        ? savedFontSize
+        : "default";
 
     var root = document.documentElement;
 
     root.dataset.theme = theme;
+    root.dataset.fontSize = fontSize;
     root.style.colorScheme = theme;
 
     root.classList.remove("theme-dark", "theme-light", "dark");

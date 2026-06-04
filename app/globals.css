@@ -394,6 +394,153 @@
   border-color: var(--border-hover) !important;
 }
 
+/* User font-size preference. */
+:root {
+  --ui-text-9: 13px;
+  --ui-text-10: 13px;
+  --ui-text-10-5: 13px;
+  --ui-text-11: 13px;
+  --ui-text-12: 13px;
+  --ui-text-12-5: 13px;
+  --ui-text-13: 13px;
+  --ui-text-14: 14px;
+  --ui-text-14-5: 14.5px;
+  --ui-text-15: 15px;
+  --ui-text-16: 16px;
+  --ui-text-18: 18px;
+  --ui-text-xs: 13px;
+  --ui-text-sm: 0.875rem;
+  --ui-text-base: 1rem;
+  --ui-text-lg: 1.125rem;
+  --ui-text-xl: 1.25rem;
+  --ui-text-2xl: 1.5rem;
+  --ui-text-3xl: 1.875rem;
+  --ui-text-1-15rem: 1.15rem;
+  --ui-text-2rem: 2rem;
+  --ui-text-2-3rem: 2.3rem;
+  --ui-text-2-6rem: 2.6rem;
+}
+
+:root[data-font-size="compact"] {
+  --ui-text-9: 12px;
+  --ui-text-10: 12px;
+  --ui-text-10-5: 12px;
+  --ui-text-11: 12px;
+  --ui-text-12: 12px;
+  --ui-text-12-5: 12.5px;
+  --ui-text-13: 12px;
+  --ui-text-14: 13px;
+  --ui-text-14-5: 13.5px;
+  --ui-text-15: 14px;
+  --ui-text-16: 15px;
+  --ui-text-18: 17px;
+  --ui-text-xs: 12px;
+  --ui-text-sm: 0.8125rem;
+  --ui-text-base: 0.9375rem;
+  --ui-text-lg: 1.0625rem;
+  --ui-text-xl: 1.125rem;
+  --ui-text-2xl: 1.375rem;
+  --ui-text-3xl: 1.75rem;
+  --ui-text-1-15rem: 1.05rem;
+  --ui-text-2rem: 1.85rem;
+  --ui-text-2-3rem: 2.15rem;
+  --ui-text-2-6rem: 2.4rem;
+}
+
+:root[data-font-size="large"] {
+  --ui-text-9: 14px;
+  --ui-text-10: 14px;
+  --ui-text-10-5: 14px;
+  --ui-text-11: 14px;
+  --ui-text-12: 14px;
+  --ui-text-12-5: 14.5px;
+  --ui-text-13: 15px;
+  --ui-text-14: 16px;
+  --ui-text-14-5: 16.5px;
+  --ui-text-15: 17px;
+  --ui-text-16: 18px;
+  --ui-text-18: 20px;
+  --ui-text-xs: 14px;
+  --ui-text-sm: 1rem;
+  --ui-text-base: 1.125rem;
+  --ui-text-lg: 1.25rem;
+  --ui-text-xl: 1.375rem;
+  --ui-text-2xl: 1.625rem;
+  --ui-text-3xl: 2rem;
+  --ui-text-1-15rem: 1.25rem;
+  --ui-text-2rem: 2.15rem;
+  --ui-text-2-3rem: 2.45rem;
+  --ui-text-2-6rem: 2.75rem;
+}
+
+:root[data-font-size] [class~="text-xs"] { font-size: var(--ui-text-xs) !important; }
+:root[data-font-size] [class~="text-sm"] { font-size: var(--ui-text-sm) !important; }
+:root[data-font-size] [class~="text-base"] { font-size: var(--ui-text-base) !important; }
+:root[data-font-size] [class~="text-lg"] { font-size: var(--ui-text-lg) !important; }
+:root[data-font-size] [class~="text-xl"] { font-size: var(--ui-text-xl) !important; }
+:root[data-font-size] [class~="text-2xl"] { font-size: var(--ui-text-2xl) !important; }
+:root[data-font-size] [class~="text-3xl"] { font-size: var(--ui-text-3xl) !important; }
+:root[data-font-size] [class~="text-[9px]"] { font-size: var(--ui-text-9) !important; }
+:root[data-font-size] [class~="text-[10px]"] { font-size: var(--ui-text-10) !important; }
+:root[data-font-size] [class~="text-[10.5px]"] { font-size: var(--ui-text-10-5) !important; }
+:root[data-font-size] [class~="text-[11px]"] { font-size: var(--ui-text-11) !important; }
+:root[data-font-size] [class~="text-[12px]"] { font-size: var(--ui-text-12) !important; }
+:root[data-font-size] [class~="text-[12.5px]"] { font-size: var(--ui-text-12-5) !important; }
+:root[data-font-size] [class~="text-[13px]"] { font-size: var(--ui-text-13) !important; }
+:root[data-font-size] [class~="text-[14px]"] { font-size: var(--ui-text-14) !important; }
+:root[data-font-size] [class~="text-[14.5px]"] { font-size: var(--ui-text-14-5) !important; }
+:root[data-font-size] [class~="text-[15px]"] { font-size: var(--ui-text-15) !important; }
+:root[data-font-size] [class~="text-[16px]"] { font-size: var(--ui-text-16) !important; }
+:root[data-font-size] [class~="text-[18px]"] { font-size: var(--ui-text-18) !important; }
+:root[data-font-size] [class~="text-[1.15rem]"] { font-size: var(--ui-text-1-15rem) !important; }
+:root[data-font-size] [class~="text-[2rem]"] { font-size: var(--ui-text-2rem) !important; }
+:root[data-font-size] [class~="text-[2.3rem]"] { font-size: var(--ui-text-2-3rem) !important; }
+:root[data-font-size] [class~="text-[2.6rem]"] { font-size: var(--ui-text-2-6rem) !important; }
+
+@media (min-width: 40rem) {
+  :root[data-font-size] [class~="sm:text-xs"] { font-size: var(--ui-text-xs) !important; }
+  :root[data-font-size] [class~="sm:text-sm"] { font-size: var(--ui-text-sm) !important; }
+  :root[data-font-size] [class~="sm:text-base"] { font-size: var(--ui-text-base) !important; }
+  :root[data-font-size] [class~="sm:text-lg"] { font-size: var(--ui-text-lg) !important; }
+  :root[data-font-size] [class~="sm:text-xl"] { font-size: var(--ui-text-xl) !important; }
+  :root[data-font-size] [class~="sm:text-2xl"] { font-size: var(--ui-text-2xl) !important; }
+  :root[data-font-size] [class~="sm:text-3xl"] { font-size: var(--ui-text-3xl) !important; }
+  :root[data-font-size] [class~="sm:text-[16px]"] { font-size: var(--ui-text-16) !important; }
+  :root[data-font-size] [class~="sm:text-[2.6rem]"] { font-size: var(--ui-text-2-6rem) !important; }
+}
+
+@media (min-width: 48rem) {
+  :root[data-font-size] [class~="md:text-xs"] { font-size: var(--ui-text-xs) !important; }
+  :root[data-font-size] [class~="md:text-sm"] { font-size: var(--ui-text-sm) !important; }
+  :root[data-font-size] [class~="md:text-base"] { font-size: var(--ui-text-base) !important; }
+  :root[data-font-size] [class~="md:text-lg"] { font-size: var(--ui-text-lg) !important; }
+  :root[data-font-size] [class~="md:text-xl"] { font-size: var(--ui-text-xl) !important; }
+  :root[data-font-size] [class~="md:text-2xl"] { font-size: var(--ui-text-2xl) !important; }
+  :root[data-font-size] [class~="md:text-3xl"] { font-size: var(--ui-text-3xl) !important; }
+  :root[data-font-size] [class~="md:text-[18px]"] { font-size: var(--ui-text-18) !important; }
+}
+
+@media (min-width: 64rem) {
+  :root[data-font-size] [class~="lg:text-xs"] { font-size: var(--ui-text-xs) !important; }
+  :root[data-font-size] [class~="lg:text-sm"] { font-size: var(--ui-text-sm) !important; }
+  :root[data-font-size] [class~="lg:text-base"] { font-size: var(--ui-text-base) !important; }
+  :root[data-font-size] [class~="lg:text-lg"] { font-size: var(--ui-text-lg) !important; }
+  :root[data-font-size] [class~="lg:text-xl"] { font-size: var(--ui-text-xl) !important; }
+  :root[data-font-size] [class~="lg:text-2xl"] { font-size: var(--ui-text-2xl) !important; }
+  :root[data-font-size] [class~="lg:text-3xl"] { font-size: var(--ui-text-3xl) !important; }
+}
+
+@media (min-width: 80rem) {
+  :root[data-font-size] [class~="xl:text-xs"] { font-size: var(--ui-text-xs) !important; }
+  :root[data-font-size] [class~="xl:text-sm"] { font-size: var(--ui-text-sm) !important; }
+  :root[data-font-size] [class~="xl:text-base"] { font-size: var(--ui-text-base) !important; }
+  :root[data-font-size] [class~="xl:text-lg"] { font-size: var(--ui-text-lg) !important; }
+  :root[data-font-size] [class~="xl:text-xl"] { font-size: var(--ui-text-xl) !important; }
+  :root[data-font-size] [class~="xl:text-2xl"] { font-size: var(--ui-text-2xl) !important; }
+  :root[data-font-size] [class~="xl:text-3xl"] { font-size: var(--ui-text-3xl) !important; }
+  :root[data-font-size] [class~="xl:text-[2.6rem]"] { font-size: var(--ui-text-2-6rem) !important; }
+}
+
 [data-radix-popper-content-wrapper] {
   --card: var(--popover-surface);
   --popover: var(--popover-surface);

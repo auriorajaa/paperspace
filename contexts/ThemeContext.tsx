@@ -10,10 +10,13 @@ import {
 } from "react";
 
 export type Theme = "dark" | "light";
+export type FontSizePreference = "compact" | "default" | "large";
 
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  fontSize: FontSizePreference;
+  setFontSize: (fontSize: FontSizePreference) => void;
   resolvedTheme: Theme;
   systemTheme: Theme | undefined;
 }
@@ -22,6 +25,8 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
+  const [fontSize, setFontSizeState] =
+    useState<FontSizePreference>("default");
   const [resolvedTheme, setResolvedTheme] = useState<Theme>("dark");
   const [systemTheme, setSystemTheme] = useState<Theme | undefined>(undefined);
   const [mounted, setMounted] = useState(false);
@@ -31,6 +36,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Check localStorage
     const saved = localStorage.getItem("theme") as Theme | null;
+    const savedFontSize = localStorage.getItem(
+      "font-size"
+    ) as FontSizePreference | null;
     const systemPrefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)"
     ).matches;
@@ -43,6 +51,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setResolvedTheme(initialTheme);
 
     applyTheme(initialTheme);
+
+    const initialFontSize =
+      savedFontSize === "compact" || savedFontSize === "large"
+        ? savedFontSize
+        : "default";
+
+    setFontSizeState(initialFontSize);
+    applyFontSize(initialFontSize);
   }, []);
 
   const applyTheme = (newTheme: Theme) => {
@@ -64,6 +80,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(newTheme);
     setResolvedTheme(newTheme);
     applyTheme(newTheme);
+  };
+
+  const applyFontSize = (newFontSize: FontSizePreference) => {
+    document.documentElement.dataset.fontSize = newFontSize;
+  };
+
+  const setFontSize = (newFontSize: FontSizePreference) => {
+    localStorage.setItem("font-size", newFontSize);
+    setFontSizeState(newFontSize);
+    applyFontSize(newFontSize);
   };
 
   // Listen for system theme changes
@@ -93,6 +119,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         value={{
           theme: "dark",
           setTheme: () => {},
+          fontSize: "default",
+          setFontSize: () => {},
           resolvedTheme: "dark",
           systemTheme: undefined,
         }}
@@ -107,6 +135,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       value={{
         theme,
         setTheme,
+        fontSize,
+        setFontSize,
         resolvedTheme,
         systemTheme,
       }}
