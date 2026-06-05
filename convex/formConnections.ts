@@ -127,6 +127,15 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
+
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new ConvexError("Template not found");
+    if (template.ownerId !== identity.subject) {
+      throw new ConvexError(
+        "Only the template owner can connect this template to a form"
+      );
+    }
+
     const scriptToken = generateToken();
     return ctx.db.insert("formConnections", {
       ownerId: identity.subject,

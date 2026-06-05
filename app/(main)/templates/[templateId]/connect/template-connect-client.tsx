@@ -2071,7 +2071,7 @@ export default function ConnectFormPage() {
   const templateId = params.templateId as Id<"templates">;
 
   const template = useQuery(
-    api.templates.getById,
+    api.templates.getEditableById,
     isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
   const connections = useQuery(

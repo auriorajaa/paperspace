@@ -1747,13 +1747,16 @@ export default function TemplateEditPage() {
   const [mobileWarningDismissed, setMobileWarningDismissed] = useState(false);
 
   const template = useQuery(
-    api.templates.getById,
+    api.templates.getEditableById,
     isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
   const updateTemplate = useMutation(api.templates.update);
 
   const [editorError, setEditorError] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
+  const editorReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [editorKey, setEditorKey] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -1940,6 +1943,30 @@ export default function TemplateEditPage() {
       waitForFileSaved,
     ]
   );
+
+  useEffect(() => {
+    // Reset ready state setiap kali editor di-remount (retry atau key baru)
+    setEditorReady(false);
+    setEditorError(false);
+
+    // Timeout guard: kalau OO tidak fire onDocumentReady dalam 20 detik → error
+    if (editorReadyTimeoutRef.current)
+      clearTimeout(editorReadyTimeoutRef.current);
+    editorReadyTimeoutRef.current = setTimeout(() => {
+      setEditorReady((current) => {
+        if (!current) {
+          // Belum ready setelah 20 detik → trigger error state
+          setEditorError(true);
+        }
+        return current;
+      });
+    }, 20_000);
+
+    return () => {
+      if (editorReadyTimeoutRef.current)
+        clearTimeout(editorReadyTimeoutRef.current);
+    };
+  }, [editorKey]);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 
@@ -2308,6 +2335,8 @@ export default function TemplateEditPage() {
               templateId={templateId}
               storageId={template.storageId}
               onReady={() => {
+                if (editorReadyTimeoutRef.current)
+                  clearTimeout(editorReadyTimeoutRef.current);
                 setEditorReady(true);
                 setEditorError(false);
               }}

@@ -1175,7 +1175,7 @@ export default function TemplateReviewClient() {
   const { isLoaded, isSignedIn } = useAuth();
 
   const template = useQuery(
-    api.templates.getById,
+    api.templates.getEditableById,
     isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
   const updateTemplate = useMutation(api.templates.update);

@@ -1,9 +1,9 @@
 // app\(main)\templates\templates-client.tsx
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useOrganization } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -32,6 +32,10 @@ import {
   AlignLeftIcon,
   PackageIcon,
   ScanIcon,
+  EyeIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  UsersIcon,
 } from "lucide-react";
 import { differenceInHours, format, formatDistanceToNow } from "date-fns";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -61,6 +65,7 @@ import {
 } from "@/components/ui/dialog";
 import { useEditorExitGuard } from "@/hooks/useEditorExitGuard";
 import { SyncCooldownButton } from "@/components/SyncCooldownButton";
+import { createPortal } from "react-dom";
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -80,6 +85,24 @@ function extractFolder(tags: string[] | undefined): string | null {
 }
 function extractLabels(tags: string[] | undefined): string[] {
   return tags?.slice(1) ?? [];
+}
+
+type TemplateWithAccess = Doc<"templates"> & {
+  isOwner?: boolean;
+  accessLevel?: "owner" | "org";
+};
+
+type ScopeFilter = "all" | "mine" | "org";
+
+function isOwnedTemplate(template: TemplateWithAccess, userId?: string | null) {
+  return template.isOwner === true || (!!userId && template.ownerId === userId);
+}
+
+function isOrgTemplate(
+  template: TemplateWithAccess,
+  organizationId?: string | null
+) {
+  return !!organizationId && template.organizationId === organizationId;
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -135,6 +158,199 @@ async function handleExport(template: Doc<"templates">, fmt: "docx" | "pdf") {
       toast.error("PDF export failed. Check OnlyOffice setup.");
     }
   }
+}
+
+function TemplatePreviewModal({
+  template,
+  onClose,
+}: {
+  template: TemplateWithAccess;
+  onClose: () => void;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setState("loading");
+    setPdfBlobUrl(null);
+    let cancelled = false;
+
+    async function convertToPdf() {
+      try {
+        const res = await fetch("/api/onlyoffice-convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileUrl: template.fileUrl,
+            fileName: template.name,
+          }),
+        });
+        if (!res.ok) throw new Error(`Convert failed: ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        setPdfBlobUrl(url);
+        setState("ready");
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    }
+
+    convertToPdf();
+
+    return () => {
+      cancelled = true;
+      setPdfBlobUrl((prev) => {
+        if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1_000);
+        return null;
+      });
+    };
+  }, [template.fileUrl, template.name]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleOpenInTab = () => {
+    if (pdfBlobUrl) window.open(pdfBlobUrl, "_blank");
+  };
+
+  return createPortal(
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+      style={{
+        background: "var(--overlay-backdrop)",
+        backdropFilter: "blur(8px)",
+      }}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
+    >
+      <div
+        className="flex flex-col w-full max-w-5xl rounded-2xl overflow-hidden"
+        style={{
+          background: "var(--bg-card)",
+          border: `1px solid var(--border-subtle)`,
+          boxShadow: "var(--shadow-elevated)",
+          maxHeight: "95vh",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center gap-3 px-4 py-3 shrink-0"
+          style={{ borderBottom: `1px solid var(--border-subtle)` }}
+        >
+          <EyeIcon
+            className="w-4 h-4 shrink-0"
+            style={{ color: "var(--accent-light)" }}
+          />
+          <p
+            className="flex-1 text-sm font-medium truncate"
+            style={{ color: "var(--text)" }}
+            title={`${template.name}.docx`}
+          >
+            {template.name}.docx
+          </p>
+
+          {pdfBlobUrl && (
+            <button
+              onClick={handleOpenInTab}
+              aria-label="Open PDF in new tab"
+              className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all"
+              style={{
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: `1px solid var(--border-subtle)`,
+              }}
+            >
+              <ExternalLinkIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Open PDF</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => handleExport(template, "docx")}
+            aria-label="Download template"
+            className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              background: "var(--success-bg)",
+              color: "var(--success)",
+              border: `1px solid color-mix(in srgb, var(--success) 20%, transparent)`,
+            }}
+          >
+            <DownloadIcon className="w-3 h-3" />
+            <span className="hidden sm:inline">Download</span>
+          </button>
+
+          <button
+            onClick={onClose}
+            aria-label="Close preview"
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 relative" style={{ minHeight: "60vh" }}>
+          {state === "loading" && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10"
+              style={{ background: "var(--bg-card)" }}
+            >
+              <div
+                className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: "var(--accent-light)" }}
+              />
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                Converting document...
+              </p>
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center z-10">
+              <FileTextIcon
+                className="w-8 h-8"
+                style={{ color: "var(--text-muted)" }}
+              />
+              <div>
+                <p
+                  className="text-sm font-semibold mb-1"
+                  style={{ color: "var(--text)" }}
+                >
+                  Preview not available
+                </p>
+                <p
+                  className="text-xs max-w-xs leading-relaxed"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  Conversion failed. Download the file to view it locally.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {pdfBlobUrl && (
+            <iframe
+              key={pdfBlobUrl}
+              src={pdfBlobUrl}
+              title={`Preview: ${template.name}`}
+              className="w-full h-full border-0"
+              style={{ minHeight: "60vh" }}
+            />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -647,16 +863,24 @@ function FolderAndLabelEditor({
 
 function TemplateMenu({
   template,
+  isOwner,
   onDelete,
   onRename,
   onEditFolderLabels,
   onEditFields,
+  onPreview,
+  onDuplicate,
+  duplicating,
 }: {
-  template: Doc<"templates">;
+  template: TemplateWithAccess;
+  isOwner: boolean;
   onDelete: () => void;
   onRename: () => void;
   onEditFolderLabels: () => void;
   onEditFields: () => void;
+  onPreview: () => void;
+  onDuplicate: () => void;
+  duplicating?: boolean;
 }) {
   const router = useRouter();
   return (
@@ -694,42 +918,67 @@ function TemplateMenu({
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            onRename();
+            onPreview();
           }}
         >
-          <PencilIcon className="w-3.5 h-3.5 mr-2" /> Rename
+          <EyeIcon className="w-3.5 h-3.5 mr-2" /> Preview document
         </DropdownMenuItem>
+        {isOwner && (
+          <>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onRename();
+              }}
+            >
+              <PencilIcon className="w-3.5 h-3.5 mr-2" /> Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditFields();
+              }}
+            >
+              <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Open in
+              Editor
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/templates/${template._id}/review`);
+              }}
+            >
+              <ScanIcon className="w-3.5 h-3.5 mr-2" /> Review fields
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditFolderLabels();
+              }}
+            >
+              <FolderIcon className="w-3.5 h-3.5 mr-2" /> Edit folder &amp;
+              labels
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            onEditFields();
+            if (isOwner) router.push(`/templates/${template._id}/connect`);
+            else onDuplicate();
           }}
+          disabled={!isOwner && duplicating}
         >
-          <LayoutTemplateIcon className="w-3.5 h-3.5 mr-2" /> Open in Editor
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.stopPropagation();
-            router.push(`/templates/${template._id}/review`);
-          }}
-        >
-          <ScanIcon className="w-3.5 h-3.5 mr-2" /> Review fields
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.stopPropagation();
-            onEditFolderLabels();
-          }}
-        >
-          <FolderIcon className="w-3.5 h-3.5 mr-2" /> Edit folder &amp; labels
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.stopPropagation();
-            router.push(`/templates/${template._id}/connect`);
-          }}
-        >
-          <LinkIcon className="w-3.5 h-3.5 mr-2" /> Connect form
+          {isOwner ? (
+            <>
+              <LinkIcon className="w-3.5 h-3.5 mr-2" /> Connect form
+            </>
+          ) : (
+            <>
+              <CopyIcon className="w-3.5 h-3.5 mr-2" />
+              {duplicating ? "Copying..." : "Copy to my templates"}
+            </>
+          )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -748,16 +997,21 @@ function TemplateMenu({
         >
           <FileTextIcon className="w-3.5 h-3.5 mr-2" /> Export as PDF
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2Icon className="w-3.5 h-3.5 mr-2 text-destructive" /> Delete
-        </DropdownMenuItem>
+        {isOwner && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2Icon className="w-3.5 h-3.5 mr-2 text-destructive" />{" "}
+              Delete
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -771,10 +1025,12 @@ function FolderLabelBadges({
   tags,
   onEditClick,
   compact = false,
+  canEdit = true,
 }: {
   tags: string[];
   onEditClick: () => void;
   compact?: boolean;
+  canEdit?: boolean;
 }) {
   const folder = extractFolder(tags);
   const labels = extractLabels(tags);
@@ -825,7 +1081,7 @@ function FolderLabelBadges({
           +{overflow}
         </span>
       )}
-      {tags.length === 0 && (
+      {tags.length === 0 && canEdit && (
         <button
           onClick={onEditClick}
           className="text-[10px] px-1.5 py-px rounded-md font-medium transition-colors"
@@ -848,6 +1104,54 @@ function FolderLabelBadges({
   );
 }
 
+function TemplateAccessBadges({
+  template,
+  isOwner,
+  orgName,
+}: {
+  template: TemplateWithAccess;
+  isOwner: boolean;
+  orgName: string;
+}) {
+  const sharedInOrg = !!template.organizationId;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[10px] font-medium"
+        style={{
+          background: isOwner ? "var(--accent-bg)" : "var(--bg-muted)",
+          color: isOwner ? "var(--accent-light)" : "var(--text-muted)",
+          border: `1px solid ${isOwner ? "var(--accent-border)" : "var(--border-subtle)"}`,
+        }}
+      >
+        {isOwner ? "Mine" : "Org template"}
+      </span>
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-px rounded-md text-[10px] font-medium"
+        style={{
+          background: sharedInOrg ? "var(--success-bg)" : "var(--bg-muted)",
+          color: sharedInOrg ? "var(--success)" : "var(--text-dim)",
+          border: `1px solid ${
+            sharedInOrg
+              ? "color-mix(in srgb, var(--success) 25%, transparent)"
+              : "var(--border-subtle)"
+          }`,
+        }}
+      >
+        {sharedInOrg ? (
+          <>
+            <UsersIcon className="w-2.5 h-2.5" />
+            <span className="max-w-[110px] truncate">{orgName}</span>
+          </>
+        ) : (
+          "Personal"
+        )}
+      </span>
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────────
 // Grid card
 // ────────────────────────────────────────────────────────────────────────────────
@@ -855,30 +1159,44 @@ function FolderLabelBadges({
 function TemplateGridCard({
   template,
   onDelete,
+  onPreview,
+  onDuplicate,
   selected,
   selectMode,
   onSelect,
   allExistingFolders,
   canEnterEditor,
   getCooldownMs,
+  currentUserId,
+  orgName,
 }: {
-  template: Doc<"templates">;
+  template: TemplateWithAccess;
   onDelete: () => void;
+  onPreview: () => void;
+  onDuplicate: (template: TemplateWithAccess) => Promise<void>;
   selected: boolean;
   selectMode: boolean;
   onSelect: (shift: boolean) => void;
   allExistingFolders: string[];
   canEnterEditor: () => boolean;
   getCooldownMs: () => number;
+  currentUserId?: string | null;
+  orgName: string;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [editingFolderLabels, setEditingFolderLabels] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const tags = template.tags ?? [];
+  const isOwner = isOwnedTemplate(template, currentUserId);
 
   const handleEditFields = () => {
+    if (!isOwner) {
+      onPreview();
+      return;
+    }
     const remaining = getCooldownMs();
     if (remaining > 0) {
       toast.info(
@@ -887,6 +1205,16 @@ function TemplateGridCard({
       return;
     }
     router.push(`/templates/${template._id}/edit`);
+  };
+
+  const handleDuplicate = async () => {
+    if (duplicating) return;
+    setDuplicating(true);
+    try {
+      await onDuplicate(template);
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -982,23 +1310,33 @@ function TemplateGridCard({
             <div onClick={(e) => e.stopPropagation()}>
               <TemplateMenu
                 template={template}
+                isOwner={isOwner}
                 onDelete={onDelete}
                 onRename={() => setRenameOpen(true)}
                 onEditFolderLabels={() => setEditingFolderLabels(true)}
                 onEditFields={handleEditFields}
+                onPreview={onPreview}
+                onDuplicate={handleDuplicate}
+                duplicating={duplicating}
               />
             </div>
           </div>
 
           {/* Description — click to edit */}
+          <TemplateAccessBadges
+            template={template}
+            isOwner={isOwner}
+            orgName={orgName}
+          />
+
           <div
             className="flex-1 min-h-[28px]"
             onClick={(e) => {
               e.stopPropagation();
-              if (!selectMode) setEditingDesc(true);
+              if (isOwner && !selectMode) setEditingDesc(true);
             }}
           >
-            {editingDesc ? (
+            {editingDesc && isOwner ? (
               <InlineDescriptionEdit
                 id={template._id}
                 currentDescription={template.description ?? ""}
@@ -1015,9 +1353,10 @@ function TemplateGridCard({
                     fontStyle: template.description ? "normal" : "italic",
                   }}
                 >
-                  {template.description || "Click to add description"}
+                  {template.description ||
+                    (isOwner ? "Click to add description" : "No description")}
                 </p>
-                {template.description && !selectMode && (
+                {isOwner && template.description && !selectMode && (
                   <AlignLeftIcon
                     className="w-3 h-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity"
                     style={{ color: "var(--text-dim)" }}
@@ -1028,7 +1367,7 @@ function TemplateGridCard({
           </div>
 
           {/* Folder + Label editor or display */}
-          {editingFolderLabels ? (
+          {editingFolderLabels && isOwner ? (
             <FolderAndLabelEditor
               id={template._id}
               currentTags={tags}
@@ -1039,6 +1378,7 @@ function TemplateGridCard({
             <FolderLabelBadges
               tags={tags}
               compact
+              canEdit={isOwner}
               onEditClick={() => setEditingFolderLabels(true)}
             />
           )}
@@ -1046,15 +1386,17 @@ function TemplateGridCard({
           {/* Action buttons */}
           {!selectMode && (
             <div className="flex gap-2 pt-0.5">
-              <div className="flex-1" onClick={(e) => e.stopPropagation()}>
-                <SyncCooldownButton
-                  onClick={handleEditFields}
-                  remainingMs={getCooldownMs()}
-                  isOnCooldown={!canEnterEditor()}
-                  label="Editor"
-                  icon="edit"
-                />
-              </div>
+              {isOwner && (
+                <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                  <SyncCooldownButton
+                    onClick={handleEditFields}
+                    remainingMs={getCooldownMs()}
+                    isOnCooldown={!canEnterEditor()}
+                    label="Editor"
+                    icon="edit"
+                  />
+                </div>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1075,26 +1417,63 @@ function TemplateGridCard({
               >
                 <PlayIcon className="w-3 h-3" /> Use
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/templates/${template._id}/review`);
-                }}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium transition-all"
-                style={{
-                  background: "rgba(99,102,241,0.07)",
-                  color: "var(--accent-light)",
-                  border: "1px solid rgba(99,102,241,0.18)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "rgba(99,102,241,0.14)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "rgba(99,102,241,0.07)")
-                }
-              >
-                <ScanIcon className="w-3 h-3" /> Review
-              </button>
+              {isOwner ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/templates/${template._id}/review`);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium transition-all"
+                  style={{
+                    background: "rgba(99,102,241,0.07)",
+                    color: "var(--accent-light)",
+                    border: "1px solid rgba(99,102,241,0.18)",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(99,102,241,0.14)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      "rgba(99,102,241,0.07)")
+                  }
+                >
+                  <ScanIcon className="w-3 h-3" /> Review
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreview();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium transition-all"
+                    style={{
+                      background: "var(--bg-input)",
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <EyeIcon className="w-3 h-3" /> Preview
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicate();
+                    }}
+                    disabled={duplicating}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium transition-all disabled:opacity-60"
+                    style={{
+                      background: "rgba(52,211,153,0.08)",
+                      color: "var(--success)",
+                      border: "1px solid rgba(52,211,153,0.2)",
+                    }}
+                  >
+                    <CopyIcon className="w-3 h-3" />
+                    {duplicating ? "Copying" : "Copy"}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1118,29 +1497,41 @@ function TemplateGridCard({
 function TemplateListRow({
   template,
   onDelete,
+  onPreview,
+  onDuplicate,
   selected,
   selectMode,
   onSelect,
   allExistingFolders,
-  canEnterEditor,
   getCooldownMs,
+  currentUserId,
+  orgName,
 }: {
-  template: Doc<"templates">;
+  template: TemplateWithAccess;
   onDelete: () => void;
+  onPreview: () => void;
+  onDuplicate: (template: TemplateWithAccess) => Promise<void>;
   selected: boolean;
   selectMode: boolean;
   onSelect: (shift: boolean) => void;
   allExistingFolders: string[];
-  canEnterEditor: () => boolean;
   getCooldownMs: () => number;
+  currentUserId?: string | null;
+  orgName: string;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [editingFolderLabels, setEditingFolderLabels] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const tags = template.tags ?? [];
+  const isOwner = isOwnedTemplate(template, currentUserId);
 
   const handleEditFields = () => {
+    if (!isOwner) {
+      onPreview();
+      return;
+    }
     const remaining = getCooldownMs();
     if (remaining > 0) {
       toast.info(
@@ -1149,6 +1540,16 @@ function TemplateListRow({
       return;
     }
     router.push(`/templates/${template._id}/edit`);
+  };
+
+  const handleDuplicate = async () => {
+    if (duplicating) return;
+    setDuplicating(true);
+    try {
+      await onDuplicate(template);
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -1229,8 +1630,14 @@ function TemplateListRow({
             </span>
           </div>
 
+          <TemplateAccessBadges
+            template={template}
+            isOwner={isOwner}
+            orgName={orgName}
+          />
+
           {/* Folder / Labels */}
-          {editingFolderLabels ? (
+          {editingFolderLabels && isOwner ? (
             <div onClick={(e) => e.stopPropagation()}>
               <FolderAndLabelEditor
                 id={template._id}
@@ -1244,9 +1651,10 @@ function TemplateListRow({
               <FolderLabelBadges
                 tags={tags}
                 compact
+                canEdit={isOwner}
                 onEditClick={() => setEditingFolderLabels(true)}
               />
-              {tags.length > 0 && (
+              {isOwner && tags.length > 0 && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1305,6 +1713,7 @@ function TemplateListRow({
               </button>
 
               {/* Review ← BARU */}
+              {isOwner ? (
               <button
                 onClick={() => router.push(`/templates/${template._id}/review`)}
                 className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
@@ -1322,14 +1731,46 @@ function TemplateListRow({
               >
                 <ScanIcon className="w-3 h-3" /> Review
               </button>
+              ) : (
+                <>
+                  <button
+                    onClick={onPreview}
+                    className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                    style={{
+                      background: "var(--bg-input)",
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <EyeIcon className="w-3 h-3" /> Preview
+                  </button>
+                  <button
+                    onClick={handleDuplicate}
+                    disabled={duplicating}
+                    className="hidden sm:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                    style={{
+                      background: "rgba(52,211,153,0.08)",
+                      color: "var(--success)",
+                      border: "1px solid rgba(52,211,153,0.2)",
+                    }}
+                  >
+                    <CopyIcon className="w-3 h-3" />
+                    {duplicating ? "Copying" : "Copy"}
+                  </button>
+                </>
+              )}
             </>
           )}
           <TemplateMenu
             template={template}
+            isOwner={isOwner}
             onDelete={onDelete}
             onRename={() => setRenameOpen(true)}
             onEditFolderLabels={() => setEditingFolderLabels(true)}
             onEditFields={handleEditFields}
+            onPreview={onPreview}
+            onDuplicate={handleDuplicate}
+            duplicating={duplicating}
           />
         </div>
       </div>
@@ -1357,6 +1798,7 @@ function BulkBar({
   onMoveToFolder,
   onExportZip,
   allFolders,
+  canManage,
 }: {
   count: number;
   total: number;
@@ -1366,6 +1808,7 @@ function BulkBar({
   onMoveToFolder: (folder: string) => void;
   onExportZip: (fmt: "docx" | "pdf") => void;
   allFolders: string[];
+  canManage: boolean;
 }) {
   return (
     <div
@@ -1402,7 +1845,7 @@ function BulkBar({
       />
 
       {/* Move to folder */}
-      {allFolders.length > 0 && (
+      {canManage && allFolders.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -1461,24 +1904,26 @@ function BulkBar({
       </DropdownMenu>
 
       {/* Delete */}
-      <button
-        onClick={onDelete}
-        className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
-        style={{
-          background: "rgba(248,113,113,0.08)",
-          color: "var(--danger)",
-          border: "1px solid rgba(248,113,113,0.2)",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
-        }
-      >
-        <Trash2Icon className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Delete</span>
-      </button>
+      {canManage && (
+        <button
+          onClick={onDelete}
+          className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition-all"
+          style={{
+            background: "rgba(248,113,113,0.08)",
+            color: "var(--danger)",
+            border: "1px solid rgba(248,113,113,0.2)",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "rgba(248,113,113,0.14)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "rgba(248,113,113,0.08)")
+          }
+        >
+          <Trash2Icon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Delete</span>
+        </button>
+      )}
 
       <button
         onClick={onClear}
@@ -1961,24 +2406,29 @@ const SORT_LABELS: Record<SortKey, string> = {
 export default function TemplatesPage() {
   const router = useRouter();
   const [pageReady, setPageReady] = useState(false);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { organization } = useOrganization();
   const templates = useQuery(
     api.templates.getAll,
     isLoaded && isSignedIn ? {} : "skip"
   );
   const removeTemplate = useMutation(api.templates.remove);
   const updateTemplate = useMutation(api.templates.update);
+  const duplicateTemplate = useAction(api.templates.duplicate);
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [view, setView] = useState<ViewMode>("grid");
+  const [scope, setScope] = useState<ScopeFilter>("all");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [folderPanelOpen, setFolderPanelOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Doc<"templates"> | null>(
-    null
-  );
+  const [deleteTarget, setDeleteTarget] =
+    useState<TemplateWithAccess | null>(null);
+  const [previewTarget, setPreviewTarget] =
+    useState<TemplateWithAccess | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [globalDuplicating, setGlobalDuplicating] = useState(false);
   const [page, setPage] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -1988,12 +2438,28 @@ export default function TemplatesPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastSelectedIdx = useRef<number>(-1);
+  const orgName = organization?.name ?? "Organization";
+  const orgId = organization?.id ?? null;
+  const templateList = (templates ?? []) as TemplateWithAccess[];
+  const mineCount = templateList.filter((t: TemplateWithAccess) =>
+    isOwnedTemplate(t, userId)
+  ).length;
+  const orgCount = orgId
+    ? templateList.filter((t: TemplateWithAccess) => isOrgTemplate(t, orgId))
+        .length
+    : 0;
+  const sharedCount = orgId
+    ? templateList.filter(
+        (t: TemplateWithAccess) =>
+          !isOwnedTemplate(t, userId) && isOrgTemplate(t, orgId)
+      ).length
+    : 0;
 
   /** All unique folder values (first tags) */
   const allFolders = useMemo(() => {
     if (!templates) return [];
     const set = new Set<string>();
-    templates.forEach((t) => {
+    templates.forEach((t: TemplateWithAccess) => {
       const f = extractFolder(t.tags);
       if (f) set.add(f);
     });
@@ -2004,13 +2470,15 @@ export default function TemplatesPage() {
   const allLabels = useMemo(() => {
     if (!templates) return [];
     const set = new Set<string>();
-    templates.forEach((t) => extractLabels(t.tags).forEach((l) => set.add(l)));
+    templates.forEach((t: TemplateWithAccess) =>
+      extractLabels(t.tags).forEach((l: string) => set.add(l))
+    );
     return [...set].sort();
   }, [templates]);
 
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    (templates ?? []).forEach((t) => {
+    (templates ?? []).forEach((t: TemplateWithAccess) => {
       const f = extractFolder(t.tags);
       if (f) counts[f] = (counts[f] ?? 0) + 1;
     });
@@ -2019,14 +2487,19 @@ export default function TemplatesPage() {
 
   const filteredTemplates = useMemo(() => {
     if (!templates) return [];
-    let result = [...templates] as Doc<"templates">[];
+    let result = [...templates] as TemplateWithAccess[];
+    if (scope === "mine") {
+      result = result.filter((t) => isOwnedTemplate(t, userId));
+    } else if (scope === "org" && orgId) {
+      result = result.filter((t) => isOrgTemplate(t, orgId));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
         (t) =>
           t.name.toLowerCase().includes(q) ||
           t.description?.toLowerCase().includes(q) ||
-          t.tags?.some((tag) => tag.includes(q))
+          t.tags?.some((tag) => tag.toLowerCase().includes(q))
       );
     }
     if (activeFolder) {
@@ -2051,7 +2524,7 @@ export default function TemplatesPage() {
       }
     });
     return result;
-  }, [templates, search, activeTag, activeFolder, sort]);
+  }, [templates, scope, userId, orgId, search, activeTag, activeFolder, sort]);
 
   const totalPages = Math.max(
     1,
@@ -2069,13 +2542,21 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, activeTag, activeFolder, sort]);
+  }, [search, activeTag, activeFolder, sort, scope]);
   useEffect(() => {
     setSelected(new Set());
-  }, [page, search, activeTag, activeFolder, sort]);
+  }, [page, search, activeTag, activeFolder, sort, scope]);
   useEffect(() => {
     if (selected.size === 0 && selectMode) setSelectMode(false);
   }, [selected.size]);
+
+  const selectedTemplates = useMemo(
+    () => filteredTemplates.filter((t) => selected.has(t._id)),
+    [filteredTemplates, selected]
+  );
+  const canManageSelected =
+    selectedTemplates.length > 0 &&
+    selectedTemplates.every((t) => isOwnedTemplate(t, userId));
 
   const handleSelect = useCallback(
     (id: string, shift: boolean) => {
@@ -2103,6 +2584,11 @@ export default function TemplatesPage() {
   }, [filteredTemplates]);
 
   const handleBulkDelete = async () => {
+    if (!canManageSelected) {
+      toast.error("Only template owners can delete selected templates.");
+      setBulkDeleteOpen(false);
+      return;
+    }
     const ids = Array.from(selected);
     const results = await Promise.allSettled(
       ids.map((id) => removeTemplate({ id: id as Doc<"templates">["_id"] }))
@@ -2117,10 +2603,16 @@ export default function TemplatesPage() {
   };
 
   const handleMoveToFolder = async (folder: string) => {
+    if (!canManageSelected) {
+      toast.error("Only template owners can move selected templates.");
+      return;
+    }
     const ids = Array.from(selected);
     const results = await Promise.allSettled(
       ids.map(async (id) => {
-        const tmpl = templates?.find((t) => t._id === id);
+        const tmpl = (templates as TemplateWithAccess[] | undefined)?.find(
+          (t: TemplateWithAccess) => t._id === id
+        );
         if (!tmpl) return;
         const rest = (tmpl.tags ?? []).slice(1);
         await updateTemplate({
@@ -2229,6 +2721,26 @@ export default function TemplatesPage() {
     }
   };
 
+const handleDuplicateTemplate = useCallback(
+  async (template: TemplateWithAccess) => {
+    const toastId = toast.loading("Copying template...");
+    try {
+      await duplicateTemplate({ id: template._id });
+      // Tunggu Convex + OO server selesai sync
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      toast.dismiss(toastId);
+      toast.success("Template copied — ready to use!");
+      // Tetap di /templates, user buka sendiri
+    } catch (err: unknown) {
+      toast.dismiss(toastId);
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't copy template."
+      );
+    }
+  },
+  [duplicateTemplate]
+  );
+  
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -2247,7 +2759,7 @@ export default function TemplatesPage() {
   };
 
   const isLoading = !pageReady || templates === undefined;
-  const hasFilters = !!(search || activeTag || activeFolder);
+  const hasFilters = !!(search || activeTag || activeFolder || scope !== "all");
   const someSelected = selected.size > 0;
   const allPageSelected =
     displayTemplates.length > 0 &&
@@ -2278,6 +2790,24 @@ export default function TemplatesPage() {
                 {templates?.length ?? 0} template
                 {(templates?.length ?? 0) !== 1 ? "s" : ""}
               </span>
+              <span style={{ color: "var(--text-dim)" }}>·</span>
+              <span>{mineCount} mine</span>
+              {sharedCount > 0 && (
+                <>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span>
+                    {sharedCount} shared from {orgName}
+                  </span>
+                </>
+              )}
+              {orgId && orgCount > 0 && (
+                <>
+                  <span style={{ color: "var(--text-dim)" }}>·</span>
+                  <span>
+                    {orgCount} in {orgName}
+                  </span>
+                </>
+              )}
               {allFolders.length > 0 && (
                 <>
                   <span style={{ color: "var(--text-dim)" }}>·</span>
@@ -2437,6 +2967,44 @@ export default function TemplatesPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0"
+            style={{
+              background: "var(--bg-muted)",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
+            {(
+              [
+                { value: "all", label: "All" },
+                { value: "mine", label: "Mine" },
+                ...(orgId
+                  ? [{ value: "org" as ScopeFilter, label: orgName }]
+                  : []),
+              ] as { value: ScopeFilter; label: string }[]
+            ).map((item) => (
+              <button
+                key={item.value}
+                onClick={() => setScope(item.value)}
+                className="h-7 px-2.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap"
+                style={{
+                  background:
+                    scope === item.value
+                      ? "rgba(99,102,241,0.18)"
+                      : "transparent",
+                  color:
+                    scope === item.value
+                      ? "var(--accent-light)"
+                      : "var(--text-muted)",
+                }}
+              >
+                <span className="max-w-[120px] truncate inline-block align-bottom">
+                  {item.label}
+                </span>
+              </button>
+            ))}
+          </div>
+
           {/* Folder toggle */}
           <button
             onClick={() => setFolderPanelOpen((v) => !v)}
@@ -2583,6 +3151,20 @@ export default function TemplatesPage() {
               </button>
             </span>
           )}
+          {scope !== "all" && (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-muted)",
+              }}
+            >
+              {scope === "mine" ? "Mine" : orgName}
+              <button onClick={() => setScope("all")}>
+                <XIcon className="w-3 h-3" />
+              </button>
+            </span>
+          )}
           {activeFolder && (
             <span
               className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg"
@@ -2614,6 +3196,7 @@ export default function TemplatesPage() {
           <button
             onClick={() => {
               setSearch("");
+              setScope("all");
               setActiveTag(null);
               setActiveFolder(null);
             }}
@@ -2626,7 +3209,29 @@ export default function TemplatesPage() {
       )}
 
       {/* Content + folder panel */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+          {/* Global duplicate blocking overlay */}
+  {globalDuplicating && (
+    <div
+      className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3"
+      style={{
+        background: "rgba(0,0,0,0.35)",
+        backdropFilter: "blur(2px)",
+        pointerEvents: "all",
+      }}
+    >
+      <div
+        className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+        style={{ borderColor: "var(--accent-light)" }}
+      />
+      <p className="text-[13px] font-medium" style={{ color: "var(--text)" }}>
+        Copying template…
+      </p>
+      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+        Please wait, syncing file to server
+      </p>
+    </div>
+  )}
         <div ref={contentRef} className="flex-1 overflow-y-auto flex flex-col">
           <div className="flex-1">
             {isLoading ? (
@@ -2661,7 +3266,7 @@ export default function TemplatesPage() {
                   className="text-[14px] font-semibold mb-1.5"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  {search || activeTag || activeFolder
+                  {search || activeTag || activeFolder || scope !== "all"
                     ? "No templates found"
                     : "No templates yet"}
                 </p>
@@ -2671,13 +3276,17 @@ export default function TemplatesPage() {
                 >
                   {search
                     ? `No results for "${search}".`
+                    : scope === "mine"
+                      ? "You do not have any templates in this view."
+                      : scope === "org"
+                        ? `No templates shared in ${orgName} yet.`
                     : activeTag
                       ? `No templates with label "${activeTag}".`
                       : activeFolder
                         ? `No templates in folder "${activeFolder}".`
                         : "Upload a .docx with {{placeholders}} to create a reusable template."}
                 </p>
-                {!search && !activeTag && !activeFolder && (
+                {!search && !activeTag && !activeFolder && scope === "all" && (
                   <button
                     onClick={() => router.push("/templates/new")}
                     className="flex items-center gap-1.5 text-[13px] font-medium px-4 py-2.5 rounded-xl"
@@ -2698,12 +3307,16 @@ export default function TemplatesPage() {
                     key={t._id}
                     template={t}
                     onDelete={() => setDeleteTarget(t)}
+                    onPreview={() => setPreviewTarget(t)}
+                    onDuplicate={handleDuplicateTemplate}
                     selected={selected.has(t._id)}
                     selectMode={selectMode}
                     onSelect={(shift) => handleSelect(t._id, shift)}
                     allExistingFolders={allFolders}
                     canEnterEditor={canEnter}
                     getCooldownMs={getRemainingMs}
+                    currentUserId={userId}
+                    orgName={orgName}
                   />
                 ))}
               </div>
@@ -2714,12 +3327,15 @@ export default function TemplatesPage() {
                     key={t._id}
                     template={t}
                     onDelete={() => setDeleteTarget(t)}
+                    onPreview={() => setPreviewTarget(t)}
+                    onDuplicate={handleDuplicateTemplate}
                     selected={selected.has(t._id)}
                     selectMode={selectMode}
                     onSelect={(shift) => handleSelect(t._id, shift)}
                     allExistingFolders={allFolders}
-                    canEnterEditor={canEnter}
                     getCooldownMs={getRemainingMs}
+                    currentUserId={userId}
+                    orgName={orgName}
                   />
                 ))}
               </div>
@@ -2764,6 +3380,14 @@ export default function TemplatesPage() {
           onMoveToFolder={handleMoveToFolder}
           onExportZip={handleBulkExportZip}
           allFolders={allFolders}
+          canManage={canManageSelected}
+        />
+      )}
+
+      {previewTarget && (
+        <TemplatePreviewModal
+          template={previewTarget}
+          onClose={() => setPreviewTarget(null)}
         />
       )}
 

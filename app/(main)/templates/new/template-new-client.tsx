@@ -720,7 +720,9 @@ export default function TemplateNewPage() {
   const existingLabels = useMemo(() => {
     if (!allTemplates) return [];
     const lbls = new Set<string>();
-    allTemplates.forEach((t) => (t.tags || []).forEach((l) => lbls.add(l)));
+    allTemplates.forEach((t: { tags?: string[] }) =>
+      (t.tags || []).forEach((l: string) => lbls.add(l))
+    );
     return Array.from(lbls).sort();
   }, [allTemplates]);
 

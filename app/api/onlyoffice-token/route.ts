@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { auth } from "@clerk/nextjs/server";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -26,7 +29,7 @@ function getClientIp(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
+  const { userId, getToken } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -72,6 +75,33 @@ export async function POST(req: NextRequest) {
         { error: "Server configuration error" },
         { status: 500 }
       );
+    }
+
+    if (templateId) {
+      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+      const clerkToken = await getToken({ template: "convex" });
+      if (clerkToken) convex.setAuth(clerkToken);
+
+      const template = await convex.query(api.templates.getEditableById, {
+        id: templateId as Id<"templates">,
+      });
+
+      if (!template) {
+        return NextResponse.json(
+          { error: "Only the template owner can open the editor" },
+          { status: 403 }
+        );
+      }
+
+      if (
+        template.fileUrl !== fileUrl ||
+        (storageId && template.storageId !== storageId)
+      ) {
+        return NextResponse.json(
+          { error: "Template file mismatch" },
+          { status: 403 }
+        );
+      }
     }
 
     // Build callback URL dengan documentId/templateId
