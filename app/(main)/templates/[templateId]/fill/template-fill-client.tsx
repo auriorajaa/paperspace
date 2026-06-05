@@ -529,13 +529,7 @@ function LoopSection({
                   className="flex-1 text-[12px]"
                   style={{ color: "var(--text-dim)" }}
                 >
-                  No sub-fields.{" "}
-                  <Link
-                    href={`/templates/${field.id}/edit`}
-                    style={{ color: "var(--accent-light)" }}
-                  >
-                    Re-scan in editor.
-                  </Link>
+                  No sub-fields detected for this table.
                 </p>
               )}
 
@@ -923,12 +917,14 @@ function SingleForm({
   templateName,
   fileUrl,
   previewText,
+  canEditTemplate,
 }: {
   fields: TemplateField[];
   templateId: Id<"templates">;
   templateName: string;
   fileUrl: string;
   previewText?: string;
+  canEditTemplate: boolean;
 }) {
   const saveGenerated = useMutation(api.templates.saveGeneratedDocument);
   const generateUploadUrl = useMutation(api.templates.generateUploadUrl);
@@ -1151,31 +1147,39 @@ function SingleForm({
             className="text-[12px] leading-relaxed"
             style={{ color: "var(--text-dim)" }}
           >
-            Open the template editor, add{" "}
-            <code
-              className="font-mono text-[11px] px-1 rounded"
-              style={{
-                background: "var(--accent-soft)",
-                color: "var(--accent-light)",
-              }}
-            >
-              {"{{placeholders}}"}
-            </code>{" "}
-            to your document, then click Save to scan.
+            {canEditTemplate ? (
+              <>
+                Open the template editor, add{" "}
+                <code
+                  className="font-mono text-[11px] px-1 rounded"
+                  style={{
+                    background: "var(--accent-soft)",
+                    color: "var(--accent-light)",
+                  }}
+                >
+                  {"{{placeholders}}"}
+                </code>{" "}
+                to your document, then click Save to scan.
+              </>
+            ) : (
+              "This shared template has no fillable fields. Copy it to your templates if you need to edit the placeholders."
+            )}
           </p>
         </div>
-        <Link
-          href={`/templates/${templateId}/edit`}
-          className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2.5 rounded-xl"
-          style={{
-            background: "var(--accent-bg)",
-            color: "var(--accent-pale)",
-            border: `1px solid var(--accent-border)`,
-          }}
-        >
-          <PencilIcon className="w-3.5 h-3.5" />
-          Open editor
-        </Link>
+        {canEditTemplate && (
+          <Link
+            href={`/templates/${templateId}/edit`}
+            className="flex items-center gap-1.5 text-[12px] font-medium px-4 py-2.5 rounded-xl"
+            style={{
+              background: "var(--accent-bg)",
+              color: "var(--accent-pale)",
+              border: `1px solid var(--accent-border)`,
+            }}
+          >
+            <PencilIcon className="w-3.5 h-3.5" />
+            Open editor
+          </Link>
+        )}
       </div>
     );
   }
@@ -2499,7 +2503,7 @@ export default function TemplateFillPage() {
   const params = useParams();
   const router = useRouter();
   const templateId = params.templateId as Id<"templates">;
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
 
   const template = useQuery(
     api.templates.getById,
@@ -2517,7 +2521,7 @@ export default function TemplateFillPage() {
       };
     }
     const fields = template.fields as TemplateField[];
-    const previewText = (template as any).previewText as string | undefined;
+    const previewText = (template as { previewText?: string }).previewText;
     return buildFieldHierarchy(fields, previewText ?? "");
   }, [template]);
 
@@ -2603,12 +2607,16 @@ export default function TemplateFillPage() {
   }
 
   // ── Template loaded – proceed normally ────────────────────────────
+  const templateWithAccess = template as typeof template & {
+    previewText?: string;
+    tags?: string[];
+    isOwner?: boolean;
+  };
   const fields = template.fields as TemplateField[];
-  const previewText = (template as any).previewText as string | undefined;
-  const tmplTags = (template as any).tags as string[] | undefined;
-
-  const totalSections =
-    trueSimpleFields.length + loopFields.length + conditionGroups.length;
+  const previewText = templateWithAccess.previewText;
+  const tmplTags = templateWithAccess.tags;
+  const isOwner =
+    templateWithAccess.isOwner === true || template.ownerId === userId;
 
   return (
     <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
@@ -2619,31 +2627,39 @@ export default function TemplateFillPage() {
       >
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-          {[
-            { href: "/templates", label: "Templates" },
-            { href: `/templates/${templateId}/edit`, label: template.name },
-          ].map(({ href, label }, i) => (
-            <span key={href} className="flex items-center gap-1.5">
-              {i > 0 && (
-                <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
-                  /
-                </span>
-              )}
-              <Link
-                href={href}
-                className="text-[11px] transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = "var(--accent-light)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = "var(--text-muted)")
-                }
-              >
-                {label}
-              </Link>
+          <Link
+            href="/templates"
+            className="text-[11px] transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.color = "var(--accent-light)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.color = "var(--text-muted)")
+            }
+          >
+            Templates
+          </Link>
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
+          {isOwner ? (
+            <Link
+              href={`/templates/${templateId}/edit`}
+              className="text-[11px] transition-colors"
+              style={{ color: "var(--text-muted)" }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.color = "var(--accent-light)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "var(--text-muted)")
+              }
+            >
+              {template.name}
+            </Link>
+          ) : (
+            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              {template.name}
             </span>
-          ))}
+          )}
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
           <span
             className="text-[11px]"
@@ -2740,24 +2756,26 @@ export default function TemplateFillPage() {
             </div>
           </div>
 
-          <Link
-            href={`/templates/${templateId}/edit`}
-            className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl shrink-0 transition-colors"
-            style={{
-              background: "var(--bg-muted)",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border-subtle)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.color = "var(--text-secondary)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.color = "var(--text-muted)")
-            }
-          >
-            <PencilIcon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Edit template</span>
-          </Link>
+          {isOwner && (
+            <Link
+              href={`/templates/${templateId}/edit`}
+              className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl shrink-0 transition-colors"
+              style={{
+                background: "var(--bg-muted)",
+                color: "var(--text-muted)",
+                border: "1px solid var(--border-subtle)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.color = "var(--text-secondary)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "var(--text-muted)")
+              }
+            >
+              <PencilIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Edit template</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -2786,6 +2804,7 @@ export default function TemplateFillPage() {
               templateName={template.name}
               fileUrl={template.fileUrl}
               previewText={previewText}
+              canEditTemplate={isOwner}
             />
           </TabsContent>
           <TabsContent value="bulk">
