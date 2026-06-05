@@ -441,7 +441,10 @@ export const duplicate = action({
     if (!blob) throw new ConvexError("Template file not found");
 
     const newStorageId = await ctx.storage.store(blob);
-    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+    const convexSiteUrl =
+      process.env.CONVEX_SITE_URL ??
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL ??
+      "";
     const fileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}`;
 
     return (await ctx.runMutation(internal.templates.createDuplicateInternal, {
