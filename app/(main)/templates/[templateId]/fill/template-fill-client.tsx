@@ -5,7 +5,14 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  type CSSProperties,
+} from "react";
 import {
   ChevronLeftIcon,
   AlertCircleIcon,
@@ -343,6 +350,9 @@ function LoopSection({
   onRemoveRow: (idx: number) => void;
 }) {
   const subFields = field.subFields ?? [];
+  const loopGridStyle = {
+    "--loop-grid": `32px repeat(${Math.max(subFields.length, 1)}, minmax(150px, 1fr)) 44px`,
+  } as CSSProperties;
 
   return (
     <div
@@ -451,24 +461,32 @@ function LoopSection({
           )}
         </button>
       ) : (
-        <div
-          className="divide-y"
-          style={{ borderColor: "var(--border-subtle)" }}
-        >
+        <div className="overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+          <div
+            className="divide-y"
+            style={{ borderColor: "var(--border-subtle)" }}
+          >
           {subFields.length > 0 && (
             <div
-              className="hidden sm:grid gap-3 px-4 py-2"
+              className="hidden sm:grid gap-3 px-4 py-2.5 items-center"
               style={{
-                gridTemplateColumns: `28px repeat(${subFields.length}, 1fr) 28px`,
+                ...loopGridStyle,
+                gridTemplateColumns: "var(--loop-grid)",
                 background: "var(--bg-muted)",
               }}
             >
-              <span />
+              <span
+                className="text-[10px] font-semibold uppercase"
+                style={{ color: "var(--text-dim)" }}
+              >
+                #
+              </span>
               {subFields.map((sf) => (
                 <p
                   key={sf.id}
-                  className="text-[10px] font-semibold uppercase tracking-wide"
+                  className="text-[10px] font-semibold uppercase leading-tight"
                   style={{ color: "var(--text-dim)" }}
+                  title={sf.label}
                 >
                   {sf.label}
                 </p>
@@ -480,18 +498,22 @@ function LoopSection({
           {rows.map((row, rowIdx) => (
             <div
               key={rowIdx}
-              className="flex items-start sm:items-center gap-2 sm:gap-3 px-4 py-3 group"
-              style={{ background: "var(--bg-muted)" }}
+              className="grid grid-cols-1 sm:[grid-template-columns:var(--loop-grid)] items-start sm:items-center gap-2 sm:gap-3 px-4 py-3 group"
+              style={{
+                ...loopGridStyle,
+                background: "var(--bg-muted)",
+              }}
             >
               <span
-                className="text-[10px] font-mono w-6 text-center shrink-0 mt-2.5 sm:mt-0"
+                className="inline-flex items-center gap-1 text-[10px] font-mono sm:w-8 sm:justify-center"
                 style={{ color: "var(--text-dim)" }}
               >
+                <span className="sm:hidden">Row</span>
                 {rowIdx + 1}
               </span>
 
               {subFields.length > 0 ? (
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <>
                   {subFields.map((sf) => (
                     <div key={sf.name} className="space-y-1 sm:space-y-0">
                       <p
@@ -507,7 +529,7 @@ function LoopSection({
                         onChange={(e) =>
                           onUpdateRow(rowIdx, sf.name, e.target.value)
                         }
-                        className="w-full rounded-lg px-2.5 py-2 text-[12px] outline-none"
+                        className="w-full h-9 rounded-lg px-2.5 text-[12px] outline-none"
                         style={{
                           background: "var(--bg-muted)",
                           border: `1px solid var(--border-subtle)`,
@@ -523,7 +545,7 @@ function LoopSection({
                       />
                     </div>
                   ))}
-                </div>
+                </>
               ) : (
                 <p
                   className="flex-1 text-[12px]"
@@ -535,7 +557,7 @@ function LoopSection({
 
               <button
                 onClick={() => onRemoveRow(rowIdx)}
-                className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all shrink-0"
+                className="w-9 h-9 rounded-lg flex items-center justify-center transition-all shrink-0 sm:justify-self-center"
                 style={{ color: "var(--text-dim)" }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--danger-bg)";
@@ -572,6 +594,7 @@ function LoopSection({
             <PlusIcon className="w-3.5 h-3.5" />
             Add another row
           </button>
+          </div>
         </div>
       )}
     </div>
