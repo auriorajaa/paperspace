@@ -302,11 +302,13 @@ function AddDocumentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg sm:max-w-xl w-[95vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Add papers to collection</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+
+        <div className="space-y-3 flex-1 flex flex-col min-h-0">
+          {/* Search Input */}
           <div className="relative">
             <SearchIcon
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
@@ -331,8 +333,10 @@ function AddDocumentDialog({
               }
             />
           </div>
+
+          {/* List Papers */}
           <div
-            className="max-h-64 overflow-y-auto space-y-0.5 rounded-xl p-1"
+            className="flex-1 min-h-0 max-h-64 overflow-y-auto space-y-0.5 rounded-xl p-1"
             style={{ border: `1px solid var(--border-subtle)` }}
           >
             {searchResults === undefined ? (
@@ -353,13 +357,14 @@ function AddDocumentDialog({
               searchResults.map((doc) => {
                 const alreadyIn = existingDocIds.has(doc._id);
                 const isSel = selected.has(doc._id);
+
                 return (
                   <button
                     key={doc._id}
                     type="button"
                     onClick={() => toggleSelect(doc._id)}
                     disabled={alreadyIn}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors min-w-0"
                     style={{
                       background: isSel ? "var(--accent-bg)" : "transparent",
                       opacity: alreadyIn ? 0.5 : 1,
@@ -379,14 +384,17 @@ function AddDocumentDialog({
                       <FileTextIcon
                         className="w-4 h-4"
                         style={{ color: "var(--text-muted)" }}
-                      />{" "}
+                      />
                     </span>
+
+                    {/* Title dengan truncate yang benar */}
                     <span
-                      className="flex-1 text-[13px] truncate"
+                      className="flex-1 text-[13px] truncate min-w-0"
                       style={{ color: "var(--text)" }}
                     >
                       {doc.title}
                     </span>
+
                     {alreadyIn ? (
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 rounded-md shrink-0"
@@ -408,12 +416,19 @@ function AddDocumentDialog({
               })
             )}
           </div>
+
+          {/* Selected Info */}
           {selected.size > 0 && (
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <p
+              className="text-[11px] text-right"
+              style={{ color: "var(--text-muted)" }}
+            >
               {selected.size} paper{selected.size !== 1 ? "s" : ""} selected
             </p>
           )}
         </div>
+
+        {/* Footer Buttons */}
         <DialogFooter>
           <button
             onClick={() => onOpenChange(false)}

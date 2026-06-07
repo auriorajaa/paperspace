@@ -2721,24 +2721,25 @@ export default function TemplatesPage() {
     }
   };
 
-const handleDuplicateTemplate = useCallback(
-  async (template: TemplateWithAccess) => {
-    const toastId = toast.loading("Copying template...");
-    try {
-      await duplicateTemplate({ id: template._id });
-      // Tunggu Convex + OO server selesai sync
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      toast.dismiss(toastId);
-      toast.success("Template copied — ready to use!");
-      // Tetap di /templates, user buka sendiri
-    } catch (err: unknown) {
-      toast.dismiss(toastId);
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't copy template."
-      );
-    }
-  },
-  [duplicateTemplate]
+  const handleDuplicateTemplate = useCallback(
+    async (template: TemplateWithAccess) => {
+      const toastId = toast.loading("Copying template...");
+      setGlobalDuplicating(true);
+      try {
+        await duplicateTemplate({ id: template._id });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        toast.dismiss(toastId);
+        toast.success("Template copied - ready to use!");
+      } catch (err: unknown) {
+        toast.dismiss(toastId);
+        toast.error(
+          err instanceof Error ? err.message : "Couldn't copy template."
+        );
+      } finally {
+        setGlobalDuplicating(false);
+      }
+    },
+    [duplicateTemplate]
   );
   
   const handleDelete = async () => {
@@ -3210,28 +3211,31 @@ const handleDuplicateTemplate = useCallback(
 
       {/* Content + folder panel */}
       <div className="flex flex-1 overflow-hidden relative">
-          {/* Global duplicate blocking overlay */}
-  {globalDuplicating && (
-    <div
-      className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3"
-      style={{
-        background: "rgba(0,0,0,0.35)",
-        backdropFilter: "blur(2px)",
-        pointerEvents: "all",
-      }}
-    >
-      <div
-        className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-        style={{ borderColor: "var(--accent-light)" }}
-      />
-      <p className="text-[13px] font-medium" style={{ color: "var(--text)" }}>
-        Copying template…
-      </p>
-      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Please wait, syncing file to server
-      </p>
-    </div>
-  )}
+        {/* Global duplicate blocking overlay */}
+        {globalDuplicating && (
+          <div
+            className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3"
+            style={{
+              background: "rgba(0,0,0,0.35)",
+              backdropFilter: "blur(2px)",
+              pointerEvents: "all",
+            }}
+          >
+            <div
+              className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: "var(--accent-light)" }}
+            />
+            <p
+              className="text-[13px] font-medium"
+              style={{ color: "var(--text)" }}
+            >
+              Copying template...
+            </p>
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Please wait, syncing file to server
+            </p>
+          </div>
+        )}
         <div ref={contentRef} className="flex-1 overflow-y-auto flex flex-col">
           <div className="flex-1">
             {isLoading ? (

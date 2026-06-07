@@ -43,7 +43,8 @@ const fieldSchema = v.object({
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 function getOrgId(identity: any): string | undefined {
-  return identity.organization_id as string | undefined;
+  const orgId = identity.organization_id;
+  return typeof orgId === "string" && orgId.length > 0 ? orgId : undefined;
 }
 
 function hasTemplateAccess(
@@ -132,7 +133,6 @@ export const getById = query({
     const template = await ctx.db.get(args.id);
     if (!template) return null;
 
-    // Templates are strictly owner-only — org membership is not enough.
     if (!hasTemplateAccess(template, identity)) return null;
 
     return sanitizeTemplateForIdentity(template, identity);
@@ -159,7 +159,6 @@ export const getGeneratedCount = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return 0;
 
-    // Templates are strictly owner-only.
     const template = await ctx.db.get(args.templateId);
     if (!template) return 0;
     if (!hasTemplateAccess(template, identity)) return 0;
@@ -184,7 +183,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     previewText: v.optional(v.string()),
     sourceFileType: v.optional(v.string()),
-    // organizationId intentionally omitted — templates are personal only.
+    // organizationId is derived from the authenticated Clerk identity.
     tags: v.optional(v.array(v.string())),
     fields: v.array(fieldSchema),
   },
@@ -303,13 +302,12 @@ export const saveGeneratedDocument = mutation({
     format: v.string(),
     isBulk: v.boolean(),
     bulkCount: v.optional(v.number()),
-    // organizationId intentionally omitted — templates are personal only.
+    // organizationId is derived from the authenticated Clerk identity.
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    // Templates are strictly owner-only.
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new ConvexError("Template not found");
     if (!hasTemplateAccess(template, identity))
