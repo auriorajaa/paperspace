@@ -14,6 +14,7 @@ import {
   FileTextIcon,
   FolderIcon,
   LayoutTemplateIcon,
+  ClipboardListIcon,
   ZapIcon,
   ChevronDownIcon,
   CheckIcon,
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/documents", label: "Papers", icon: FileTextIcon },
   { href: "/collections", label: "Collections", icon: FolderIcon },
   { href: "/templates", label: "Templates", icon: LayoutTemplateIcon },
+  { href: "/forms", label: "Forms", icon: ClipboardListIcon },
   { href: "/form-results", label: "Results", icon: ZapIcon },
 ];
 

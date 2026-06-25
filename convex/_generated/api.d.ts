@@ -11,10 +11,14 @@
 import type * as collections from "../collections.js";
 import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
+import type * as docxGeneration from "../docxGeneration.js";
 import type * as formConnections from "../formConnections.js";
 import type * as googleAccounts from "../googleAccounts.js";
 import type * as http from "../http.js";
+import type * as internalFormResponses from "../internalFormResponses.js";
+import type * as internalForms from "../internalForms.js";
 import type * as processFormResponses from "../processFormResponses.js";
+import type * as processInternalFormResponses from "../processInternalFormResponses.js";
 import type * as templates from "../templates.js";
 
 import type {
@@ -27,10 +31,14 @@ declare const fullApi: ApiFromModules<{
   collections: typeof collections;
   crons: typeof crons;
   documents: typeof documents;
+  docxGeneration: typeof docxGeneration;
   formConnections: typeof formConnections;
   googleAccounts: typeof googleAccounts;
   http: typeof http;
+  internalFormResponses: typeof internalFormResponses;
+  internalForms: typeof internalForms;
   processFormResponses: typeof processFormResponses;
+  processInternalFormResponses: typeof processInternalFormResponses;
   templates: typeof templates;
 }>;
 
