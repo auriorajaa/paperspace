@@ -6,12 +6,18 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileEditIcon, LayoutTemplateIcon, ArrowRightIcon } from "lucide-react";
+import {
+  FileEditIcon,
+  LayoutTemplateIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  SparklesIcon,
+} from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 
 const NON_MAPPABLE_TYPES = ["loop", "condition", "condition_inverse"];
 
-export default function NewFormClient() {
+export default function NewFormClient({ orgId }: { orgId?: string }) {
   const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const templates = useQuery(
@@ -37,9 +43,10 @@ export default function NewFormClient() {
       const id = await create({
         title: title.trim(),
         description: description.trim() || undefined,
+        organizationId: orgId,
         schema: [],
       });
-      router.push(`/forms/${id}/builder`);
+      router.push(`/forms/${id}/builder${orgId ? `?orgId=${orgId}` : ""}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to create form");
     } finally {
@@ -73,9 +80,10 @@ export default function NewFormClient() {
       const id = await create({
         title: formTitle,
         description: description.trim() || undefined,
+        organizationId: orgId,
         schema,
       });
-      router.push(`/forms/${id}/builder`);
+      router.push(`/forms/${id}/builder${orgId ? `?orgId=${orgId}` : ""}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to create form");
     } finally {
@@ -93,25 +101,42 @@ export default function NewFormClient() {
           className="px-4 sm:px-6 pt-[calc(48px+1rem)] sm:pt-5 pb-4 shrink-0"
           style={{ borderBottom: "1px solid var(--border-subtle)" }}
         >
-          <h1
-            className="text-[15px] sm:text-base font-semibold"
-            style={{ color: "var(--text)" }}
-          >
-            New form
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            How would you like to start?
-          </p>
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              onClick={() => router.push(`/forms${orgId ? `?orgId=${orgId}` : ""}`)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+              style={{ color: "var(--text-dim)" }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.color = "var(--text-muted)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "var(--text-dim)")
+              }
+            >
+              <ArrowLeftIcon className="w-4 h-4" />
+            </button>
+            <div>
+              <h1
+                className="text-[15px] sm:text-base font-semibold"
+                style={{ color: "var(--text)" }}
+              >
+                New form
+              </h1>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                How would you like to start?
+              </p>
+            </div>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
-          <div className="max-w-lg mx-auto space-y-4">
+          <div className="max-w-6xl grid gap-4 sm:grid-cols-2">
             <button
               onClick={() => {
                 setMode("blank");
                 setTitle("");
                 setDescription("");
               }}
-              className="w-full text-left rounded-2xl p-5 flex items-start gap-4 transition-all"
+              className="w-full text-left rounded-2xl p-5 flex flex-col gap-4 transition-all"
               style={{
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-subtle)",
@@ -137,22 +162,40 @@ export default function NewFormClient() {
               </div>
               <div>
                 <p
-                  className="text-sm font-semibold"
+                  className="text-sm font-semibold mb-1"
                   style={{ color: "var(--text)" }}
                 >
                   Start from blank
                 </p>
                 <p
-                  className="text-xs mt-1"
+                  className="text-xs leading-relaxed"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Build your form from scratch with our drag-and-drop builder.
+                  Build your form from scratch. Add questions, customize the
+                  theme, and collect responses — all with our drag-and-drop
+                  builder.
                 </p>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {["Short text", "Multiple choice", "Dropdown", "Email"].map(
+                    (tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] px-1.5 py-0.5 rounded"
+                        style={{
+                          background: "var(--bg-muted)",
+                          color: "var(--text-dim)",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    )
+                  )}
+                </div>
               </div>
-              <ArrowRightIcon
-                className="w-4 h-4 shrink-0 mt-1"
-                style={{ color: "var(--text-dim)" }}
-              />
+              <div className="flex items-center gap-1.5 text-xs font-medium mt-auto" style={{ color: "var(--accent-light)" }}>
+                <span>Create blank form</span>
+                <ArrowRightIcon className="w-3 h-3" />
+              </div>
             </button>
 
             <button
@@ -161,7 +204,7 @@ export default function NewFormClient() {
                 setTitle("");
                 setDescription("");
               }}
-              className="w-full text-left rounded-2xl p-5 flex items-start gap-4 transition-all"
+              className="w-full text-left rounded-2xl p-5 flex flex-col gap-4 transition-all"
               style={{
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-subtle)",
@@ -181,30 +224,45 @@ export default function NewFormClient() {
                     "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
                 }}
               >
-                <LayoutTemplateIcon
+                <SparklesIcon
                   className="w-5 h-5"
                   style={{ color: "var(--success)" }}
                 />
               </div>
               <div>
                 <p
-                  className="text-sm font-semibold"
+                  className="text-sm font-semibold mb-1"
                   style={{ color: "var(--text)" }}
                 >
                   Start from a template
                 </p>
                 <p
-                  className="text-xs mt-1"
+                  className="text-xs leading-relaxed"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Auto-generate form questions from an existing template&apos;s
-                  fields.
+                  Auto-generate form questions from an existing document
+                  template. Each template field becomes a form question
+                  automatically.
                 </p>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {["Auto-mapped", "Pre-filled", "Quick setup"].map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-[10px] px-1.5 py-0.5 rounded"
+                      style={{
+                        background: "var(--bg-muted)",
+                        color: "var(--text-dim)",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <ArrowRightIcon
-                className="w-4 h-4 shrink-0 mt-1"
-                style={{ color: "var(--text-dim)" }}
-              />
+              <div className="flex items-center gap-1.5 text-xs font-medium mt-auto" style={{ color: "var(--success)" }}>
+                <span>Choose template</span>
+                <ArrowRightIcon className="w-3 h-3" />
+              </div>
             </button>
           </div>
         </div>
@@ -223,11 +281,12 @@ export default function NewFormClient() {
       >
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
           <button
-            onClick={() => setMode("select")}
-            className="text-[11px] transition-colors"
+            onClick={() => router.push(`/forms${orgId ? `?orgId=${orgId}` : ""}`)}
+            className="text-[11px] transition-colors flex items-center gap-1"
             style={{ color: "var(--text-muted)" }}
           >
-            New form
+            <ArrowLeftIcon className="w-3 h-3" />
+            Forms
           </button>
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
           <span
@@ -246,7 +305,7 @@ export default function NewFormClient() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-        <div className="max-w-lg mx-auto space-y-4">
+        <div className="max-w-6xl space-y-4">
           <div>
             <label
               className="text-xs font-medium mb-1 block"
@@ -296,59 +355,90 @@ export default function NewFormClient() {
               >
                 Choose a template
               </label>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {(templates ?? []).map((t) => {
-                  const mappable = t.fields.filter(
-                    (f: any) => !NON_MAPPABLE_TYPES.includes(f.type)
-                  );
-                  return (
-                    <button
-                      key={t._id}
-                      onClick={() =>
-                        setSelectedTemplateId(
-                          t._id as Id<"templates">
-                        )
-                      }
-                      className="w-full text-left rounded-xl px-3 py-2.5 transition-all flex items-center gap-3"
+              {!templates ? (
+                <div className="space-y-1.5">
+                  {[1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl px-3 py-2.5"
                       style={{
-                        background:
-                          selectedTemplateId === t._id
-                            ? "var(--accent-bg)"
-                            : "var(--bg-muted)",
-                        border: `1px solid ${
-                          selectedTemplateId === t._id
-                            ? "var(--accent-border)"
-                            : "var(--border-subtle)"
-                        }`,
+                        background: "var(--bg-muted)",
+                        border: "1px solid var(--border-subtle)",
                       }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className="text-sm font-medium truncate"
-                          style={{ color: "var(--text)" }}
-                        >
-                          {t.name}
-                        </p>
-                        <p
-                          className="text-xs"
-                          style={{ color: "var(--text-dim)" }}
-                        >
-                          {mappable.length} mappable field
-                          {mappable.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      {selectedTemplateId === t._id && (
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: "var(--accent-light)" }}
-                        >
-                          Selected
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                      <div
+                        className="h-4 w-2/3 rounded animate-pulse mb-2"
+                        style={{ background: "var(--bg-input)" }}
+                      />
+                      <div
+                        className="h-3 w-1/3 rounded animate-pulse"
+                        style={{ background: "var(--bg-input)" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : templates.length === 0 ? (
+                <p
+                  className="text-xs py-3 text-center"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  No templates available. Upload a document template first.
+                </p>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {(templates ?? []).map((t) => {
+                    const mappable = t.fields.filter(
+                      (f: any) => !NON_MAPPABLE_TYPES.includes(f.type)
+                    );
+                    return (
+                      <button
+                        key={t._id}
+                        onClick={() =>
+                          setSelectedTemplateId(
+                            t._id as Id<"templates">
+                          )
+                        }
+                        className="w-full text-left rounded-xl px-3 py-2.5 transition-all flex items-center gap-3"
+                        style={{
+                          background:
+                            selectedTemplateId === t._id
+                              ? "var(--accent-bg)"
+                              : "var(--bg-muted)",
+                          border: `1px solid ${
+                            selectedTemplateId === t._id
+                              ? "var(--accent-border)"
+                              : "var(--border-subtle)"
+                          }`,
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-sm font-medium truncate"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {t.name}
+                          </p>
+                          <p
+                            className="text-xs"
+                            style={{ color: "var(--text-dim)" }}
+                          >
+                            {mappable.length} mappable field
+                            {mappable.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        {selectedTemplateId === t._id && (
+                          <span
+                            className="text-xs font-medium"
+                            style={{ color: "var(--accent-light)" }}
+                          >
+                            Selected
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -370,17 +460,17 @@ export default function NewFormClient() {
                   ? handleCreateBlank
                   : handleCreateFromTemplate
               }
-              disabled={creating}
+              disabled={creating || (mode === "template" && !selectedTemplateId)}
               className="flex-1 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px] transition-all"
               style={{
                 background: "var(--accent-strong-bg)",
                 color: "var(--accent-pale)",
                 border: "1px solid var(--accent-border)",
-                opacity: creating ? 0.6 : 1,
+                opacity: creating || (mode === "template" && !selectedTemplateId) ? 0.6 : 1,
               }}
             >
               {creating
-                ? "Creating…"
+                ? "Creating\u2026"
                 : mode === "blank"
                   ? "Create blank form"
                   : "Create form"}

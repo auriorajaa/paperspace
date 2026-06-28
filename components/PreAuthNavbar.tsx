@@ -6,7 +6,7 @@ import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface PreAuthNavbarProps {
-  page?: "landing" | "sign-in" | "sign-up";
+  page?: "landing" | "sign-in" | "sign-up" | "form";
   isSignedIn?: boolean;
 }
 
@@ -84,6 +84,19 @@ export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
             }}
           >
             Sign in
+          </Link>
+        ) : page === "form" ? (
+          /* Form page — minimal, just sign in */
+          <Link
+            href="/sign-in"
+            className="text-sm font-medium px-4 py-1.5 rounded-lg transition-all duration-150"
+            style={{
+              background: "var(--bg-muted)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Sign in to create forms
           </Link>
         ) : (
           /* Landing — Sign in hidden on mobile, both visible on sm+ */

@@ -8,6 +8,9 @@ export const metadata = buildPageMetadata({
   noIndex: true,
 });
 
-export default function NewFormPage() {
-  return <NewFormClient />;
+export default async function NewFormPage(props: {
+  searchParams?: Promise<{ orgId?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  return <NewFormClient orgId={searchParams?.orgId || undefined} />;
 }

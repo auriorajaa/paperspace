@@ -1,3 +1,4 @@
+// convex\schema.ts
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -114,6 +115,10 @@ export default defineSchema({
     settings: v.object({
       acceptResponses: v.boolean(),
       confirmationMessage: v.optional(v.string()),
+      headerImage: v.optional(v.string()),
+      themeColor: v.optional(v.string()),
+      submitButtonText: v.optional(v.string()),
+      showHeader: v.optional(v.boolean()),
     }),
   })
     .index("by_owner_id", ["ownerId"])

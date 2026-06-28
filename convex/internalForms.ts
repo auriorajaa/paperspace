@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// convex\internalForms.ts
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
@@ -12,20 +13,87 @@ function generatePublicId(): string {
   return result;
 }
 
+function getOrgId(identity: any): string | undefined {
+  const orgId = identity.organization_id;
+  return orgId || undefined;
+}
+
+function hasAccess(
+  doc: { ownerId: string; organizationId?: string },
+  identity: any
+): boolean {
+  if (doc.ownerId === identity.subject) return true;
+  const orgId = getOrgId(identity);
+  return !!(orgId && doc.organizationId && doc.organizationId === orgId);
+}
+
 // ── Queries ────────────────────────────────────────────────────────────────
 
 export const getAll = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    orgId: v.optional(v.string()),
+    includeArchived: v.optional(v.boolean()),
+    search: v.optional(v.string()),
+    sort: v.optional(v.string()),
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    const forms = await ctx.db
+
+    const orgId = args.orgId || getOrgId(identity);
+
+    const personalForms = await ctx.db
       .query("internalForms")
       .withIndex("by_owner_id", (q) => q.eq("ownerId", identity.subject))
       .order("desc")
       .collect();
+
+    let orgForms: typeof personalForms = [];
+    if (orgId) {
+      orgForms = await ctx.db
+        .query("internalForms")
+        .withIndex("by_organization_id", (q) => q.eq("organizationId", orgId))
+        .order("desc")
+        .collect();
+    }
+
+    const seen = new Set<string>();
+    let all = [...personalForms, ...orgForms].filter((f) => {
+      if (seen.has(f._id)) return false;
+      seen.add(f._id);
+      return true;
+    });
+
+    if (!args.includeArchived) {
+      all = all.filter((f) => f.status !== "archived");
+    }
+
+    if (args.status && args.status !== "all") {
+      all = all.filter((f) => f.status === args.status);
+    }
+
+    if (args.search) {
+      const q = args.search.toLowerCase();
+      all = all.filter(
+        (f) =>
+          f.title.toLowerCase().includes(q) ||
+          (f.description && f.description.toLowerCase().includes(q))
+      );
+    }
+
+    if (args.sort === "title_asc") {
+      all.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (args.sort === "title_desc") {
+      all.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (args.sort === "oldest") {
+      all.sort((a, b) => a._creationTime - b._creationTime);
+    } else {
+      all.sort((a, b) => b._creationTime - a._creationTime);
+    }
+
     const withCounts = await Promise.all(
-      forms.map(async (f) => {
+      all.map(async (f) => {
         const responses = await ctx.db
           .query("internalFormResponses")
           .withIndex("by_form_id", (q) => q.eq("formId", f._id))
@@ -38,8 +106,11 @@ export const getAll = query({
           .collect();
         return {
           ...f,
+          creatorName: identity.name || undefined,
+          creatorEmail: identity.email || undefined,
           responseCount: responses.length,
           connectionCount: connections.length,
+          isOrgForm: !!f.organizationId,
         };
       })
     );
@@ -53,8 +124,13 @@ export const getById = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
     const form = await ctx.db.get(args.id);
-    if (!form || form.ownerId !== identity.subject) return null;
-    return form;
+    if (!form || !hasAccess(form, identity)) return null;
+    return {
+      ...form,
+      creatorName: identity.name || undefined,
+      creatorEmail: identity.email || undefined,
+      isOrgForm: !!form.organizationId,
+    };
   },
 });
 
@@ -82,6 +158,7 @@ export const create = mutation({
   args: {
     title: v.string(),
     description: v.optional(v.string()),
+    organizationId: v.optional(v.string()),
     schema: v.array(
       v.object({
         id: v.string(),
@@ -97,8 +174,11 @@ export const create = mutation({
     if (!identity) throw new ConvexError("Not authenticated");
 
     const publicId = generatePublicId();
+    const orgId = args.organizationId || getOrgId(identity);
+
     return ctx.db.insert("internalForms", {
       ownerId: identity.subject,
+      organizationId: orgId || undefined,
       title: args.title,
       description: args.description,
       schema: args.schema,
@@ -129,8 +209,12 @@ export const update = mutation({
     ),
     settings: v.optional(
       v.object({
-        acceptResponses: v.boolean(),
+        acceptResponses: v.optional(v.boolean()),
         confirmationMessage: v.optional(v.string()),
+        headerImage: v.optional(v.string()),
+        themeColor: v.optional(v.string()),
+        submitButtonText: v.optional(v.string()),
+        showHeader: v.optional(v.boolean()),
       })
     ),
   },
@@ -138,7 +222,7 @@ export const update = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || form.ownerId !== identity.subject)
+    if (!form || !hasAccess(form, identity))
       throw new ConvexError("Not found");
 
     const { id, ...rest } = args;
@@ -146,6 +230,9 @@ export const update = mutation({
     Object.entries(rest).forEach(([k, v]) => {
       if (v !== undefined) patch[k] = v;
     });
+    if (patch.settings && typeof patch.settings === "object") {
+      patch.settings = { ...form.settings, ...patch.settings };
+    }
     await ctx.db.patch(id, patch);
   },
 });
@@ -156,7 +243,7 @@ export const publish = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || form.ownerId !== identity.subject)
+    if (!form || !hasAccess(form, identity))
       throw new ConvexError("Not found");
 
     await ctx.db.patch(args.id, {
@@ -172,7 +259,7 @@ export const archive = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || form.ownerId !== identity.subject)
+    if (!form || !hasAccess(form, identity))
       throw new ConvexError("Not found");
 
     await ctx.db.patch(args.id, {
@@ -188,7 +275,7 @@ export const remove = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || form.ownerId !== identity.subject)
+    if (!form || !hasAccess(form, identity))
       throw new ConvexError("Not found");
 
     const responses = await ctx.db

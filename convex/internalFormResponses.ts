@@ -3,6 +3,15 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 
+function hasAccess(
+  doc: { ownerId: string; organizationId?: string },
+  identity: any
+): boolean {
+  if (doc.ownerId === identity.subject) return true;
+  const orgId = identity.organization_id || undefined;
+  return !!(orgId && doc.organizationId && doc.organizationId === orgId);
+}
+
 // ── Queries ────────────────────────────────────────────────────────────────
 
 export const getByFormId = query({
@@ -11,7 +20,7 @@ export const getByFormId = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
     const form = await ctx.db.get(args.formId);
-    if (!form || form.ownerId !== identity.subject) return [];
+    if (!form || !hasAccess(form, identity)) return [];
 
     return ctx.db
       .query("internalFormResponses")
@@ -61,7 +70,6 @@ export const submit = mutation({
       throw new ConvexError("Form is not accepting responses");
     }
 
-    // Validate required fields
     for (const question of form.schema) {
       if (question.required) {
         const answer = args.answers.find(
@@ -75,7 +83,6 @@ export const submit = mutation({
       }
     }
 
-    // Validate that all provided answers match schema questions
     const validQuestionIds = new Set(form.schema.map((q) => q.id));
     for (const answer of args.answers) {
       if (!validQuestionIds.has(answer.questionId)) {
@@ -85,6 +92,8 @@ export const submit = mutation({
       }
     }
 
+    const ipHash = args.ipHash || (args.userAgent ? simpleHash(args.userAgent) : undefined);
+
     return ctx.db.insert("internalFormResponses", {
       formId: form._id,
       ownerId: form.ownerId,
@@ -92,7 +101,17 @@ export const submit = mutation({
       submittedAt: Date.now(),
       respondentEmail: args.respondentEmail,
       userAgent: args.userAgent,
-      ipHash: args.ipHash,
+      ipHash,
     });
   },
 });
+
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(16).slice(0, 8);
+}

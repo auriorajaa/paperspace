@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { PlusIcon } from "lucide-react";
 import {
   QuestionBlock,
@@ -74,6 +73,23 @@ export function FormBuilder({
         />
       ))}
 
+      {schema.length === 0 && (
+        <div
+          className="rounded-xl p-6 text-center"
+          style={{
+            background: "var(--bg-muted)",
+            border: "1px dashed var(--border-subtle)",
+          }}
+        >
+          <p
+            className="text-sm font-medium mb-3"
+            style={{ color: "var(--text-muted)" }}
+          >
+            No questions yet. Add one below to get started.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1.5 pt-1">
         <span
           className="text-xs font-medium self-center mr-1"
@@ -88,7 +104,7 @@ export function FormBuilder({
             className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors min-h-[36px]"
             style={{
               background: "var(--accent-bg)",
-              color: "var(--accent-light)",
+              color: t.color || "var(--accent-light)",
               border: "1px solid var(--accent-border)",
             }}
             onMouseEnter={(e) =>

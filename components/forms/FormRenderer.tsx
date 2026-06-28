@@ -10,6 +10,9 @@ interface RendererProps {
   disabled?: boolean;
   onSubmit: (answers: { questionId: string; value: string }[]) => void;
   submitLabel?: string;
+  themeColor?: string;
+  headerImage?: string;
+  showHeader?: boolean;
 }
 
 export function FormRenderer({
@@ -19,9 +22,14 @@ export function FormRenderer({
   disabled = false,
   onSubmit,
   submitLabel = "Submit",
+  themeColor,
+  headerImage,
+  showHeader = true,
 }: RendererProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const accent = themeColor || "var(--accent-light)";
 
   const handleChange = (questionId: string, value: string) => {
     setValues((prev) => ({ ...prev, [questionId]: value }));
@@ -58,22 +66,36 @@ export function FormRenderer({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1
-          className="text-xl font-semibold"
-          style={{ color: "var(--text)" }}
-        >
-          {title}
-        </h1>
-        {description && (
-          <p
-            className="text-sm mt-1"
-            style={{ color: "var(--text-muted)" }}
+      {showHeader && (
+        <div>
+          {headerImage && (
+            <div className="rounded-xl overflow-hidden mb-4 -mx-2 -mt-2 sm:-mx-4 sm:-mt-4">
+              <img
+                src={headerImage}
+                alt="Form header"
+                className="w-full h-40 sm:h-48 object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            </div>
+          )}
+          <h1
+            className="text-xl font-semibold"
+            style={{ color: "var(--text)" }}
           >
-            {description}
-          </p>
-        )}
-      </div>
+            {title}
+          </h1>
+          {description && (
+            <p
+              className="text-sm mt-1"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {description}
+            </p>
+          )}
+        </div>
+      )}
 
       {schema.map((q) => (
         <div key={q.id} className="space-y-1.5">
@@ -160,7 +182,7 @@ export function FormRenderer({
                     checked={values[q.id] === opt}
                     onChange={(e) => handleChange(q.id, e.target.value)}
                     disabled={disabled}
-                    style={{ accentColor: "var(--accent-light)" }}
+                    style={{ accentColor: accent }}
                   />
                   {opt}
                 </label>
@@ -188,7 +210,7 @@ export function FormRenderer({
                         handleChange(q.id, next.join("; "));
                       }}
                       disabled={disabled}
-                      style={{ accentColor: "var(--accent-light)" }}
+                      style={{ accentColor: accent }}
                     />
                     {opt}
                   </label>
@@ -231,21 +253,20 @@ export function FormRenderer({
         disabled={disabled}
         className="w-full text-sm font-semibold px-4 py-3 rounded-xl transition-all duration-150 min-h-[48px]"
         style={{
-          background: "var(--accent-strong-bg)",
-          color: "var(--accent-pale)",
-          border: "1px solid var(--accent-border)",
+          background: accent,
+          color: "#fff",
           opacity: disabled ? 0.6 : 1,
         }}
         onMouseEnter={(e) => {
           if (!disabled)
-            e.currentTarget.style.background = "var(--accent-mid)";
+            e.currentTarget.style.opacity = "0.9";
         }}
         onMouseLeave={(e) => {
           if (!disabled)
-            e.currentTarget.style.background = "var(--accent-strong-bg)";
+            e.currentTarget.style.opacity = "1";
         }}
       >
-        {submitLabel}
+        {submitLabel || "Submit"}
       </button>
     </div>
   );
