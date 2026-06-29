@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// convex\internalFormResponses.ts
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
@@ -94,12 +95,42 @@ export const submit = mutation({
 
     const ipHash = args.ipHash || (args.userAgent ? simpleHash(args.userAgent) : undefined);
 
+    let respondentEmail = args.respondentEmail;
+
+    if (form.settings.collectEmail) {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        throw new ConvexError("Please sign in to submit this form");
+      }
+      const email = identity.email;
+      if (!email) {
+        throw new ConvexError(
+          "Could not retrieve your email from your account"
+        );
+      }
+
+      const domains = form.settings.allowedDomains ?? [];
+      if (domains.length > 0) {
+        const domain = email.split("@")[1]?.toLowerCase();
+        const allowed = domains.some(
+          (d) => domain === d.toLowerCase().trim()
+        );
+        if (!allowed) {
+          throw new ConvexError(
+            `Email domain @${domain} is not allowed for this form`
+          );
+        }
+      }
+
+      respondentEmail = email;
+    }
+
     return ctx.db.insert("internalFormResponses", {
       formId: form._id,
       ownerId: form.ownerId,
       answers: args.answers,
       submittedAt: Date.now(),
-      respondentEmail: args.respondentEmail,
+      respondentEmail,
       userAgent: args.userAgent,
       ipHash,
     });

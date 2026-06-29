@@ -4,6 +4,33 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 
+const questionValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  type: v.string(),
+  required: v.boolean(),
+  options: v.optional(v.array(v.string())),
+  description: v.optional(v.string()),
+  placeholder: v.optional(v.string()),
+  min: v.optional(v.number()),
+  max: v.optional(v.number()),
+});
+
+const settingsValidator = v.object({
+  acceptResponses: v.optional(v.boolean()),
+  confirmationMessage: v.optional(v.string()),
+  headerImage: v.optional(v.string()),
+  themeColor: v.optional(v.string()),
+  submitButtonText: v.optional(v.string()),
+  showHeader: v.optional(v.boolean()),
+  fontFamily: v.optional(v.string()),
+  cornerStyle: v.optional(v.string()),
+  showProgress: v.optional(v.boolean()),
+  seoDescription: v.optional(v.string()),
+  collectEmail: v.optional(v.boolean()),
+  allowedDomains: v.optional(v.array(v.string())),
+});
+
 function generatePublicId(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
@@ -152,6 +179,29 @@ export const getByPublicId = query({
   },
 });
 
+/**
+ * Lightweight metadata-only lookup used by generateMetadata() in
+ * app/f/[publicId]/page.tsx — avoids leaking the full schema/settings
+ * to link-preview crawlers.
+ */
+export const getMetaByPublicId = query({
+  args: { publicId: v.string() },
+  handler: async (ctx, args) => {
+    const form = await ctx.db
+      .query("internalForms")
+      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
+      .first();
+    if (!form || form.status !== "published") return null;
+    return {
+      title: form.title,
+      description:
+        form.settings.seoDescription || form.description || undefined,
+      headerImage: form.settings.headerImage || undefined,
+      acceptResponses: form.settings.acceptResponses,
+    };
+  },
+});
+
 // ── Mutations ──────────────────────────────────────────────────────────────
 
 export const create = mutation({
@@ -159,15 +209,7 @@ export const create = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     organizationId: v.optional(v.string()),
-    schema: v.array(
-      v.object({
-        id: v.string(),
-        title: v.string(),
-        type: v.string(),
-        required: v.boolean(),
-        options: v.optional(v.array(v.string())),
-      })
-    ),
+    schema: v.array(questionValidator),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -186,6 +228,9 @@ export const create = mutation({
       publicId,
       settings: {
         acceptResponses: false,
+        fontFamily: "default",
+        cornerStyle: "soft",
+        showProgress: true,
       },
     });
   },
@@ -196,34 +241,14 @@ export const update = mutation({
     id: v.id("internalForms"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
-    schema: v.optional(
-      v.array(
-        v.object({
-          id: v.string(),
-          title: v.string(),
-          type: v.string(),
-          required: v.boolean(),
-          options: v.optional(v.array(v.string())),
-        })
-      )
-    ),
-    settings: v.optional(
-      v.object({
-        acceptResponses: v.optional(v.boolean()),
-        confirmationMessage: v.optional(v.string()),
-        headerImage: v.optional(v.string()),
-        themeColor: v.optional(v.string()),
-        submitButtonText: v.optional(v.string()),
-        showHeader: v.optional(v.boolean()),
-      })
-    ),
+    schema: v.optional(v.array(questionValidator)),
+    settings: v.optional(settingsValidator),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || !hasAccess(form, identity))
-      throw new ConvexError("Not found");
+    if (!form || !hasAccess(form, identity)) throw new ConvexError("Not found");
 
     const { id, ...rest } = args;
     const patch: Record<string, unknown> = {};
@@ -243,8 +268,7 @@ export const publish = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || !hasAccess(form, identity))
-      throw new ConvexError("Not found");
+    if (!form || !hasAccess(form, identity)) throw new ConvexError("Not found");
 
     await ctx.db.patch(args.id, {
       status: "published",
@@ -259,8 +283,7 @@ export const archive = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || !hasAccess(form, identity))
-      throw new ConvexError("Not found");
+    if (!form || !hasAccess(form, identity)) throw new ConvexError("Not found");
 
     await ctx.db.patch(args.id, {
       status: "archived",
@@ -275,8 +298,7 @@ export const remove = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
     const form = await ctx.db.get(args.id);
-    if (!form || !hasAccess(form, identity))
-      throw new ConvexError("Not found");
+    if (!form || !hasAccess(form, identity)) throw new ConvexError("Not found");
 
     const responses = await ctx.db
       .query("internalFormResponses")
@@ -286,9 +308,7 @@ export const remove = mutation({
 
     const connections = await ctx.db
       .query("formConnections")
-      .withIndex("by_internal_form_id", (q) =>
-        q.eq("internalFormId", args.id)
-      )
+      .withIndex("by_internal_form_id", (q) => q.eq("internalFormId", args.id))
       .collect();
     await Promise.all(
       connections.map(async (c) => {

@@ -39,13 +39,13 @@ const THEME_OPTIONS: {
   {
     value: "dark",
     label: "Dark",
-    subtitle: "Default cinematic look",
+    subtitle: "Default look",
     icon: MoonIcon,
   },
   {
     value: "light",
     label: "Light",
-    subtitle: "Bright workspace mode",
+    subtitle: "Bright mode",
     icon: SunIcon,
   },
 ];

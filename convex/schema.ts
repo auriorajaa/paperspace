@@ -8,6 +8,11 @@ const internalFormQuestionSchema = v.object({
   type: v.string(),
   required: v.boolean(),
   options: v.optional(v.array(v.string())),
+  // ── Rich customization (all optional / backward compatible) ───────────────
+  description: v.optional(v.string()), // helper text shown under the title
+  placeholder: v.optional(v.string()),
+  min: v.optional(v.number()),
+  max: v.optional(v.number()),
 });
 
 export default defineSchema({
@@ -119,6 +124,14 @@ export default defineSchema({
       themeColor: v.optional(v.string()),
       submitButtonText: v.optional(v.string()),
       showHeader: v.optional(v.boolean()),
+      // ── Rich customization (all optional / backward compatible) ─────────────
+      fontFamily: v.optional(v.string()), // "default" | "serif" | "mono" | "rounded"
+      cornerStyle: v.optional(v.string()), // "pill" | "soft" | "square"
+      showProgress: v.optional(v.boolean()),
+      seoDescription: v.optional(v.string()), // override for link-share metadata
+      // ── Email collection (requires Google sign-in) ─────────────────────────
+      collectEmail: v.optional(v.boolean()),
+      allowedDomains: v.optional(v.array(v.string())), // e.g. ["mhsw.pnj.ac.id"]
     }),
   })
     .index("by_owner_id", ["ownerId"])
