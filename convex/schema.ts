@@ -216,6 +216,14 @@ export default defineSchema({
     .index("by_script_token", ["scriptToken"])
     .index("by_internal_form_id", ["internalFormId"]),
 
+  // ── Admin stats cache ────────────────────────────────────────────────────────
+  // Pre-computed counts updated hourly by cron to avoid full table scans on dashboard.
+  statsCache: defineTable({
+    key: v.string(),
+    data: v.any(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   formSubmissions: defineTable({
     connectionId: v.id("formConnections"),
     templateId: v.id("templates"),

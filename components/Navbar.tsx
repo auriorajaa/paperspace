@@ -8,6 +8,7 @@ import {
   useOrganization,
   useOrganizationList,
   useClerk,
+  useUser,
 } from "@clerk/nextjs";
 import {
   HomeIcon,
@@ -26,9 +27,15 @@ import {
   SettingsIcon,
   XIcon,
   MailIcon,
+  ShieldIcon,
+  UsersIcon,
+  DatabaseIcon,
+  ActivityIcon,
+  MoreHorizontalIcon,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { ADMIN_EMAIL } from "@/lib/constants";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: HomeIcon },
@@ -37,6 +44,13 @@ const NAV_ITEMS = [
   { href: "/templates", label: "Templates", icon: LayoutTemplateIcon },
   { href: "/forms", label: "Forms", icon: ClipboardListIcon },
   { href: "/form-results", label: "Results", icon: ZapIcon },
+];
+
+const ADMIN_ITEMS = [
+  { href: "/admin", label: "Dashboard", icon: ShieldIcon },
+  { href: "/admin/users", label: "Users", icon: UsersIcon },
+  { href: "/admin/content", label: "Content", icon: DatabaseIcon },
+  // { href: "/admin/activity", label: "Activity", icon: ActivityIcon },
 ];
 
 // ── Invitation Row ────────────────────────────────────────────────────────────
@@ -57,15 +71,14 @@ function InvitationRow({
     try {
       await invitation.accept();
       onDone();
-      window.location.reload(); // ← langsung reload
+      window.location.reload();
     } catch (e) {
-      // console.error(e)
+      // silent
     } finally {
       setLoading(null);
     }
   };
 
-  // Clerk client SDK tidak expose .reject() — dismiss lokal.
   const handleDecline = () => {
     setLoading("decline");
     onDone();
@@ -322,7 +335,7 @@ function OrgDropdown({
         boxShadow: "var(--shadow-elevated)",
       }}
     >
-      {/* ── Pending Invitations ── */}
+      {/* Pending Invitations */}
       {visibleInvitations.length > 0 && (
         <>
           <div className="px-4 pt-2.5 pb-1">
@@ -597,7 +610,7 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const { organization } = useOrganization();
   const { userMemberships, userInvitations, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
-    userInvitations: { infinite: true }, // ← NEW
+    userInvitations: { infinite: true },
   });
   const { openCreateOrganization, openOrganizationProfile } = useClerk();
   const [open, setOpen] = useState(false);
@@ -701,7 +714,6 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             />
           </>
         )}
-        {/* ── Red badge ── */}
         {pendingCount > 0 && (
           <span
             className="absolute flex items-center justify-center text-[9px] font-bold rounded-full"
@@ -742,22 +754,232 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-// ── Mobile Account Sheet ──────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+//  ADMIN NAVIGATION — self-contained hierarchy
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── AdminNavItem (child of AdminNavGroup) ───────────────────────────────────
+// Dashboard (/admin) uses exact match. Deeper routes use startsWith.
+
+function AdminNavItem({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+  collapsed = false,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  pathname: string;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const active =
+    href === "/admin"
+      ? pathname === "/admin"
+      : pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="group/admin-item relative flex items-center rounded-lg transition-all duration-200"
+      style={{
+        gap: collapsed ? 0 : 10,
+        padding: collapsed ? "6px 0" : "6px 10px",
+        justifyContent: collapsed ? "center" : "flex-start",
+        color: active ? "var(--accent-light)" : "var(--text-muted)",
+        background: active ? "var(--accent-bg)" : "transparent",
+        fontSize: 12.5,
+        fontWeight: active ? 600 : 400,
+      }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = "var(--text-secondary)";
+          e.currentTarget.style.background = "var(--bg-muted)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = "var(--text-muted)";
+          e.currentTarget.style.background = "transparent";
+        }
+      }}
+    >
+      <Icon
+        className="w-3.5 h-3.5 shrink-0"
+        style={{ color: active ? "var(--accent-light)" : "inherit" }}
+      />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
+  );
+}
+
+// ── AdminNavGroup ─────────────────────────────────────────────────────────────
+
+function AdminNavGroup({
+  collapsed,
+  pathname,
+}: {
+  collapsed: boolean;
+  pathname: string;
+}) {
+  const isAnyAdminActive = pathname.startsWith("/admin");
+  const [open, setOpen] = useState(isAnyAdminActive);
+
+  useEffect(() => {
+    if (isAnyAdminActive) setOpen(true);
+  }, [isAnyAdminActive]);
+
+  // ── Collapsed sidebar: icon + flyout ──
+  if (collapsed) {
+    return (
+      <div className="relative group/admin">
+        <Link
+          href="/admin"
+          className="flex items-center justify-center rounded-xl transition-all duration-200 relative"
+          style={{
+            padding: "9px 0",
+            color: isAnyAdminActive ? "var(--text)" : "var(--text-muted)",
+            background: isAnyAdminActive
+              ? "var(--nav-active-bg)"
+              : "transparent",
+          }}
+        >
+          <ShieldIcon
+            className="w-4 h-4 shrink-0"
+            style={{
+              color: isAnyAdminActive ? "var(--accent-light)" : "inherit",
+            }}
+          />
+        </Link>
+        <div
+          className="absolute left-full top-0 ml-3 w-52 rounded-xl py-2 opacity-0 pointer-events-none group-hover/admin:opacity-100 group-hover/admin:pointer-events-auto transition-all duration-150 z-50"
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-hover)",
+            boxShadow: "var(--shadow-flyout)",
+          }}
+        >
+          <p
+            className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: "var(--text-dim)" }}
+          >
+            Admin
+          </p>
+          <div className="px-1.5 space-y-0.5">
+            {ADMIN_ITEMS.map((item) => (
+              <AdminNavItem
+                key={item.href}
+                {...item}
+                pathname={pathname}
+                collapsed={false}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Expanded sidebar: collapsible nested list ──
+  return (
+    <div
+      className="mt-3 pt-3"
+      style={{ borderTop: "1px solid var(--border-subtle)" }}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 rounded-xl transition-all duration-200 relative"
+        style={{
+          padding: "8px 12px",
+          color: isAnyAdminActive ? "var(--text)" : "var(--text-muted)",
+          background: isAnyAdminActive ? "var(--nav-active-bg)" : "transparent",
+          fontWeight: isAnyAdminActive ? 500 : 400,
+        }}
+        onMouseEnter={(e) => {
+          if (!isAnyAdminActive) {
+            e.currentTarget.style.color = "var(--text-secondary)";
+            e.currentTarget.style.background = "var(--bg-muted)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isAnyAdminActive) {
+            e.currentTarget.style.color = "var(--text-muted)";
+            e.currentTarget.style.background = "transparent";
+          }
+        }}
+      >
+        <ShieldIcon
+          className="w-4 h-4 shrink-0"
+          style={{
+            color: isAnyAdminActive ? "var(--accent-light)" : "inherit",
+          }}
+        />
+        <span className="flex-1 text-left truncate" style={{ fontSize: 13 }}>
+          Admin
+        </span>
+        <ChevronDownIcon
+          className="w-3.5 h-3.5 shrink-0 transition-transform duration-200"
+          style={{
+            color: "var(--text-dim)",
+            transform: open ? "rotate(180deg)" : "rotate(-90deg)",
+          }}
+        />
+      </button>
+
+      {/* Nested children with guide line */}
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out"
+        style={{ maxHeight: open ? ADMIN_ITEMS.length * 36 + 8 : 0 }}
+      >
+        <div
+          className="relative mt-1 ml-[19px] pl-3 space-y-0.5"
+          style={{ borderLeft: "1px solid var(--border-subtle)" }}
+        >
+          {ADMIN_ITEMS.map((item) => (
+            <AdminNavItem
+              key={item.href}
+              {...item}
+              pathname={pathname}
+              collapsed={false}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MOBILE COMPONENTS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Mobile Account Sheet ────────────────────────────────────────────────────
 
 function MobileAccountSheet({
   open,
   onClose,
+  pathname,
 }: {
   open: boolean;
   onClose: () => void;
+  pathname: string;
 }) {
   const { organization } = useOrganization();
   const { userMemberships, userInvitations, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
-    userInvitations: { infinite: true }, // ← NEW
+    userInvitations: { infinite: true },
   });
   const { openCreateOrganization, openOrganizationProfile } = useClerk();
+  const { user } = useUser();
+  const isAdmin =
+    user?.publicMetadata?.role === "admin" ||
+    user?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [adminOpen, setAdminOpen] = useState(pathname.startsWith("/admin"));
 
   const orgs = userMemberships?.data ?? [];
   const allInvitations: any[] = userInvitations?.data ?? [];
@@ -848,7 +1070,7 @@ function MobileAccountSheet({
           </button>
         </div>
 
-        {/* ── Pending Invitations (mobile) ── */}
+        {/* Pending Invitations */}
         {visibleInvitations.length > 0 && (
           <div className="px-5 pt-4 pb-2">
             <div className="flex items-center gap-2 mb-3">
@@ -963,7 +1185,7 @@ function MobileAccountSheet({
               await setActive?.({ organization: null });
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1 transition-all"
             style={{
               background: isPersonal ? "var(--accent-soft)" : "var(--bg-muted)",
               border: `1px solid ${isPersonal ? "var(--accent-border)" : "var(--border-subtle)"}`,
@@ -1014,7 +1236,7 @@ function MobileAccountSheet({
                   await setActive?.({ organization: org.id });
                   onClose();
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left mb-1 transition-all"
                 style={{
                   background: isActive
                     ? "var(--accent-soft)"
@@ -1070,6 +1292,100 @@ function MobileAccountSheet({
           })}
         </div>
 
+        {/* Results link for admins on mobile (hidden from bottom bar) */}
+        {isAdmin && (
+          <div
+            className="px-5 py-2"
+            style={{ borderTop: "1px solid var(--border-subtle)" }}
+          >
+            <Link
+              href="/form-results"
+              onClick={onClose}
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-all duration-200"
+              style={{
+                background: pathname === "/form-results" ? "var(--accent-bg)" : "var(--bg-muted)",
+                border: "1px solid var(--border-subtle)",
+                color: pathname === "/form-results" ? "var(--accent-light)" : "var(--text-secondary)",
+                fontWeight: pathname === "/form-results" ? 600 : 400,
+              }}
+            >
+              <ZapIcon className="w-4 h-4 shrink-0" />
+              <span className="text-sm">Results</span>
+            </Link>
+          </div>
+        )}
+
+        {/* Admin Section — with exact-match fix for Dashboard */}
+        {isAdmin && (
+          <div
+            className="px-5 py-2"
+            style={{ borderTop: "1px solid var(--border-subtle)" }}
+          >
+            <button
+              onClick={() => setAdminOpen((v) => !v)}
+              className="w-full flex items-center gap-2 pt-2 pb-1 transition-colors"
+            >
+              <ShieldIcon
+                className="w-3.5 h-3.5"
+                style={{ color: "var(--accent-light)" }}
+              />
+              <p
+                className="flex-1 text-left text-[11px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--text-dim)" }}
+              >
+                Admin
+              </p>
+              <ChevronDownIcon
+                className="w-3.5 h-3.5 transition-transform duration-200"
+                style={{
+                  color: "var(--text-dim)",
+                  transform: adminOpen ? "rotate(180deg)" : "rotate(-90deg)",
+                }}
+              />
+            </button>
+            {adminOpen && (
+              <div
+                className="mt-1.5 ml-[7px] pl-3 space-y-1"
+                style={{ borderLeft: "1px solid var(--border-subtle)" }}
+              >
+                {ADMIN_ITEMS.map(({ href, label, icon: Icon }) => {
+                  const active =
+                    href === "/admin"
+                      ? pathname === "/admin"
+                      : pathname === href || pathname.startsWith(`${href}/`);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={onClose}
+                      className="group/admin-item relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all duration-200"
+                      style={{
+                        background: active
+                          ? "var(--accent-bg)"
+                          : "var(--bg-muted)",
+                        border: "1px solid var(--border-subtle)",
+                        color: active
+                          ? "var(--accent-light)"
+                          : "var(--text-secondary)",
+                        fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {active && (
+                        <span
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full"
+                          style={{ background: "var(--accent-light)" }}
+                        />
+                      )}
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate text-[12.5px]">{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Preferences */}
         <div
           className="px-5 py-2"
@@ -1093,7 +1409,7 @@ function MobileAccountSheet({
                 100
               );
             }}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2"
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2 transition-all"
             style={{
               background: "var(--bg-muted)",
               border: "1px solid var(--border-subtle)",
@@ -1124,7 +1440,7 @@ function MobileAccountSheet({
                 onClose();
                 setTimeout(() => openOrganizationProfile({}), 100);
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left mb-2 transition-all"
               style={{
                 background: "var(--bg-muted)",
                 border: "1px solid var(--border-subtle)",
@@ -1285,10 +1601,13 @@ function MobileHeader({
   );
 }
 
-// ── Navbar ────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+//  MAIN NAVBAR EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user } = useUser();
   const { organization } = useOrganization();
   const { userInvitations } = useOrganizationList({
     userInvitations: { infinite: true },
@@ -1298,6 +1617,10 @@ export function Navbar() {
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
 
   const pendingInvitationsCount = userInvitations?.data?.length ?? 0;
+  const isAdmin =
+    user?.publicMetadata?.role === "admin" ||
+    user?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
+  const mobileNavItems = isAdmin ? NAV_ITEMS.slice(0, 5) : NAV_ITEMS;
 
   useEffect(() => {
     setMounted(true);
@@ -1327,8 +1650,10 @@ export function Navbar() {
       <MobileAccountSheet
         open={mobileAccountOpen}
         onClose={() => setMobileAccountOpen(false)}
+        pathname={pathname}
       />
 
+      {/* Desktop Sidebar */}
       <aside
         className="hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-200 overflow-visible"
         style={{
@@ -1338,10 +1663,10 @@ export function Navbar() {
           zIndex: 40,
         }}
       >
+        {/* Logo area */}
         <div
           className="flex items-center h-14 shrink-0"
           style={{
-            // borderBottom: "1px solid var(--border-subtle)",
             padding: collapsed ? "0" : "0 12px",
             justifyContent: collapsed ? "center" : "space-between",
           }}
@@ -1381,48 +1706,7 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* {organization && (
-          <div
-            className="flex items-center shrink-0 transition-all duration-200"
-            style={{
-              background: "var(--org-strip-bg)",
-              // borderBottom: "1px solid var(--org-strip-border)",
-              padding: collapsed ? "4px 0" : "5px 12px",
-              justifyContent: collapsed ? "center" : "flex-start",
-              minHeight: collapsed ? 14 : "auto",
-            }}
-          >
-            {collapsed ? (
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: "var(--accent-light)" }}
-              />
-            ) : (
-              <>
-                <BuildingIcon
-                  className="w-3 h-3 shrink-0 mr-1.5"
-                  style={{ color: "var(--accent-light)" }}
-                />
-                <span
-                  className="text-[10px] font-medium truncate flex-1"
-                  style={{ color: "var(--accent-light)" }}
-                >
-                  {organization.name}
-                </span>
-                <span
-                  className="text-[9px] px-1.5 py-px rounded ml-2 font-semibold shrink-0"
-                  style={{
-                    background: "var(--accent-bg-hover)",
-                    color: "var(--accent-light)",
-                  }}
-                >
-                  ORG
-                </span>
-              </>
-            )}
-          </div>
-        )} */}
-
+        {/* Main Navigation */}
         <nav
           className={`flex-1 py-2 px-2 space-y-0.5 ${collapsed ? "overflow-hidden" : "overflow-y-auto"}`}
         >
@@ -1436,7 +1720,7 @@ export function Navbar() {
               <Link
                 key={href}
                 href={resolvedHref}
-                className="flex items-center rounded-xl transition-all duration-150 relative group/nav"
+                className="group/nav relative flex items-center rounded-xl transition-all duration-200"
                 style={{
                   gap: collapsed ? 0 : 10,
                   padding: collapsed ? "9px 0" : "8px 12px",
@@ -1480,8 +1764,12 @@ export function Navbar() {
               </Link>
             );
           })}
+          {isAdmin && (
+            <AdminNavGroup collapsed={collapsed} pathname={pathname} />
+          )}
         </nav>
 
+        {/* Bottom section */}
         <div
           className="shrink-0 flex flex-col gap-2 px-2 py-3"
           style={{ borderTop: "1px solid var(--border-subtle)" }}
@@ -1507,6 +1795,7 @@ export function Navbar() {
         </div>
       </aside>
 
+      {/* Mobile Bottom Tab Bar */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-50"
         style={{
@@ -1519,7 +1808,7 @@ export function Navbar() {
           className="flex items-stretch"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {mobileNavItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
             const resolvedHref =
               href === "/forms" && organization
@@ -1554,6 +1843,32 @@ export function Navbar() {
               </Link>
             );
           })}
+          {isAdmin && (
+            <button
+              onClick={() => setMobileAccountOpen(true)}
+              className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative transition-colors min-w-0"
+              style={{
+                color: pathname.startsWith("/admin")
+                  ? "var(--accent-light)"
+                  : "var(--text-dim)",
+                minHeight: 52,
+              }}
+            >
+              {pathname.startsWith("/admin") && (
+                <span
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
+                  style={{ background: "var(--primary)" }}
+                />
+              )}
+              <MoreHorizontalIcon className="w-[18px] h-[18px] shrink-0" />
+              <span
+                className="font-medium leading-none truncate w-full text-center px-0.5"
+                style={{ fontSize: 9 }}
+              >
+                More
+              </span>
+            </button>
+          )}
         </div>
       </nav>
       <div className="md:hidden h-12 shrink-0" aria-hidden />
