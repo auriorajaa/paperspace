@@ -6,10 +6,14 @@ import {
   AdminApiError,
   createAdminConvexClient,
   formatAdminUser,
+  getInternalApiSecret,
   getPrimaryEmail,
   requireAdminRequest,
 } from "@/lib/admin";
 import { sendUserNotification } from "@/lib/admin-email";
+import { ConvexHttpClient } from "convex/browser";
+
+const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
@@ -49,6 +53,10 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "The primary admin account cannot be deleted" }, { status: 400 });
     }
 
+    if (getPrimaryEmail(adminUser) !== ADMIN_EMAIL && targetUser.publicMetadata?.role === "admin") {
+      return NextResponse.json({ error: "Admins cannot delete other admins" }, { status: 403 });
+    }
+
     const convex = await createAdminConvexClient(session.getToken);
     const cleanup = await convex.mutation(api.admin.cleanupUserData, {
       targetUserId: userId,
@@ -62,6 +70,67 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     }
     console.error("[admin/users/delete]", error);
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
+  }
+}
+
+export async function PATCH(_req: NextRequest, context: RouteContext) {
+  try {
+    const { userId } = await context.params;
+    const { clerk, session, user: adminUser } = await requireAdminRequest();
+
+    if (getPrimaryEmail(adminUser) !== ADMIN_EMAIL) {
+      return NextResponse.json({ error: "Only the primary admin can manage admin roles" }, { status: 403 });
+    }
+
+    const body = await _req.json();
+    const role: string | null = body.role ?? null;
+
+    if (role !== "admin" && role !== null) {
+      return NextResponse.json({ error: "Invalid role. Must be 'admin' or null" }, { status: 400 });
+    }
+
+    if (userId === adminUser.id) {
+      return NextResponse.json({ error: "You cannot change your own admin role" }, { status: 400 });
+    }
+
+    const targetUser = await clerk.users.getUser(userId);
+    if (getPrimaryEmail(targetUser) === ADMIN_EMAIL) {
+      return NextResponse.json({ error: "The primary admin role cannot be changed" }, { status: 400 });
+    }
+
+    await clerk.users.updateUser(userId, { publicMetadata: { role } });
+
+    // Sync the Convex admin whitelist (JWT doesn't carry publicMetadata.role).
+    // These mutations use system auth (internal secret) so they work even when
+    // the caller's Convex JWT lacks the email claim.
+    if (CONVEX_URL) {
+      const convex = new ConvexHttpClient(CONVEX_URL);
+      const token = await session.getToken({ template: "convex" });
+      if (token) convex.setAuth(token);
+
+      const secret = getInternalApiSecret();
+
+      // Whitelist the caller (original admin) so their Convex JWT works too.
+      await convex.mutation(api.admin.addAdminToWhitelist, {
+        userId: adminUser.id,
+        secret,
+      });
+
+      if (role === "admin") {
+        await convex.mutation(api.admin.addAdminToWhitelist, { userId, secret });
+      } else {
+        await convex.mutation(api.admin.removeAdminFromWhitelist, { userId, secret });
+      }
+    }
+
+    const updatedUser = await clerk.users.getUser(userId);
+    return NextResponse.json({ success: true, user: formatAdminUser(updatedUser) });
+  } catch (error) {
+    if (error instanceof AdminApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[admin/users/role]", error);
+    return NextResponse.json({ error: "Failed to update role" }, { status: 500 });
   }
 }
 

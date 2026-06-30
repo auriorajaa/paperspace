@@ -4,8 +4,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { ArrowLeftIcon, MailIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, MailIcon, ShieldCheckIcon, ShieldXIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
+import { ADMIN_EMAIL } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -126,6 +128,12 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   const [notifyReason, setNotifyReason] = useState("Notification");
   const [notifyMessage, setNotifyMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [roleConfirmOpen, setRoleConfirmOpen] = useState(false);
+  const [roleAction, setRoleAction] = useState<"promote" | "demote" | null>(null);
+  const [roleChanging, setRoleChanging] = useState(false);
+
+  const { user: currentUser } = useUser();
+  const isSuperAdmin = currentUser?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +189,29 @@ export default function UserDetailClient({ userId }: { userId: string }) {
       toast.error(error instanceof Error ? error.message : "Failed to send");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleRoleChange = async () => {
+    if (!roleAction) return;
+    setRoleChanging(true);
+    try {
+      const newRole = roleAction === "promote" ? "admin" : null;
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to update role");
+      setData((prev) => prev ? { ...prev, user: json.user } : prev);
+      toast.success(roleAction === "promote" ? "User promoted to admin" : "Admin role removed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update role");
+    } finally {
+      setRoleChanging(false);
+      setRoleConfirmOpen(false);
+      setRoleAction(null);
     }
   };
 
@@ -319,6 +350,32 @@ export default function UserDetailClient({ userId }: { userId: string }) {
             </div>
           </div>
           <div className="flex w-full gap-2 md:w-fit">
+            {isSuperAdmin && user.role !== "admin" && (
+              <button
+                onClick={() => { setRoleAction("promote"); setRoleConfirmOpen(true); }}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium md:flex-initial"
+                style={{
+                  background: "rgba(99,102,241,0.12)",
+                  color: "var(--accent-light)",
+                }}
+              >
+                <ShieldCheckIcon className="h-4 w-4" />
+                Promote to admin
+              </button>
+            )}
+            {isSuperAdmin && user.role === "admin" && user.email !== ADMIN_EMAIL && (
+              <button
+                onClick={() => { setRoleAction("demote"); setRoleConfirmOpen(true); }}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium md:flex-initial"
+                style={{
+                  background: "rgba(234,179,8,0.12)",
+                  color: "#ca8a04",
+                }}
+              >
+                <ShieldXIcon className="h-4 w-4" />
+                Demote admin
+              </button>
+            )}
             <button
               onClick={() => setNotifyOpen(true)}
               className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium md:flex-initial"
@@ -331,14 +388,16 @@ export default function UserDetailClient({ userId }: { userId: string }) {
               <MailIcon className="h-4 w-4" />
               Notify user
             </button>
-            <button
-              onClick={() => setConfirmOpen(true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium md:flex-initial"
-              style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}
-            >
-              <Trash2Icon className="h-4 w-4" />
-              Delete
-            </button>
+            {user.id !== currentUser?.id && user.email !== ADMIN_EMAIL && (isSuperAdmin || user.role !== "admin") && (
+              <button
+                onClick={() => setConfirmOpen(true)}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium md:flex-initial"
+                style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}
+              >
+                <Trash2Icon className="h-4 w-4" />
+                Delete
+              </button>
+            )}
           </div>
         </div>
 
@@ -445,6 +504,38 @@ export default function UserDetailClient({ userId }: { userId: string }) {
               }}
             >
               {deleting ? "Deleting..." : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={roleConfirmOpen} onOpenChange={setRoleConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {roleAction === "promote" ? `Promote ${user.name} to admin?` : `Remove admin from ${user.name}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {roleAction === "promote"
+                ? "This user will gain full access to the admin panel, including viewing all users, content, and stats."
+                : "This user will lose all admin access. Their account will continue to function normally."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={roleChanging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={roleChanging}
+              variant={roleAction === "demote" ? "destructive" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                handleRoleChange();
+              }}
+            >
+              {roleChanging
+                ? "Updating..."
+                : roleAction === "promote"
+                  ? "Promote to admin"
+                  : "Remove admin"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
