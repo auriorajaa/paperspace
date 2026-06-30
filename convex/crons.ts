@@ -9,4 +9,10 @@ crons.interval(
   internal.processFormResponses.pollAll
 );
 
+crons.interval(
+  "update admin stats cache",
+  { hours: 1 },
+  internal.admin.updateStatsCache
+);
+
 export default crons;
