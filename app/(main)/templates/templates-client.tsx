@@ -44,6 +44,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -961,25 +964,44 @@ function TemplateMenu({
             </DropdownMenuItem>
           </>
         )}
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isOwner) router.push(`/templates/${template._id}/connect`);
-            else onDuplicate();
-          }}
-          disabled={!isOwner && duplicating}
-        >
-          {isOwner ? (
-            <>
+        {isOwner ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
               <LinkIcon className="w-3.5 h-3.5 mr-2" /> Connect form
-            </>
-          ) : (
-            <>
-              <CopyIcon className="w-3.5 h-3.5 mr-2" />
-              {duplicating ? "Copying..." : "Copy to my templates"}
-            </>
-          )}
-        </DropdownMenuItem>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/templates/${template._id}/connect`);
+                }}
+              >
+                <ExternalLinkIcon className="w-3.5 h-3.5 mr-2" /> Google Form
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(
+                    `/templates/${template._id}/connect-internal`
+                  );
+                }}
+              >
+                <FileTextIcon className="w-3.5 h-3.5 mr-2" /> Internal Form
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : (
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+            disabled={duplicating}
+          >
+            <CopyIcon className="w-3.5 h-3.5 mr-2" />
+            {duplicating ? "Copying..." : "Copy to my templates"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={(e) => {

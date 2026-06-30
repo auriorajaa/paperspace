@@ -1,15 +1,17 @@
-// app\(main)\forms\[formId]\connect-template\connect-template-client.tsx
+// app\(main)\templates\[templateId]\connect-internal\connect-internal-client.tsx
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   PlusIcon,
   ArrowRightIcon,
+  FileTextIcon,
+  CheckCircleIcon,
   CheckIcon,
   XIcon,
   AlertCircleIcon,
@@ -20,10 +22,11 @@ import {
   PauseIcon,
   Trash2Icon,
   ChevronDownIcon,
-  LayoutTemplateIcon,
+  FileEditIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
+import { formatDistanceToNow } from "date-fns";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +40,7 @@ import {
 
 const NON_MAPPABLE_TYPES = ["loop", "condition", "condition_inverse"];
 
-// ── Shared banner components ──────────────────────────────────────────────────
+// ── Shared banner components (mirrors template-connect-client) ────────────────
 
 function ErrorBanner({
   message,
@@ -123,7 +126,7 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Step indicator ────────────────────────────────────────────────────────────
+// ── Step indicator (mirrors Google connect wizard) ────────────────────────────
 
 function StepIndicator({
   step,
@@ -187,14 +190,14 @@ function StepIndicator({
   );
 }
 
-// ── Connection card ───────────────────────────────────────────────────────────
+// ── Connection card (mirrors Google ConnectionCard) ───────────────────────────
 
-function TemplateConnectionCard({
+function InternalConnectionCard({
   connection,
-  allTemplates,
+  allForms,
 }: {
   connection: any;
-  allTemplates: any[];
+  allForms: any[];
 }) {
   const updateConnection = useMutation(api.formConnections.update);
   const removeConnection = useMutation(api.formConnections.remove);
@@ -204,9 +207,7 @@ function TemplateConnectionCard({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
 
-  const linkedTemplate = allTemplates.find(
-    (t) => t._id === connection.templateId
-  );
+  const linkedForm = allForms.find((f) => f._id === connection.internalFormId);
 
   const handleToggleActive = async () => {
     setToggling(true);
@@ -247,22 +248,15 @@ function TemplateConnectionCard({
         {/* Header */}
         <div className="flex items-start gap-3 p-4">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base"
             style={{
               background: connection.isActive
-                ? "rgba(99,102,241,0.15)"
+                ? "var(--accent-bg)"
                 : "var(--bg-input)",
-              border: `1px solid ${connection.isActive ? "rgba(99,102,241,0.25)" : "var(--border-subtle)"}`,
+              border: `1px solid ${connection.isActive ? "var(--accent-border)" : "var(--border-subtle)"}`,
             }}
           >
-            <LayoutTemplateIcon
-              className="w-4 h-4"
-              style={{
-                color: connection.isActive
-                  ? "var(--accent-light)"
-                  : "var(--text-dim)",
-              }}
-            />
+            📋
           </div>
 
           <div className="flex-1 min-w-0">
@@ -271,7 +265,7 @@ function TemplateConnectionCard({
                 className="text-sm font-semibold truncate"
                 style={{ color: "var(--text)" }}
               >
-                {connection.templateName ?? "Unknown template"}
+                {connection.formTitle}
               </p>
               <span
                 className="text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0"
@@ -304,7 +298,7 @@ function TemplateConnectionCard({
                 {connection.fieldMappings.length !== 1 ? "s" : ""} mapped
               </span>
               <span className="text-xs" style={{ color: "var(--text-dim)" }}>
-                Generates on each form submission
+                Auto-generates on each form submission
               </span>
             </div>
           </div>
@@ -312,9 +306,9 @@ function TemplateConnectionCard({
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
-          {linkedTemplate && (
+          {linkedForm && (
             <Link
-              href={`/templates/${linkedTemplate._id}/fill`}
+              href={`/forms/${linkedForm._id}/builder`}
               className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-all duration-150 min-h-[44px]"
               style={{
                 background: "var(--bg-muted)",
@@ -330,8 +324,8 @@ function TemplateConnectionCard({
                 e.currentTarget.style.borderColor = "var(--border-subtle)";
               }}
             >
-              <LayoutTemplateIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Use template</span>
+              <FileEditIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Edit form</span>
             </Link>
           )}
 
@@ -475,8 +469,7 @@ function TemplateConnectionCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Remove connection?</AlertDialogTitle>
             <AlertDialogDescription>
-              The connection to &ldquo;
-              {connection.templateName ?? "this template"}&rdquo; will be
+              The connection to &ldquo;{connection.formTitle}&rdquo; will be
               removed. Existing generated documents will not be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -498,19 +491,17 @@ function TemplateConnectionCard({
 
 // ── Wizard ────────────────────────────────────────────────────────────────────
 
-function ConnectTemplateWizard({
-  formId,
-  formTitle,
-  formQuestions,
-  templates,
-  existingConnections,
+function ConnectInternalWizard({
+  templateId,
+  templateFields,
+  myForms,
+  alreadyConnectedIds,
   onDone,
 }: {
-  formId: Id<"internalForms">;
-  formTitle: string;
-  formQuestions: any[];
-  templates: any[];
-  existingConnections: any[];
+  templateId: Id<"templates">;
+  templateFields: any[];
+  myForms: any[];
+  alreadyConnectedIds: Set<string>;
   onDone: () => void;
 }) {
   const createConnection = useMutation(api.formConnections.create);
@@ -518,8 +509,8 @@ function ConnectTemplateWizard({
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1
-  const [selectedTemplateId, setSelectedTemplateId] =
-    useState<Id<"templates"> | null>(null);
+  const [selectedFormId, setSelectedFormId] =
+    useState<Id<"internalForms"> | null>(null);
 
   // Step 2
   const [mappings, setMappings] = useState<Record<string, string>>({});
@@ -530,24 +521,20 @@ function ConnectTemplateWizard({
   const [filenameError, setFilenameError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const alreadyConnectedTemplateIds = useMemo(
-    () => new Set(existingConnections.map((c: any) => c.templateId)),
-    [existingConnections]
+  const selectedForm = myForms.find((f) => f._id === selectedFormId);
+  const mappableTemplateFields = templateFields.filter(
+    (f) => !NON_MAPPABLE_TYPES.includes(f.type)
   );
-
-  const selectedTemplate = templates.find((t) => t._id === selectedTemplateId);
-  const templateFields = useMemo(() => {
-    if (!selectedTemplate) return [];
-    return selectedTemplate.fields.filter(
-      (f: any) => !NON_MAPPABLE_TYPES.includes(f.type)
-    );
-  }, [selectedTemplate]);
-
+  const mappableFormQuestions = useMemo(() => {
+    if (!selectedForm) return [];
+    return selectedForm.schema.map((q: any) => ({ id: q.id, title: q.title }));
+  }, [selectedForm]);
   const mappedCount = Object.values(mappings).filter(Boolean).length;
+
   const ILLEGAL_CHARS = /[<>:"/\\|?*]/;
 
   const STEPS = [
-    { n: 1, label: "Select template" },
+    { n: 1, label: "Select form" },
     { n: 2, label: "Map fields" },
     { n: 3, label: "Filename" },
   ];
@@ -556,7 +543,7 @@ function ConnectTemplateWizard({
     const validMappings = Object.entries(mappings)
       .filter(([, questionId]) => questionId)
       .map(([templateFieldName, questionId]) => {
-        const q = formQuestions.find((f: any) => f.id === questionId);
+        const q = mappableFormQuestions.find((f: any) => f.id === questionId);
         return {
           formQuestionTitle: q?.title ?? questionId,
           templateFieldName,
@@ -564,7 +551,8 @@ function ConnectTemplateWizard({
         };
       });
 
-    if (validMappings.length === 0 && templateFields.length > 0) {
+    if (validMappings.length === 0 && mappableTemplateFields.length > 0) {
+      setFilenameError("");
       toast.error("Please map at least one template field to a form question");
       return;
     }
@@ -579,20 +567,20 @@ function ConnectTemplateWizard({
     }
     setFilenameError("");
 
-    if (!selectedTemplate) return;
+    if (!selectedForm) return;
     setSaving(true);
     try {
       await createConnection({
-        templateId: selectedTemplateId!,
-        formId: formId as string,
-        formTitle,
+        templateId,
+        formId: selectedFormId as string,
+        formTitle: selectedForm.title,
         fieldMappings: validMappings,
         filenamePattern: pattern,
         connectionType: "internal",
-        internalFormId: formId,
+        internalFormId: selectedFormId!,
       });
       toast.success(
-        "Template connected — documents will generate on each submission"
+        "Internal form connected — documents will generate on each submission"
       );
       onDone();
     } catch (err: any) {
@@ -606,7 +594,7 @@ function ConnectTemplateWizard({
     <div className="space-y-5">
       <StepIndicator step={step} steps={STEPS} />
 
-      {/* ── Step 1: Select template ───────────────────────────────────────── */}
+      {/* ── Step 1: Select form ───────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div>
@@ -614,20 +602,20 @@ function ConnectTemplateWizard({
               className="text-sm font-semibold mb-1"
               style={{ color: "var(--text)" }}
             >
-              Select a template
+              Select an internal form
             </h3>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              A document will be generated using this template on each new form
-              response.
+              Documents will be auto-generated every time this form receives a
+              new response.
             </p>
           </div>
 
-          {templates.length === 0 ? (
+          {myForms.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-10 rounded-xl text-center"
               style={{ border: "1px dashed var(--border-subtle)" }}
             >
-              <LayoutTemplateIcon
+              <FileTextIcon
                 className="w-8 h-8 mb-3"
                 style={{ color: "var(--text-dim)" }}
               />
@@ -635,17 +623,17 @@ function ConnectTemplateWizard({
                 className="text-sm font-semibold mb-1"
                 style={{ color: "var(--text-secondary)" }}
               >
-                No templates yet
+                No internal forms yet
               </p>
               <p
                 className="text-xs mb-4 max-w-xs"
                 style={{ color: "var(--text-dim)" }}
               >
-                Upload a .docx file with placeholders to create a template
-                first.
+                Create a form first, then come back to connect it to this
+                template.
               </p>
               <Link
-                href="/templates/new"
+                href="/forms/new"
                 className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl min-h-[44px]"
                 style={{
                   background: "var(--accent-strong-bg)",
@@ -654,24 +642,24 @@ function ConnectTemplateWizard({
                 }}
               >
                 <PlusIcon className="w-3.5 h-3.5" />
-                Create a template
+                Create a form
               </Link>
             </div>
           ) : (
             <div className="space-y-1.5">
-              {templates.map((t: any) => {
-                const connected = alreadyConnectedTemplateIds.has(t._id);
+              {myForms.map((f: any) => {
+                const connected = alreadyConnectedIds.has(f._id);
                 return (
                   <button
-                    key={t._id}
+                    key={f._id}
                     onClick={() => {
                       if (connected) {
                         toast.error(
-                          "This template is already connected to this form"
+                          "This form is already connected to this template"
                         );
                         return;
                       }
-                      setSelectedTemplateId(t._id);
+                      setSelectedFormId(f._id);
                       setMappings({});
                       setStep(2);
                     }}
@@ -695,7 +683,7 @@ function ConnectTemplateWizard({
                     }}
                   >
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
                       style={{
                         background: connected
                           ? "var(--bg-input)"
@@ -703,37 +691,31 @@ function ConnectTemplateWizard({
                         border: "1px solid rgba(99,102,241,0.2)",
                       }}
                     >
-                      <LayoutTemplateIcon
-                        className="w-3.5 h-3.5"
-                        style={{
-                          color: connected
-                            ? "var(--text-dim)"
-                            : "var(--accent-light)",
-                        }}
-                      />
+                      📋
                     </div>
                     <div className="flex-1 min-w-0">
                       <p
                         className="text-sm font-medium truncate"
                         style={{ color: "var(--text)" }}
                       >
-                        {t.name}
+                        {f.title}
                       </p>
                       <p
                         className="text-xs"
                         style={{ color: "var(--text-dim)" }}
                       >
-                        {t.fields?.length ?? 0} field
-                        {(t.fields?.length ?? 0) !== 1 ? "s" : ""}
+                        {f.schema?.length ?? 0} question
+                        {(f.schema?.length ?? 0) !== 1 ? "s" : ""}
                         {connected ? " · Already connected" : ""}
                       </p>
                     </div>
-                    {!connected ? (
+                    {!connected && (
                       <ArrowRightIcon
                         className="w-4 h-4 shrink-0"
                         style={{ color: "var(--text-dim)" }}
                       />
-                    ) : (
+                    )}
+                    {connected && (
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
                         style={{
@@ -752,14 +734,15 @@ function ConnectTemplateWizard({
 
           <InfoBox>
             <span style={{ color: "var(--accent-light)" }}>How it works:</span>{" "}
-            Form answers are mapped to template fields and a document is
-            generated instantly the moment someone submits this form.
+            When someone submits the selected form, the answers are
+            automatically mapped to your template fields and a document is
+            generated instantly — no manual steps needed.
           </InfoBox>
         </div>
       )}
 
       {/* ── Step 2: Map fields ────────────────────────────────────────────── */}
-      {step === 2 && selectedTemplate && (
+      {step === 2 && selectedForm && (
         <div className="space-y-4">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -775,15 +758,15 @@ function ConnectTemplateWizard({
                   background: "var(--success-bg)",
                   color: "var(--success)",
                 }}
-                title={selectedTemplate.name}
+                title={selectedForm.title}
               >
-                {selectedTemplate.name}
+                {selectedForm.title}
               </span>
             </div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Match each template field to the form question that fills it. Loop
-              and condition fields are template logic and can&apos;t be mapped
-              from answers.
+              Match each template field to the form question that provides its
+              value. Loop and condition fields are template logic — they
+              can&apos;t be mapped from form answers.
             </p>
           </div>
 
@@ -795,7 +778,7 @@ function ConnectTemplateWizard({
           )}
 
           {/* Progress bar */}
-          {templateFields.length > 0 && (
+          {mappableTemplateFields.length > 0 && (
             <div className="flex items-center gap-2">
               <div
                 className="flex-1 h-1.5 rounded-full overflow-hidden"
@@ -804,9 +787,9 @@ function ConnectTemplateWizard({
                 <div
                   className="h-full rounded-full transition-all duration-300"
                   style={{
-                    width: `${(mappedCount / templateFields.length) * 100}%`,
+                    width: `${(mappedCount / mappableTemplateFields.length) * 100}%`,
                     background:
-                      mappedCount === templateFields.length
+                      mappedCount === mappableTemplateFields.length
                         ? "var(--success)"
                         : "var(--accent-light)",
                   }}
@@ -816,17 +799,17 @@ function ConnectTemplateWizard({
                 className="text-[11px] font-medium shrink-0"
                 style={{
                   color:
-                    mappedCount === templateFields.length
+                    mappedCount === mappableTemplateFields.length
                       ? "var(--success)"
                       : "var(--text-dim)",
                 }}
               >
-                {mappedCount}/{templateFields.length} mapped
+                {mappedCount}/{mappableTemplateFields.length} mapped
               </span>
             </div>
           )}
 
-          {templateFields.length > 0 ? (
+          {mappableTemplateFields.length > 0 ? (
             <div
               className="rounded-xl overflow-hidden"
               style={{
@@ -834,9 +817,9 @@ function ConnectTemplateWizard({
                 background: "var(--bg-card)",
               }}
             >
-              {templateFields.map((field: any, idx: number) => {
+              {mappableTemplateFields.map((field: any, idx: number) => {
                 const isMapped = !!mappings[field.name];
-                const isLast = idx === templateFields.length - 1;
+                const isLast = idx === mappableTemplateFields.length - 1;
                 return (
                   <div
                     key={field.name}
@@ -917,7 +900,7 @@ function ConnectTemplateWizard({
                         >
                           — not mapped —
                         </option>
-                        {formQuestions.map((q: any) => (
+                        {mappableFormQuestions.map((q: any) => (
                           <option
                             key={q.id}
                             value={q.id}
@@ -1007,7 +990,7 @@ function ConnectTemplateWizard({
             </button>
             <button
               onClick={() => {
-                if (mappedCount === 0 && templateFields.length > 0) {
+                if (mappedCount === 0 && mappableTemplateFields.length > 0) {
                   setMappingError(
                     "Please map at least one template field to a form question."
                   );
@@ -1058,7 +1041,7 @@ function ConnectTemplateWizard({
                 setFilenamePattern(e.target.value);
                 setFilenameError("");
               }}
-              placeholder={`${selectedTemplate?.name ?? "document"}_{{row_number}}`}
+              placeholder={`${selectedForm?.title ?? "document"}_{{row_number}}`}
               className="w-full rounded-xl px-3 py-3 text-sm font-mono outline-none min-h-[44px]"
               style={{
                 background: "var(--bg-muted)",
@@ -1079,6 +1062,7 @@ function ConnectTemplateWizard({
               </p>
             )}
 
+            {/* Insertable token chips */}
             <div className="flex flex-wrap gap-1.5">
               {[
                 "{{row_number}}",
@@ -1113,9 +1097,8 @@ function ConnectTemplateWizard({
               <span style={{ color: "var(--accent-light)" }}>
                 ⚡ Instant generation.
               </span>{" "}
-              Documents are generated the moment this form is submitted — no
-              polling or waiting. You can view generated documents from the
-              responses page.
+              Unlike Google Forms (which polls every 5 minutes), internal forms
+              generate documents immediately when the form is submitted.
             </InfoBox>
           </div>
 
@@ -1181,33 +1164,49 @@ function ConnectTemplateWizard({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConnectTemplateClient() {
+export default function ConnectInternalClient() {
   const params = useParams();
-  const formId = params.formId as Id<"internalForms">;
+  const templateId = params.templateId as Id<"templates">;
   const { isLoaded, isSignedIn } = useAuth();
 
-  const ready = isLoaded && isSignedIn && !!formId;
+  const ready = isLoaded && isSignedIn && !!templateId;
 
-  const form = useQuery(
-    api.internalForms.getById,
-    ready ? { id: formId } : "skip"
+  const template = useQuery(
+    api.templates.getEditableById,
+    ready ? { id: templateId } : "skip"
   );
-  const templates = useQuery(api.templates.getAll, ready ? {} : "skip");
+  const myForms = useQuery(api.internalForms.getAll, ready ? {} : "skip");
   const existingConnections = useQuery(
-    api.formConnections.getByInternalFormId,
-    ready ? { internalFormId: formId } : "skip"
+    api.formConnections.getByTemplateId,
+    ready ? { templateId } : "skip"
   );
 
   const [showWizard, setShowWizard] = useState(false);
 
-  const formQuestions = useMemo(() => {
-    if (!form) return [];
-    return form.schema.map((q: any) => ({ id: q.id, title: q.title }));
-  }, [form]);
+  const internalConnections = useMemo(
+    () =>
+      (existingConnections ?? []).filter(
+        (c: any) => c.connectionType === "internal"
+      ),
+    [existingConnections]
+  );
+
+  const alreadyConnectedIds = useMemo(() => {
+    return new Set(
+      internalConnections.map((c: any) => c.internalFormId).filter(Boolean)
+    );
+  }, [internalConnections]);
+
+  const templateFields = useMemo(() => {
+    if (!template) return [];
+    return template.fields.filter(
+      (f: any) => !NON_MAPPABLE_TYPES.includes(f.type)
+    );
+  }, [template]);
 
   const loading =
-    form === undefined ||
-    templates === undefined ||
+    template === undefined ||
+    myForms === undefined ||
     existingConnections === undefined;
 
   if (loading) {
@@ -1223,7 +1222,7 @@ export default function ConnectTemplateClient() {
     );
   }
 
-  if (form === null) {
+  if (template === null) {
     return (
       <div
         className="flex flex-col items-center justify-center h-full gap-4"
@@ -1246,14 +1245,14 @@ export default function ConnectTemplateClient() {
             className="text-sm font-semibold mb-1"
             style={{ color: "var(--text)" }}
           >
-            Form not found
+            Template not found
           </p>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            This form may have been deleted.
+            This template may have been deleted.
           </p>
         </div>
         <Link
-          href="/forms"
+          href="/templates"
           className="text-[13px] font-medium px-4 py-2 rounded-xl"
           style={{
             background: "var(--bg-muted)",
@@ -1261,7 +1260,7 @@ export default function ConnectTemplateClient() {
             border: "1px solid var(--border-subtle)",
           }}
         >
-          Back to forms
+          Back to templates
         </Link>
       </div>
     );
@@ -1276,26 +1275,26 @@ export default function ConnectTemplateClient() {
       >
         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
           <Link
-            href="/forms"
+            href="/templates"
             className="text-[11px] transition-colors"
             style={{ color: "var(--text-muted)" }}
           >
-            Forms
+            Templates
           </Link>
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
           <Link
-            href={`/forms/${formId}/builder`}
+            href={`/templates/${templateId}/edit`}
             className="text-[11px] transition-colors"
             style={{ color: "var(--text-muted)" }}
           >
-            {form.title}
+            {template.name}
           </Link>
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/</span>
           <span
             className="text-[11px]"
             style={{ color: "var(--text-secondary)" }}
           >
-            Connect Template
+            Connect Internal Form
           </span>
         </div>
 
@@ -1305,13 +1304,14 @@ export default function ConnectTemplateClient() {
               className="text-[15px] sm:text-base font-semibold"
               style={{ color: "var(--text)" }}
             >
-              Template connections
+              Internal form connections
             </h1>
             <p
               className="text-xs mt-0.5"
               style={{ color: "var(--text-muted)" }}
             >
-              Auto-generate documents when this form receives a response.
+              Auto-generate documents when your internal form receives a
+              response.
             </p>
           </div>
           {!showWizard && (
@@ -1334,7 +1334,7 @@ export default function ConnectTemplateClient() {
               }}
             >
               <PlusIcon className="w-3.5 h-3.5" />
-              Connect template
+              Connect form
             </button>
           )}
         </div>
@@ -1343,8 +1343,8 @@ export default function ConnectTemplateClient() {
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
         <div className="max-w-xl space-y-5">
-          {/* How it works — shown when no connections and wizard is closed */}
-          {existingConnections.length === 0 && !showWizard && (
+          {/* How it works — shown when no connections yet and wizard is closed */}
+          {internalConnections.length === 0 && !showWizard && (
             <div
               className="rounded-xl p-4 space-y-3"
               style={{
@@ -1354,42 +1354,34 @@ export default function ConnectTemplateClient() {
             >
               <div className="flex items-center gap-2">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
                   style={{
                     background: "rgba(99,102,241,0.12)",
                     border: "1px solid rgba(99,102,241,0.2)",
                   }}
                 >
-                  <LayoutTemplateIcon
-                    className="w-4 h-4"
-                    style={{ color: "var(--accent-light)" }}
-                  />
+                  ⚡
                 </div>
                 <div>
                   <p
                     className="text-sm font-semibold"
                     style={{ color: "var(--text)" }}
                   >
-                    Auto-fill documents from responses
+                    Instant document generation
                   </p>
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Connect any number of templates to this form.
+                    No polling needed — documents generate the moment a form is
+                    submitted.
                   </p>
                 </div>
               </div>
               <div className="space-y-2 pt-1">
                 {[
-                  {
-                    n: "1",
-                    text: "Choose a template (.docx with {{placeholders}})",
-                  },
-                  {
-                    n: "2",
-                    text: "Map each template field to a form question",
-                  },
+                  { n: "1", text: "Select one of your internal forms" },
+                  { n: "2", text: "Map form questions to template fields" },
                   {
                     n: "3",
-                    text: "Documents generate the moment the form is submitted",
+                    text: "Documents appear automatically on each submission",
                   },
                 ].map(({ n, text }) => (
                   <div key={n} className="flex items-start gap-2.5">
@@ -1442,42 +1434,38 @@ export default function ConnectTemplateClient() {
                   Cancel
                 </button>
               </div>
-              <ConnectTemplateWizard
-                formId={formId}
-                formTitle={form.title}
-                formQuestions={formQuestions}
-                templates={templates ?? []}
-                existingConnections={existingConnections}
+              <ConnectInternalWizard
+                templateId={templateId}
+                templateFields={template.fields}
+                myForms={myForms ?? []}
+                alreadyConnectedIds={alreadyConnectedIds}
                 onDone={() => setShowWizard(false)}
               />
             </div>
-          ) : existingConnections.length === 0 ? (
+          ) : internalConnections.length === 0 ? (
             /* Empty state */
             <div
               className="flex flex-col items-center justify-center py-16 text-center rounded-2xl"
               style={{ border: "1px dashed var(--border-subtle)" }}
             >
               <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-xl"
                 style={{ background: "var(--bg-muted)" }}
               >
-                <LayoutTemplateIcon
-                  className="w-5 h-5"
-                  style={{ color: "var(--text-dim)" }}
-                />
+                📋
               </div>
               <p
                 className="text-sm font-semibold mb-1"
                 style={{ color: "var(--text-secondary)" }}
               >
-                No templates connected
+                No connections yet
               </p>
               <p
                 className="text-xs mb-5 max-w-xs leading-relaxed"
                 style={{ color: "var(--text-dim)" }}
               >
-                Connect a template to start generating documents automatically
-                on every submission.
+                Connect an internal form to start generating documents
+                automatically on every submission.
               </p>
               <button
                 onClick={() => setShowWizard(true)}
@@ -1495,17 +1483,17 @@ export default function ConnectTemplateClient() {
                 }
               >
                 <PlusIcon className="w-3.5 h-3.5" />
-                Connect a template
+                Connect internal form
               </button>
             </div>
           ) : (
             /* Connection cards */
             <div className="space-y-4">
-              {existingConnections.map((conn: any) => (
-                <TemplateConnectionCard
+              {internalConnections.map((conn: any) => (
+                <InternalConnectionCard
                   key={conn._id}
                   connection={conn}
-                  allTemplates={templates ?? []}
+                  allForms={myForms ?? []}
                 />
               ))}
             </div>

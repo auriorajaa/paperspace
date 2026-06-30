@@ -2,6 +2,7 @@
 // convex\internalFormResponses.ts
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 
 function hasAccess(
@@ -125,7 +126,7 @@ export const submit = mutation({
       respondentEmail = email;
     }
 
-    return ctx.db.insert("internalFormResponses", {
+    const responseId = await ctx.db.insert("internalFormResponses", {
       formId: form._id,
       ownerId: form.ownerId,
       answers: args.answers,
@@ -134,6 +135,22 @@ export const submit = mutation({
       userAgent: args.userAgent,
       ipHash,
     });
+
+    try {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.processInternalFormResponses.processFormResponse,
+        {
+          responseId,
+          formId: form._id,
+        }
+      );
+    } catch {
+      // Submission saved — document generation scheduling is best-effort.
+      // The form owner can manually trigger generation from the responses page.
+    }
+
+    return responseId;
   },
 });
 

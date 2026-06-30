@@ -161,6 +161,13 @@ export const create = mutation({
       );
     }
 
+    if (args.internalFormId) {
+      const internalForm = await ctx.db.get(args.internalFormId);
+      if (!internalForm || internalForm.ownerId !== identity.subject) {
+        throw new ConvexError("Form not found");
+      }
+    }
+
     const scriptToken = generateToken();
     return ctx.db.insert("formConnections", {
       ownerId: identity.subject,

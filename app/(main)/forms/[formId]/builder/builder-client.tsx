@@ -15,6 +15,7 @@ import {
   FileEditIcon,
   CheckCircle2Icon,
   CircleIcon,
+  PlusIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
@@ -71,6 +72,10 @@ export default function BuilderPageClient() {
   const updateForm = useMutation(api.internalForms.update);
   const publish = useMutation(api.internalForms.publish);
   const archive = useMutation(api.internalForms.archive);
+  const templateConnections = useQuery(
+    api.formConnections.getByInternalFormId,
+    isLoaded && isSignedIn && form ? { internalFormId: formId } : "skip"
+  );
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -734,6 +739,86 @@ export default function BuilderPageClient() {
                         }
                       />
                     )}
+                  </section>
+
+                  {/* ── Connected templates ── */}
+                  <section className="space-y-4">
+                    <SectionLabel
+                      title="Connected templates"
+                      subtitle="Auto-generate documents when someone submits this form."
+                    />
+
+                    {templateConnections === undefined ? (
+                      <div
+                        className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
+                        style={{ borderColor: "var(--accent-light)" }}
+                      />
+                    ) : templateConnections.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {templateConnections.map((conn: any) => (
+                          <div
+                            key={conn._id}
+                            className="rounded-xl px-4 py-3 flex items-center gap-3"
+                            style={{
+                              background: "var(--bg-card)",
+                              border: "1px solid var(--border-subtle)",
+                            }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className="text-sm font-medium truncate"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {conn.templateName}
+                              </p>
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--text-dim)" }}
+                              >
+                                {conn.fieldMappings.length} field
+                                {conn.fieldMappings.length !== 1
+                                  ? "s"
+                                  : ""}{" "}
+                                mapped
+                              </p>
+                            </div>
+                            <span
+                              className="text-xs font-medium px-1.5 py-0.5 rounded-full"
+                              style={{
+                                background: conn.isActive
+                                  ? "var(--success-bg)"
+                                  : "var(--bg-input)",
+                                color: conn.isActive
+                                  ? "var(--success)"
+                                  : "var(--text-dim)",
+                              }}
+                            >
+                              {conn.isActive ? "active" : "paused"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--text-dim)" }}
+                      >
+                        No templates connected yet.
+                      </p>
+                    )}
+
+                    <Link
+                      href={`/forms/${formId}/connect-template`}
+                      className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl transition-all"
+                      style={{
+                        background: "var(--accent-strong-bg)",
+                        color: "var(--accent-pale)",
+                        border: "1px solid var(--accent-border)",
+                      }}
+                    >
+                      <PlusIcon className="w-3.5 h-3.5" />
+                      Connect a template
+                    </Link>
                   </section>
 
                   {/* ── Link sharing ── */}

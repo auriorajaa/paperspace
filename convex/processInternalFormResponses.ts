@@ -26,18 +26,11 @@ export const processFormResponse = internalAction({
 
       const fieldValues: Record<string, string> = {};
       for (const mapping of connection.fieldMappings) {
-        if (!mapping.sourceQuestionId) {
-          const answer = response.answers.find(
-            (a: any) => a.questionId === mapping.sourceQuestionId
-          );
-          if (answer) {
-            fieldValues[mapping.templateFieldName] = answer.value;
-          }
-          continue;
-        }
-        const answer = response.answers.find(
-          (a: any) => a.questionId === mapping.sourceQuestionId
-        );
+        const answer = mapping.sourceQuestionId
+          ? response.answers.find(
+              (a: any) => a.questionId === mapping.sourceQuestionId
+            )
+          : undefined;
         if (answer) {
           fieldValues[mapping.templateFieldName] = answer.value;
         }
