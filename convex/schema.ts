@@ -224,6 +224,13 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 
+  // ── Admin whitelist ───────────────────────────────────────────────────────────
+  // Clerk JWT doesn't carry publicMetadata.role, so promoted admins are tracked
+  // here. The original admin (ADMIN_EMAIL) is gated by email fallback instead.
+  adminWhitelist: defineTable({
+    userId: v.string(),
+  }).index("by_userId", ["userId"]),
+
   formSubmissions: defineTable({
     connectionId: v.id("formConnections"),
     templateId: v.id("templates"),

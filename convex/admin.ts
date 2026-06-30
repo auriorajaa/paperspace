@@ -1,13 +1,11 @@
 // convex\admin.ts
 import { v } from "convex/values";
-import { query, mutation, action, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
-import type { RegisteredAction } from "convex/server";
 
 const ADMIN_EMAIL = "hendrianoko.corp@gmail.com";
 
-type CleanupUserDataArgs = { targetUserId: string };
 type CleanupUserDataResult = {
   success: boolean;
   deleted: Record<string, number>;
@@ -15,6 +13,7 @@ type CleanupUserDataResult = {
 
 type AdminIdentity = {
   email?: string;
+  subject?: string;
   publicMetadata?: { role?: string };
   metadata?: { role?: string };
 };
@@ -58,15 +57,25 @@ function hasAdminRole(identity: AdminIdentity | null) {
 
 async function requireAdmin(ctx: {
   auth: { getUserIdentity: () => Promise<AdminIdentity | null> };
+  db?: any;
 }) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new ConvexError({ message: "Not authenticated", code: 401 });
   }
-  if (!hasAdminRole(identity)) {
-    throw new ConvexError({ message: "Forbidden: Admin access required", code: 403 });
+  if (hasAdminRole(identity)) return identity;
+
+  // Promoted admins: check whitelist by Clerk user ID (JWT sub claim)
+  if (ctx.db && identity.subject) {
+    const subject: string = identity.subject;
+    const whitelisted = await ctx.db
+      .query("adminWhitelist")
+      .withIndex("by_userId", (q: { eq: (f: string, v: string) => unknown }) => q.eq("userId", subject))
+      .first();
+    if (whitelisted) return identity;
   }
-  return identity;
+
+  throw new ConvexError({ message: "Forbidden: Admin access required", code: 403 });
 }
 
 async function deleteOwnedUserData(ctx: CleanupCtx, targetUserId: string) {
@@ -490,25 +499,43 @@ export const cleanupUserDataFromSystem = mutation({
     return await deleteOwnedUserData(ctx as unknown as CleanupCtx, args.targetUserId);
   },
 });
-export const cleanupUserDataAction: RegisteredAction<
-  "public",
-  CleanupUserDataArgs,
-  CleanupUserDataResult
-> = action({
-  args: { targetUserId: v.string() },
-  handler: async (ctx, args): Promise<CleanupUserDataResult> => {
-    await requireAdmin(ctx);
-    const result: CleanupUserDataResult = await ctx.runMutation(
-      internal.admin.cleanupUserDataInternal,
-      { targetUserId: args.targetUserId }
-    );
-    return result;
-  },
-});
-
 export const cleanupUserDataInternal = internalMutation({
   args: { targetUserId: v.string() },
   handler: async (ctx, args) => {
     return await deleteOwnedUserData(ctx as unknown as CleanupCtx, args.targetUserId);
+  },
+});
+
+export const addAdminToWhitelist = mutation({
+  args: { userId: v.string(), secret: v.string() },
+  handler: async (ctx, args) => {
+    const expected = process.env.INTERNAL_API_SECRET;
+    if (!expected || args.secret !== expected) {
+      throw new ConvexError({ message: "Unauthorized", code: 401 });
+    }
+    const existing = await ctx.db
+      .query("adminWhitelist")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
+    if (!existing) {
+      await ctx.db.insert("adminWhitelist", { userId: args.userId });
+    }
+  },
+});
+
+export const removeAdminFromWhitelist = mutation({
+  args: { userId: v.string(), secret: v.string() },
+  handler: async (ctx, args) => {
+    const expected = process.env.INTERNAL_API_SECRET;
+    if (!expected || args.secret !== expected) {
+      throw new ConvexError({ message: "Unauthorized", code: 401 });
+    }
+    const existing = await ctx.db
+      .query("adminWhitelist")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
   },
 });

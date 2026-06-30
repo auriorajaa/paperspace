@@ -14,6 +14,8 @@ import {
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
+import { ADMIN_EMAIL } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -181,6 +183,9 @@ export default function AdminUsersPage() {
   const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+
+  const { user: currentUser } = useUser();
+  const isSuperAdmin = currentUser?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -522,22 +527,24 @@ export default function AdminUsersPage() {
                         {fmt(user.createdAt)}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <button
-                          onClick={() =>
-                            setDeleteTarget({
-                              id: user.id,
-                              label: user.email || user.name,
-                            })
-                          }
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium"
-                          style={{
-                            background: "rgba(239,68,68,0.12)",
-                            color: "#ef4444",
-                          }}
-                        >
-                          <Trash2Icon className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
+                        {(isSuperAdmin || user.role !== "admin") && (
+                          <button
+                            onClick={() =>
+                              setDeleteTarget({
+                                id: user.id,
+                                label: user.email || user.name,
+                              })
+                            }
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium"
+                            style={{
+                              background: "rgba(239,68,68,0.12)",
+                              color: "#ef4444",
+                            }}
+                          >
+                            <Trash2Icon className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -654,22 +661,24 @@ export default function AdminUsersPage() {
                     <p style={{ color: "var(--text-dim)" }}>Inactive d.</p>
                   </div>
                 </div>
-                <button
-                  onClick={() =>
-                    setDeleteTarget({
-                      id: user.id,
-                      label: user.email || user.name,
-                    })
-                  }
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-medium"
-                  style={{
-                    background: "rgba(239,68,68,0.12)",
-                    color: "#ef4444",
-                  }}
-                >
-                  <Trash2Icon className="h-3.5 w-3.5" />
-                  Delete user
-                </button>
+                {(isSuperAdmin || user.role !== "admin") && (
+                  <button
+                    onClick={() =>
+                      setDeleteTarget({
+                        id: user.id,
+                        label: user.email || user.name,
+                      })
+                    }
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-medium"
+                    style={{
+                      background: "rgba(239,68,68,0.12)",
+                      color: "#ef4444",
+                    }}
+                  >
+                    <Trash2Icon className="h-3.5 w-3.5" />
+                    Delete user
+                  </button>
+                )}
               </div>
             );
           })
