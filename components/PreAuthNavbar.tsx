@@ -3,25 +3,21 @@
 
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { useTheme } from "@/contexts/ThemeContext";
 
 interface PreAuthNavbarProps {
-  page?: "landing" | "sign-in" | "sign-up";
+  page?: "landing" | "sign-in" | "sign-up" | "form";
   isSignedIn?: boolean;
 }
 
 export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
-
   return (
     <nav
       className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-5 sm:px-8 h-14"
       style={{
-        background: isDark ? "rgba(10,10,12,0.82)" : "rgba(248,250,252,0.88)",
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
-        borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.055)" : "rgba(15,23,42,0.08)"}`,
+        background: "var(--mobile-header-bg)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid var(--border-subtle)",
       }}
     >
       {/* Logo */}
@@ -57,7 +53,10 @@ export function PreAuthNavbar({ page, isSignedIn }: PreAuthNavbarProps) {
           contentAlign="end"
         />
 
-        {isSignedIn ? (
+        {page === "form" ? (
+          /* Form page — minimal nav, no buttons */
+          null
+        ) : isSignedIn ? (
           <Link
             href="/home"
             className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-150 hover:opacity-90"

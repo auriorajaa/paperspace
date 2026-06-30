@@ -2074,9 +2074,13 @@ export default function ConnectFormPage() {
     api.templates.getEditableById,
     isLoaded && isSignedIn ? { id: templateId } : "skip"
   );
-  const connections = useQuery(
+  const rawConnections = useQuery(
     api.formConnections.getByTemplateId,
     isLoaded && isSignedIn ? { templateId } : "skip"
+  );
+  const connections = (rawConnections ?? []).filter(
+    (c: any) =>
+      c.connectionType === "google" || !c.connectionType
   );
   const googleAccount = useQuery(api.googleAccounts.getMyAccount);
 
@@ -2253,7 +2257,7 @@ export default function ConnectFormPage() {
               }}
             >
               <PlusIcon className="w-3.5 h-3.5" />
-              Connect a form
+              Connect Google Form
             </button>
           )}
         </div>
@@ -2420,7 +2424,7 @@ export default function ConnectFormPage() {
                   }
                 >
                   <PlusIcon className="w-3.5 h-3.5" />
-                  Connect a form
+                  Connect Google Form
                 </button>
               </div>
             ) : (

@@ -65,6 +65,29 @@ export const getByTemplateId = query({
   },
 });
 
+export const getByInternalFormId = query({
+  args: { internalFormId: v.id("internalForms") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const form = await ctx.db.get(args.internalFormId);
+    if (!form || form.ownerId !== identity.subject) return [];
+    const connections = await ctx.db
+      .query("formConnections")
+      .withIndex("by_internal_form_id", (q) =>
+        q.eq("internalFormId", args.internalFormId)
+      )
+      .collect();
+    const withTemplates = await Promise.all(
+      connections.map(async (c) => {
+        const template = await ctx.db.get(c.templateId);
+        return { ...c, templateName: template?.name ?? "Deleted template" };
+      })
+    );
+    return withTemplates;
+  },
+});
+
 export const getByScriptToken = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
@@ -117,12 +140,14 @@ export const create = mutation({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
+        sourceQuestionId: v.optional(v.string()),
       })
     ),
     filenamePattern: v.string(),
     connectionType: v.optional(v.string()),
     googleFormId: v.optional(v.string()),
     googleQuestionMap: v.optional(v.any()),
+    internalFormId: v.optional(v.id("internalForms")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -134,6 +159,13 @@ export const create = mutation({
       throw new ConvexError(
         "Only the template owner can connect this template to a form"
       );
+    }
+
+    if (args.internalFormId) {
+      const internalForm = await ctx.db.get(args.internalFormId);
+      if (!internalForm || internalForm.ownerId !== identity.subject) {
+        throw new ConvexError("Form not found");
+      }
     }
 
     const scriptToken = generateToken();
@@ -156,6 +188,7 @@ export const create = mutation({
       // documents on the very first poll, wasting Convex storage for data
       // the user never asked to import.
       lastPolledAt: Date.now(),
+      internalFormId: args.internalFormId,
     });
   },
 });
@@ -400,6 +433,18 @@ export const getByIdInternal = internalQuery({
   },
 });
 
+export const getByInternalFormIdInternal = internalQuery({
+  args: { internalFormId: v.id("internalForms") },
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query("formConnections")
+      .withIndex("by_internal_form_id", (q) =>
+        q.eq("internalFormId", args.internalFormId)
+      )
+      .collect();
+  },
+});
+
 export const getSubmissionByIdInternal = internalQuery({
   args: { id: v.id("formSubmissions") },
   handler: async (ctx, args) => {
@@ -462,6 +507,8 @@ export const createSubmissionInternal = internalMutation({
     status: v.string(),
     submittedAt: v.number(),
     responseId: v.optional(v.string()),
+    sourceType: v.optional(v.string()),
+    internalResponseId: v.optional(v.id("internalFormResponses")),
   },
   handler: async (ctx, args) => {
     return ctx.db.insert("formSubmissions", args);

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// convex\processFormResponses.ts
 import { internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
@@ -72,6 +73,12 @@ async function getValidToken(
   return { token: refreshed.access_token };
 }
 
+// ── Re-export shared docx generation ──────────────────────────────────────────
+
+import { TemplateNotFoundError, buildFilename } from "./docxGeneration";
+
+export { TemplateNotFoundError };
+
 // ── Preprocessor: stitch {{placeholders}} split across Word XML runs ──────────
 
 function stitchParagraph(para: string): string {
@@ -121,141 +128,8 @@ function preprocessDocxBuffer(buf: ArrayBuffer, PizZip: any): ArrayBuffer {
   return zip.generate({ type: "arraybuffer" }) as ArrayBuffer;
 }
 
-// ── Filename sanitizer ────────────────────────────────────────────────────────
-
-function buildFilename(
-  pattern: string,
-  rowNumber: string,
-  fieldValues: Record<string, string>
-): string {
-  const raw = (pattern || `document_{{row_number}}`)
-    .replace(/{{row_number}}/g, rowNumber)
-    .replace(/{{(\w+)}}/g, (_: string, key: string) => fieldValues[key] ?? "")
-    .replace(/[<>:"/\\|?*]/g, "_")
-    .trim();
-
-  return raw.replace(/^_+$/, "").trim() || `document_${rowNumber}`;
-}
-
-// ── Template-not-found sentinel ───────────────────────────────────────────────
-// A dedicated error class lets pollConnection distinguish "template deleted"
-// from every other generation failure and react differently (auto-deactivate
-// the connection instead of just marking the submission as error).
-
-class TemplateNotFoundError extends Error {
-  constructor() {
-    super("Template not found");
-    this.name = "TemplateNotFoundError";
-  }
-}
-
-// ── Core document generation logic ────────────────────────────────────────────
-
-async function generateDocxFromTemplate(
-  ctx: any,
-  params: {
-    submissionId: Id<"formSubmissions">;
-    templateId: Id<"templates">;
-    fieldValues: Record<string, string>;
-    filename: string;
-  }
-): Promise<void> {
-  const { submissionId, templateId, fieldValues } = params;
-  const convexSiteUrl = process.env.CONVEX_SITE_URL!;
-
-  const template = await ctx.runQuery(internal.templates.getByIdInternal, {
-    id: templateId,
-  });
-  // Use the sentinel so the caller can treat this case specially.
-  if (!template) throw new TemplateNotFoundError();
-
-  const PizZip = (await import("pizzip")).default;
-  const Docxtemplater = (await import("docxtemplater")).default;
-
-  const fileUrl = await ctx.storage.getUrl(
-    template.storageId as Id<"_storage">
-  );
-  if (!fileUrl) throw new Error("Template file not found in storage");
-
-  const fileRes = await fetch(fileUrl);
-  if (!fileRes.ok) throw new Error("Failed to fetch template file");
-  const rawBuffer = await fileRes.arrayBuffer();
-
-  const buffer = preprocessDocxBuffer(rawBuffer, PizZip);
-
-  const data: Record<string, unknown> = {};
-  for (const field of template.fields) {
-    if (field.type === "condition" || field.type === "condition_inverse") {
-      data[field.name] = fieldValues[field.name]?.toLowerCase() === "true";
-    } else if (field.type === "loop") {
-      data[field.name] = [];
-    } else {
-      data[field.name] = fieldValues[field.name] ?? "";
-    }
-  }
-
-  const zip = new PizZip(buffer);
-  const doc = new Docxtemplater(zip, {
-    delimiters: { start: "{{", end: "}}" },
-    paragraphLoop: true,
-    linebreaks: true,
-    nullGetter: () => "",
-  });
-
-  try {
-    doc.render(data);
-  } catch (err: any) {
-    if (err?.properties?.errors?.length) {
-      const details = (err.properties.errors as any[])
-        .map((e: any) => {
-          const id = e?.properties?.id as string | undefined;
-          const tag = e?.properties?.xtag ?? e?.properties?.tag ?? "";
-          const tagHint = tag ? ` (tag: {{${tag}}})` : "";
-          if (id === "unopened_tag")
-            return `Closing tag {{/${tag}}} has no matching opening tag${tagHint}`;
-          if (id === "unclosed_tag")
-            return `Opening tag {{${tag}}} has no matching closing tag${tagHint}`;
-          if (id === "closing_tag_does_not_match") {
-            const openTag =
-              e?.properties?.openingtag ?? e?.properties?.openTag ?? "";
-            return `Mismatched tags: {{#${openTag}}} closed by {{/${tag}}} — they must match`;
-          }
-          if (id === "raw_tag_not_in_paragraph")
-            return `Raw tag {{@${tag}}} must be the only content in its paragraph${tagHint}`;
-          if (id === "loop_tag_not_in_cell")
-            return `Loop tag {{#${tag}}} and its closing tag must be in separate table rows${tagHint}`;
-          return e?.properties?.explanation ?? e?.message ?? String(e);
-        })
-        .join("; ");
-      throw new Error(`Template render failed: ${details}`);
-    }
-    throw err;
-  }
-
-  const outBuffer: ArrayBuffer = doc.getZip().generate({ type: "arraybuffer" });
-  const outUint8 = new Uint8Array(outBuffer);
-
-  const uploadUrl = await ctx.storage.generateUploadUrl();
-  const uploadRes = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-    body: outUint8,
-  });
-  if (!uploadRes.ok) throw new Error("Upload failed");
-
-  const { storageId: newStorageId } = await uploadRes.json();
-  const generatedFileUrl = `${convexSiteUrl}/getFile?storageId=${newStorageId}&filename=${encodeURIComponent(params.filename)}`;
-
-  await ctx.runMutation(internal.formConnections.updateSubmissionInternal, {
-    id: submissionId,
-    storageId: newStorageId,
-    fileUrl: generatedFileUrl,
-    status: "generated",
-  });
-}
+// ── Re-export TemplateNotFoundError ───────────────────────────────────────────
+// Imported from shared docxGeneration.ts above.
 
 // ── Fetch all responses with pagination ───────────────────────────────────────
 
@@ -462,7 +336,7 @@ export const pollConnection = internalAction({
       );
 
       try {
-        await generateDocxFromTemplate(ctx, {
+        await ctx.runAction(internal.docxGeneration.generateDocxFromTemplate, {
           submissionId: submissionId as Id<"formSubmissions">,
           templateId: connection.templateId,
           fieldValues,
@@ -620,7 +494,7 @@ export const retrySubmission = action({
     });
 
     try {
-      await generateDocxFromTemplate(ctx, {
+      await ctx.runAction(internal.docxGeneration.generateDocxFromTemplate, {
         submissionId: args.submissionId,
         templateId: submission.templateId,
         fieldValues: submission.fieldValues as Record<string, string>,

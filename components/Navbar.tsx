@@ -14,6 +14,7 @@ import {
   FileTextIcon,
   FolderIcon,
   LayoutTemplateIcon,
+  ClipboardListIcon,
   ZapIcon,
   ChevronDownIcon,
   CheckIcon,
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/documents", label: "Papers", icon: FileTextIcon },
   { href: "/collections", label: "Collections", icon: FolderIcon },
   { href: "/templates", label: "Templates", icon: LayoutTemplateIcon },
+  { href: "/forms", label: "Forms", icon: ClipboardListIcon },
   { href: "/form-results", label: "Results", icon: ZapIcon },
 ];
 
@@ -1426,10 +1428,14 @@ export function Navbar() {
         >
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
+            const resolvedHref =
+              href === "/forms" && organization
+                ? `/forms?orgId=${organization.id}`
+                : href;
             return (
               <Link
                 key={href}
-                href={href}
+                href={resolvedHref}
                 className="flex items-center rounded-xl transition-all duration-150 relative group/nav"
                 style={{
                   gap: collapsed ? 0 : 10,
@@ -1515,10 +1521,14 @@ export function Navbar() {
         >
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
+            const resolvedHref =
+              href === "/forms" && organization
+                ? `/forms?orgId=${organization.id}`
+                : href;
             return (
               <Link
                 key={href}
-                href={href}
+                href={resolvedHref}
                 className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative transition-colors min-w-0"
                 style={{
                   color: active ? "var(--accent-light)" : "var(--text-dim)",

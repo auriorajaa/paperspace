@@ -1,5 +1,19 @@
+// convex\schema.ts
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+
+const internalFormQuestionSchema = v.object({
+  id: v.string(),
+  title: v.string(),
+  type: v.string(),
+  required: v.boolean(),
+  options: v.optional(v.array(v.string())),
+  // ── Rich customization (all optional / backward compatible) ───────────────
+  description: v.optional(v.string()), // helper text shown under the title
+  placeholder: v.optional(v.string()),
+  min: v.optional(v.number()),
+  max: v.optional(v.number()),
+});
 
 export default defineSchema({
   documents: defineTable({
@@ -94,6 +108,54 @@ export default defineSchema({
     .index("by_owner_id", ["ownerId"])
     .index("by_organization_id", ["organizationId"]),
 
+  // ── Internal forms ──────────────────────────────────────────────────────────
+  internalForms: defineTable({
+    ownerId: v.string(),
+    organizationId: v.optional(v.string()),
+    title: v.string(),
+    description: v.optional(v.string()),
+    schema: v.array(internalFormQuestionSchema),
+    status: v.string(), // "draft" | "published" | "archived"
+    publicId: v.string(),
+    settings: v.object({
+      acceptResponses: v.boolean(),
+      confirmationMessage: v.optional(v.string()),
+      headerImage: v.optional(v.string()),
+      themeColor: v.optional(v.string()),
+      submitButtonText: v.optional(v.string()),
+      showHeader: v.optional(v.boolean()),
+      // ── Rich customization (all optional / backward compatible) ─────────────
+      fontFamily: v.optional(v.string()), // "default" | "serif" | "mono" | "rounded"
+      cornerStyle: v.optional(v.string()), // "pill" | "soft" | "square"
+      showProgress: v.optional(v.boolean()),
+      seoDescription: v.optional(v.string()), // override for link-share metadata
+      // ── Email collection (requires Google sign-in) ─────────────────────────
+      collectEmail: v.optional(v.boolean()),
+      allowedDomains: v.optional(v.array(v.string())), // e.g. ["mhsw.pnj.ac.id"]
+    }),
+  })
+    .index("by_owner_id", ["ownerId"])
+    .index("by_organization_id", ["organizationId"])
+    .index("by_public_id", ["publicId"]),
+
+  // ── Internal form responses ──────────────────────────────────────────────────
+  internalFormResponses: defineTable({
+    formId: v.id("internalForms"),
+    ownerId: v.string(),
+    answers: v.array(
+      v.object({
+        questionId: v.string(),
+        value: v.string(),
+      })
+    ),
+    submittedAt: v.number(),
+    respondentEmail: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    ipHash: v.optional(v.string()),
+  })
+    .index("by_form_id", ["formId"])
+    .index("by_owner_id", ["ownerId"]),
+
   generatedDocuments: defineTable({
     templateId: v.id("templates"),
     ownerId: v.string(),
@@ -128,14 +190,17 @@ export default defineSchema({
       v.object({
         formQuestionTitle: v.string(),
         templateFieldName: v.string(),
+        sourceQuestionId: v.optional(v.string()),
       })
     ),
     scriptToken: v.string(),
     filenamePattern: v.string(),
     isActive: v.boolean(),
     // ── Google Forms specific (optional for backward compat) ─────────────────
-    connectionType: v.optional(v.string()), // "google" | "manual"
+    connectionType: v.optional(v.string()), // "google" | "manual" | "internal"
     googleFormId: v.optional(v.string()),
+    // ── Internal form specific ──────────────────────────────────────────────
+    internalFormId: v.optional(v.id("internalForms")),
     // Maps Google questionId → questionTitle for response parsing
     googleQuestionMap: v.optional(v.any()),
     lastPolledAt: v.optional(v.number()),
@@ -148,7 +213,8 @@ export default defineSchema({
   })
     .index("by_owner_id", ["ownerId"])
     .index("by_template_id", ["templateId"])
-    .index("by_script_token", ["scriptToken"]),
+    .index("by_script_token", ["scriptToken"])
+    .index("by_internal_form_id", ["internalFormId"]),
 
   formSubmissions: defineTable({
     connectionId: v.id("formConnections"),
@@ -163,6 +229,8 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     submittedAt: v.number(),
     responseId: v.optional(v.string()), // Google Forms responseId for dedup
+    sourceType: v.optional(v.string()), // "google" | "internal"
+    internalResponseId: v.optional(v.id("internalFormResponses")),
   })
     .index("by_owner_id", ["ownerId"])
     .index("by_connection_id", ["connectionId"])

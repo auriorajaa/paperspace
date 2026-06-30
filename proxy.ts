@@ -10,6 +10,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/onlyoffice-callback(.*)",
   "/api/pdf/serve/(.*)",
   "/api/google/callback(.*)", // Google OAuth callback — browser redirect, needs to be public
+  "/f/(.*)", // Public internal forms
+  "/api/forms/submit/(.*)", // Public form submission endpoint
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

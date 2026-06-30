@@ -15,7 +15,7 @@ export async function generateMetadata({
 
   return buildPageMetadata({
     title: "Connect Google Form",
-    description: `Link a Google Form to this template. Every new form submission will automatically generate a filled document in ${SITE_NAME}.`,
+    description: `Link a Google Form to this template, or use an internal web form. Every new form submission will automatically generate a filled document in ${SITE_NAME}.`,
     path: `/templates/${templateId}/connect`,
     noIndex: true,
   });

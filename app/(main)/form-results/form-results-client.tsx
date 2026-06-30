@@ -77,6 +77,7 @@ interface Submission {
   errorMessage?: string;
   storageId?: string;
   ownerId: string;
+  sourceType?: string;
 }
 
 interface Connection {
@@ -94,6 +95,7 @@ interface Connection {
   templateDeleted?: boolean;
   /** Timestamp (ms) when the template was marked deleted. */
   templateDeletedAt?: number;
+  connectionType?: string;
 }
 
 // ── Export helpers ────────────────────────────────────────────────────────────
@@ -706,6 +708,29 @@ function SubmissionRow({
               </span>
             </p>
             <div className="flex items-center gap-2 flex-wrap">
+              {submission.sourceType === "internal" ? (
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{
+                    background: "color-mix(in srgb, var(--accent) 8%, transparent)",
+                    color: "var(--accent-light)",
+                    border: "1px solid color-mix(in srgb, var(--accent) 20%, transparent)",
+                  }}
+                >
+                  Web Form
+                </span>
+              ) : (
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{
+                    background: "var(--success-bg)",
+                    color: "var(--success)",
+                    border: "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
+                  }}
+                >
+                  Google Form
+                </span>
+              )}
               {submission.respondentEmail && (
                 <span
                   className="text-xs"
@@ -1206,32 +1231,34 @@ function ConnectionGroup({
 
                 <DropdownMenuSeparator />
 
-                {/* Sync Now — disabled when template is deleted */}
-                <DropdownMenuItem
-                  onClick={handleSync}
-                  disabled={syncing || isTemplateDeleted}
-                  className="flex items-center gap-2 cursor-pointer"
-                  title={
-                    isTemplateDeleted
-                      ? "Cannot sync — template has been deleted"
-                      : undefined
-                  }
-                >
-                  <RefreshCwIcon
-                    className={`w-4 h-4 ${syncing ? "animate-spin" : ""} ${isTemplateDeleted ? "opacity-40" : ""}`}
-                  />
-                  <span className={isTemplateDeleted ? "opacity-40" : ""}>
-                    {syncing ? "Syncing…" : "Sync Now"}
-                  </span>
-                  {isTemplateDeleted && (
-                    <span
-                      className="ml-auto text-[10px]"
-                      style={{ color: "var(--warning)" }}
-                    >
-                      Template deleted
+                {/* Sync Now — only for Google Forms; internal forms don't need syncing */}
+                {connection.connectionType !== "internal" && (
+                  <DropdownMenuItem
+                    onClick={handleSync}
+                    disabled={syncing || isTemplateDeleted}
+                    className="flex items-center gap-2 cursor-pointer"
+                    title={
+                      isTemplateDeleted
+                        ? "Cannot sync — template has been deleted"
+                        : undefined
+                    }
+                  >
+                    <RefreshCwIcon
+                      className={`w-4 h-4 ${syncing ? "animate-spin" : ""} ${isTemplateDeleted ? "opacity-40" : ""}`}
+                    />
+                    <span className={isTemplateDeleted ? "opacity-40" : ""}>
+                      {syncing ? "Syncing…" : "Sync Now"}
                     </span>
-                  )}
-                </DropdownMenuItem>
+                    {isTemplateDeleted && (
+                      <span
+                        className="ml-auto text-[10px]"
+                        style={{ color: "var(--warning)" }}
+                      >
+                        Template deleted
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                )}
 
                 {/* Pause/Resume — disabled when template is deleted */}
                 <DropdownMenuItem
