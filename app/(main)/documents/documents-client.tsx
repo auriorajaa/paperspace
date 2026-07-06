@@ -348,6 +348,34 @@ function UploadDocumentDialog({
 
       setStage("uploading");
 
+      const { preprocessTemplate, extractAllText } = await import(
+        "@/lib/template-preprocessor"
+      );
+      const validationBuffer = await docxFile.arrayBuffer();
+      const preprocessedBuffer = await preprocessTemplate(validationBuffer);
+      const extractedText = await extractAllText(preprocessedBuffer);
+
+      if (!extractedText.trim()) {
+        throw new Error(
+          "Could not read text from this document. It may be a scanned image — try a PDF with selectable text."
+        );
+      }
+
+      const validateRes = await fetch("/api/validate-tik-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: extractedText }),
+      });
+      const { valid, reason } = await validateRes.json();
+      if (!valid) {
+        throw new Error(
+          reason ||
+            "This file doesn't look like a TIK PNJ administrative document."
+        );
+      }
+
+      setStage("uploading");
+
       let uploadUrl: string;
       try {
         uploadUrl = await generateUploadUrl();
@@ -417,493 +445,497 @@ function UploadDocumentDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => !processing && onOpenChange(v)}>
-      <DialogContent
-        className="w-[calc(100vw-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl"
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-hover)",
-          backdropFilter: "blur(16px)",
-        }}
-      >
-        <div
-          className="flex items-center justify-between px-5 py-4 shrink-0"
-          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        <DialogContent
+          className="w-[calc(100vw-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl"
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-hover)",
+            backdropFilter: "blur(16px)",
+          }}
         >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background: "var(--accent-soft)",
-                border: "1px solid var(--accent-border)",
-              }}
-            >
-              <UploadCloudIcon
-                className="w-4 h-4"
-                style={{ color: "var(--accent-light)" }}
-              />
-            </div>
-            <DialogTitle
-              className="text-[14px] font-semibold"
-              style={{ color: "var(--text)" }}
-            >
-              Upload paper
-            </DialogTitle>
-          </div>
-          <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
-            .docx · .pdf · max {MAX_UPLOAD_MB} MB
-          </p>
-        </div>
-
-        <div className="px-5 py-4 space-y-4 w-full min-w-0">
-          {errorMsg && (
-            <div
-              className="flex items-start gap-3 p-3.5 rounded-xl"
-              style={{
-                background: "var(--danger-bg)",
-                border:
-                  "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
-              }}
-            >
-              <AlertTriangleIcon
-                className="w-4 h-4 shrink-0 mt-0.5"
-                style={{ color: "var(--danger)" }}
-              />
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <p
-                  className="text-[12px] leading-relaxed break-words"
-                  style={{ color: "var(--danger)" }}
-                >
-                  {errorMsg}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMsg("");
-                    handleUpload();
-                  }}
-                  className="mt-2 flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors active:scale-95"
-                  style={{
-                    background: "var(--danger-bg)",
-                    color: "var(--danger)",
-                    border:
-                      "1px solid color-mix(in srgb, var(--danger) 25%, transparent)",
-                  }}
-                >
-                  <RefreshCwIcon className="w-3 h-3" />
-                  Try again
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setErrorMsg("")}
-                className="w-6 h-6 flex items-center justify-center rounded-lg shrink-0"
-                style={{ color: "var(--danger)", opacity: 0.7 }}
-              >
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
           <div
-            className={`transition-opacity duration-200 ${
-              processing ? "pointer-events-none opacity-50" : ""
-            }`}
+            className="flex items-center justify-between px-5 py-4 shrink-0"
+            style={{ borderBottom: "1px solid var(--border-subtle)" }}
           >
-            {!file ? (
+            <div className="flex items-center gap-2.5">
               <div
-                role="button"
-                tabIndex={0}
-                aria-label="Upload file"
-                className="flex flex-col items-center justify-center p-7 sm:p-8 rounded-2xl border-2 border-dashed transition-all cursor-pointer select-none outline-none focus-visible:ring-2"
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                 style={{
-                  borderColor: dragOver ? "var(--primary)" : "var(--bg-input)",
-                  background: dragOver
-                    ? "var(--accent-soft)"
-                    : "var(--bg-muted)",
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  const f = e.dataTransfer.files[0];
-                  if (f) acceptFile(f);
-                }}
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    inputRef.current?.click();
-                  }
+                  background: "var(--accent-soft)",
+                  border: "1px solid var(--accent-border)",
                 }}
               >
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-transform duration-200"
-                  style={{
-                    background: "var(--accent-soft)",
-                    border: "1px solid var(--accent-border)",
-                    transform: dragOver ? "scale(1.1)" : "scale(1)",
-                  }}
-                >
-                  <UploadCloudIcon
-                    className="w-5 h-5"
-                    style={{ color: "var(--accent-light)" }}
-                  />
-                </div>
-                <p
-                  className="text-[13px] font-semibold mb-1"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {dragOver ? "Release to upload" : "Drop a file here"}
-                </p>
-                <p
-                  className="text-[11px] mb-3.5"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  or tap to browse your device
-                </p>
-                <div className="flex items-center gap-2 flex-wrap justify-center">
-                  <span
-                    className="text-[11px] px-2 py-0.5 rounded-md font-medium"
-                    style={{
-                      background: "var(--accent-soft)",
-                      color: "var(--accent-light)",
-                      border: "1px solid var(--accent-border)",
-                    }}
-                  >
-                    .docx
-                  </span>
-                  <span
-                    className="text-[11px]"
-                    style={{ color: "var(--text-dim)" }}
-                  >
-                    or
-                  </span>
-                  <span
-                    className="text-[11px] px-2 py-0.5 rounded-md font-medium"
-                    style={{
-                      background: "var(--success-bg)",
-                      color: "var(--success)",
-                      border:
-                        "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
-                    }}
-                  >
-                    .pdf
-                  </span>
-                </div>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept=".docx,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) acceptFile(f);
-                    e.target.value = "";
-                  }}
+                <UploadCloudIcon
+                  className="w-4 h-4"
+                  style={{ color: "var(--accent-light)" }}
                 />
               </div>
-            ) : (
+              <DialogTitle
+                className="text-[14px] font-semibold"
+                style={{ color: "var(--text)" }}
+              >
+                Upload paper
+              </DialogTitle>
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>
+              .docx · .pdf · max {MAX_UPLOAD_MB} MB
+            </p>
+          </div>
+
+          <div className="px-5 py-4 space-y-4 w-full min-w-0">
+            {errorMsg && (
               <div
-                className="flex items-center gap-3 p-3.5 rounded-xl overflow-hidden"
+                className="flex items-start gap-3 p-3.5 rounded-xl"
                 style={{
-                  background:
-                    fileKind === "pdf"
-                      ? "var(--success-bg)"
-                      : "var(--accent-soft)",
-                  border: `1px solid ${
-                    fileKind === "pdf"
-                      ? "color-mix(in srgb, var(--success) 22%, transparent)"
-                      : "var(--accent-border)"
-                  }`,
+                  background: "var(--danger-bg)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                 }}
               >
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                  style={{
-                    background:
-                      fileKind === "pdf"
-                        ? "color-mix(in srgb, var(--success) 12%, transparent)"
-                        : "color-mix(in srgb, var(--accent-light) 10%, transparent)",
-                  }}
-                >
-                  {fileKind === "pdf" ? (
-                    <FileIcon
-                      className="w-4 h-4"
-                      style={{ color: "var(--success)" }}
-                    />
-                  ) : (
-                    <FileTextIcon
-                      className="w-4 h-4"
-                      style={{ color: "var(--accent-light)" }}
-                    />
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                <AlertTriangleIcon
+                  className="w-4 h-4 shrink-0 mt-0.5"
+                  style={{ color: "var(--danger)" }}
+                />
+                <div className="flex-1 min-w-0 overflow-hidden">
                   <p
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      color: "var(--text)",
-                    }}
-                    className="text-[12px] font-medium"
+                    className="text-[12px] leading-relaxed break-words"
+                    style={{ color: "var(--danger)" }}
                   >
-                    {file.name}
+                    {errorMsg}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span
-                      className="text-[10px] font-bold px-1.5 py-px rounded uppercase tracking-wide shrink-0"
-                      style={{
-                        background:
-                          fileKind === "pdf"
-                            ? "var(--success-bg)"
-                            : "var(--accent-soft)",
-                        color:
-                          fileKind === "pdf"
-                            ? "var(--success)"
-                            : "var(--accent-light)",
-                      }}
-                    >
-                      {fileKind}
-                    </span>
-                    <span
-                      className="text-[11px] shrink-0"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {(file.size / 1024 / 1024).toFixed(1)} MB
-                    </span>
-                    {fileKind === "pdf" && (
-                      <span
-                        className="text-[10px] font-medium px-1.5 py-px rounded shrink-0"
-                        style={{
-                          background:
-                            "color-mix(in srgb, var(--warning) 10%, transparent)",
-                          color: "var(--warning)",
-                          border:
-                            "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
-                        }}
-                      >
-                        will be converted
-                      </span>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg("");
+                      handleUpload();
+                    }}
+                    className="mt-2 flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors active:scale-95"
+                    style={{
+                      background: "var(--danger-bg)",
+                      color: "var(--danger)",
+                      border:
+                        "1px solid color-mix(in srgb, var(--danger) 25%, transparent)",
+                    }}
+                  >
+                    <RefreshCwIcon className="w-3 h-3" />
+                    Try again
+                  </button>
                 </div>
                 <button
                   type="button"
-                  onClick={resetFile}
-                  disabled={processing}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-70 active:scale-90 disabled:opacity-30 shrink-0"
-                  style={{ color: "var(--text-muted)" }}
-                  title="Remove file"
+                  onClick={() => setErrorMsg("")}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg shrink-0"
+                  style={{ color: "var(--danger)", opacity: 0.7 }}
                 >
                   <XIcon className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
-          </div>
 
-          {fileKind === "pdf" && file && !processing && (
             <div
-              className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl"
-              style={{
-                background: "var(--warning-bg)",
-                border:
-                  "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
-              }}
-            >
-              <AlertCircleIcon
-                className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                style={{ color: "var(--warning)" }}
-              />
-              <p
-                className="text-[11px] leading-relaxed break-words"
-                style={{ color: "var(--warning)" }}
-              >
-                <span className="font-semibold">Conversion note:</span> Complex
-                layouts, tables, or image-heavy PDFs may need manual adjustments
-                after conversion. Plain-text PDFs convert best.
-              </p>
-            </div>
-          )}
-
-          {file && (
-            <div
-              className={`space-y-1.5 transition-opacity duration-200 ${
+              className={`transition-opacity duration-200 ${
                 processing ? "pointer-events-none opacity-50" : ""
               }`}
             >
-              <label
-                className="text-[11px] font-semibold flex items-center gap-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Paper name <span style={{ color: "var(--danger)" }}>*</span>
-              </label>
-              <input
-                autoFocus
-                value={name}
-                maxLength={80}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (e.target.value.trim()) setNameError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && canUpload) handleUpload();
-                }}
-                disabled={processing}
-                placeholder="Enter paper name"
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none disabled:opacity-50 transition-colors min-h-[44px]"
-                style={{
-                  background: "var(--bg-muted)",
-                  border: `1px solid ${
-                    nameError
-                      ? "color-mix(in srgb, var(--danger) 60%, transparent)"
-                      : "var(--border-subtle)"
-                  }`,
-                  color: "var(--text)",
-                }}
-                onFocus={(e) => {
-                  if (!nameError)
-                    e.currentTarget.style.border =
-                      "1px solid var(--accent-border)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.border = `1px solid ${
-                    nameError
-                      ? "color-mix(in srgb, var(--danger) 60%, transparent)"
-                      : "var(--border-subtle)"
-                  }`;
-                }}
-              />
-              {nameError && (
-                <div className="flex items-center gap-1.5">
-                  <AlertCircleIcon
-                    className="w-3 h-3 shrink-0"
-                    style={{ color: "var(--danger)" }}
-                  />
-                  <p
-                    className="text-[11px] break-words"
-                    style={{ color: "var(--danger)" }}
+              {!file ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload file"
+                  className="flex flex-col items-center justify-center p-7 sm:p-8 rounded-2xl border-2 border-dashed transition-all cursor-pointer select-none outline-none focus-visible:ring-2"
+                  style={{
+                    borderColor: dragOver
+                      ? "var(--primary)"
+                      : "var(--bg-input)",
+                    background: dragOver
+                      ? "var(--accent-soft)"
+                      : "var(--bg-muted)",
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    const f = e.dataTransfer.files[0];
+                    if (f) acceptFile(f);
+                  }}
+                  onClick={() => inputRef.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      inputRef.current?.click();
+                    }
+                  }}
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-transform duration-200"
+                    style={{
+                      background: "var(--accent-soft)",
+                      border: "1px solid var(--accent-border)",
+                      transform: dragOver ? "scale(1.1)" : "scale(1)",
+                    }}
                   >
-                    {nameError}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {file && (
-            <div className="space-y-3 pb-1">
-              <button
-                type="button"
-                onClick={handleUpload}
-                disabled={!canUpload}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[48px] overflow-hidden"
-                style={{
-                  background: canUpload
-                    ? "var(--accent-strong-bg)"
-                    : "var(--accent-soft)",
-                  color: canUpload ? "var(--accent-pale)" : "var(--text-dim)",
-                  border: `1.5px solid ${
-                    canUpload
-                      ? "var(--accent-border)"
-                      : "color-mix(in srgb, var(--accent-light) 10%, transparent)"
-                  }`,
-                }}
-              >
-                {processing ? (
-                  <>
-                    <Loader2Icon
-                      className="w-4 h-4 animate-spin shrink-0"
+                    <UploadCloudIcon
+                      className="w-5 h-5"
                       style={{ color: "var(--accent-light)" }}
                     />
-                    <span className="truncate max-w-full">
-                      {UPLOAD_STAGE_LABELS[stage] || "Processing…"}
+                  </div>
+                  <p
+                    className="text-[13px] font-semibold mb-1"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    {dragOver ? "Release to upload" : "Drop a file here"}
+                  </p>
+                  <p
+                    className="text-[11px] mb-3.5"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    or tap to browse your device
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <span
+                      className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                      style={{
+                        background: "var(--accent-soft)",
+                        color: "var(--accent-light)",
+                        border: "1px solid var(--accent-border)",
+                      }}
+                    >
+                      .docx
                     </span>
-                  </>
-                ) : !name.trim() ? (
-                  <span className="truncate max-w-full">
-                    Enter a paper name to continue
-                  </span>
-                ) : (
-                  <>
-                    <UploadCloudIcon className="w-4 h-4 shrink-0" />
-                    <span className="truncate max-w-full">
-                      Upload paper
+                    <span
+                      className="text-[11px]"
+                      style={{ color: "var(--text-dim)" }}
+                    >
+                      or
                     </span>
-                  </>
-                )}
-              </button>
-
-              {processing && stage && (
-                <div className="flex items-center justify-center gap-1 flex-wrap w-full overflow-hidden">
-                  {activeStages.map((s, i) => {
-                    const currentIdx = activeStages.indexOf(stage);
-                    const isDone = currentIdx > i;
-                    const isActive = stage === s;
-                    return (
-                      <div key={s} className="flex items-center gap-1 min-w-0">
-                        <div
-                          className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300 min-w-0"
-                          style={{
-                            background: isDone
+                    <span
+                      className="text-[11px] px-2 py-0.5 rounded-md font-medium"
+                      style={{
+                        background: "var(--success-bg)",
+                        color: "var(--success)",
+                        border:
+                          "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
+                      }}
+                    >
+                      .pdf
+                    </span>
+                  </div>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".docx,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) acceptFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-3 p-3.5 rounded-xl overflow-hidden"
+                  style={{
+                    background:
+                      fileKind === "pdf"
+                        ? "var(--success-bg)"
+                        : "var(--accent-soft)",
+                    border: `1px solid ${
+                      fileKind === "pdf"
+                        ? "color-mix(in srgb, var(--success) 22%, transparent)"
+                        : "var(--accent-border)"
+                    }`,
+                  }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{
+                      background:
+                        fileKind === "pdf"
+                          ? "color-mix(in srgb, var(--success) 12%, transparent)"
+                          : "color-mix(in srgb, var(--accent-light) 10%, transparent)",
+                    }}
+                  >
+                    {fileKind === "pdf" ? (
+                      <FileIcon
+                        className="w-4 h-4"
+                        style={{ color: "var(--success)" }}
+                      />
+                    ) : (
+                      <FileTextIcon
+                        className="w-4 h-4"
+                        style={{ color: "var(--accent-light)" }}
+                      />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                    <p
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        color: "var(--text)",
+                      }}
+                      className="text-[12px] font-medium"
+                    >
+                      {file.name}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-px rounded uppercase tracking-wide shrink-0"
+                        style={{
+                          background:
+                            fileKind === "pdf"
                               ? "var(--success-bg)"
-                              : isActive
-                                ? "var(--accent-soft)"
-                                : "transparent",
-                            opacity: isDone ? 0.5 : isActive ? 1 : 0.25,
+                              : "var(--accent-soft)",
+                          color:
+                            fileKind === "pdf"
+                              ? "var(--success)"
+                              : "var(--accent-light)",
+                        }}
+                      >
+                        {fileKind}
+                      </span>
+                      <span
+                        className="text-[11px] shrink-0"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                      {fileKind === "pdf" && (
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-px rounded shrink-0"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--warning) 10%, transparent)",
+                            color: "var(--warning)",
+                            border:
+                              "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
                           }}
                         >
-                          <div
-                            className="w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{
-                              background: isDone
-                                ? "var(--success)"
-                                : isActive
-                                  ? "var(--accent-light)"
-                                  : "var(--border-hover)",
-                            }}
-                          />
-                          <span
-                            className="text-[10px] font-medium truncate"
-                            style={{
-                              color: isDone
-                                ? "var(--success)"
-                                : isActive
-                                  ? "var(--accent-light)"
-                                  : "var(--text-dim)",
-                            }}
-                          >
-                            {UPLOAD_STAGE_LABELS[s].replace("…", "")}
-                          </span>
-                        </div>
-                        {i < activeStages.length - 1 && (
-                          <ChevronRightIcon
-                            className="w-2.5 h-2.5 shrink-0"
-                            style={{ color: "var(--bg-input)" }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                          will be converted
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetFile}
+                    disabled={processing}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:opacity-70 active:scale-90 disabled:opacity-30 shrink-0"
+                    style={{ color: "var(--text-muted)" }}
+                    title="Remove file"
+                  >
+                    <XIcon className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
-
-              {!processing && fileKind === "docx" && (
-                <p
-                  className="text-[10px] text-center break-words"
-                  style={{ color: "var(--text-dim)" }}
-                >
-                  Your .docx will be stored as-is. You can open it after upload
-                </p>
-              )}
             </div>
-          )}
-        </div>
-      </DialogContent>
+
+            {fileKind === "pdf" && file && !processing && (
+              <div
+                className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl"
+                style={{
+                  background: "var(--warning-bg)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--warning) 15%, transparent)",
+                }}
+              >
+                <AlertCircleIcon
+                  className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                  style={{ color: "var(--warning)" }}
+                />
+                <p
+                  className="text-[11px] leading-relaxed break-words"
+                  style={{ color: "var(--warning)" }}
+                >
+                  <span className="font-semibold">Conversion note:</span>{" "}
+                  Complex layouts, tables, or image-heavy PDFs may need manual
+                  adjustments after conversion. Plain-text PDFs convert best.
+                </p>
+              </div>
+            )}
+
+            {file && (
+              <div
+                className={`space-y-1.5 transition-opacity duration-200 ${
+                  processing ? "pointer-events-none opacity-50" : ""
+                }`}
+              >
+                <label
+                  className="text-[11px] font-semibold flex items-center gap-1"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Paper name <span style={{ color: "var(--danger)" }}>*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={name}
+                  maxLength={80}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (e.target.value.trim()) setNameError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && canUpload) handleUpload();
+                  }}
+                  disabled={processing}
+                  placeholder="Enter paper name"
+                  className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none disabled:opacity-50 transition-colors min-h-[44px]"
+                  style={{
+                    background: "var(--bg-muted)",
+                    border: `1px solid ${
+                      nameError
+                        ? "color-mix(in srgb, var(--danger) 60%, transparent)"
+                        : "var(--border-subtle)"
+                    }`,
+                    color: "var(--text)",
+                  }}
+                  onFocus={(e) => {
+                    if (!nameError)
+                      e.currentTarget.style.border =
+                        "1px solid var(--accent-border)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.border = `1px solid ${
+                      nameError
+                        ? "color-mix(in srgb, var(--danger) 60%, transparent)"
+                        : "var(--border-subtle)"
+                    }`;
+                  }}
+                />
+                {nameError && (
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircleIcon
+                      className="w-3 h-3 shrink-0"
+                      style={{ color: "var(--danger)" }}
+                    />
+                    <p
+                      className="text-[11px] break-words"
+                      style={{ color: "var(--danger)" }}
+                    >
+                      {nameError}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {file && (
+              <div className="space-y-3 pb-1">
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={!canUpload}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed min-h-[48px] overflow-hidden"
+                  style={{
+                    background: canUpload
+                      ? "var(--accent-strong-bg)"
+                      : "var(--accent-soft)",
+                    color: canUpload ? "var(--accent-pale)" : "var(--text-dim)",
+                    border: `1.5px solid ${
+                      canUpload
+                        ? "var(--accent-border)"
+                        : "color-mix(in srgb, var(--accent-light) 10%, transparent)"
+                    }`,
+                  }}
+                >
+                  {processing ? (
+                    <>
+                      <Loader2Icon
+                        className="w-4 h-4 animate-spin shrink-0"
+                        style={{ color: "var(--accent-light)" }}
+                      />
+                      <span className="truncate max-w-full">
+                        {UPLOAD_STAGE_LABELS[stage] || "Processing…"}
+                      </span>
+                    </>
+                  ) : !name.trim() ? (
+                    <span className="truncate max-w-full">
+                      Enter a paper name to continue
+                    </span>
+                  ) : (
+                    <>
+                      <UploadCloudIcon className="w-4 h-4 shrink-0" />
+                      <span className="truncate max-w-full">Upload paper</span>
+                    </>
+                  )}
+                </button>
+
+                {processing && stage && (
+                  <div className="flex items-center justify-center gap-1 flex-wrap w-full overflow-hidden">
+                    {activeStages.map((s, i) => {
+                      const currentIdx = activeStages.indexOf(stage);
+                      const isDone = currentIdx > i;
+                      const isActive = stage === s;
+                      return (
+                        <div
+                          key={s}
+                          className="flex items-center gap-1 min-w-0"
+                        >
+                          <div
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-full transition-all duration-300 min-w-0"
+                            style={{
+                              background: isDone
+                                ? "var(--success-bg)"
+                                : isActive
+                                  ? "var(--accent-soft)"
+                                  : "transparent",
+                              opacity: isDone ? 0.5 : isActive ? 1 : 0.25,
+                            }}
+                          >
+                            <div
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{
+                                background: isDone
+                                  ? "var(--success)"
+                                  : isActive
+                                    ? "var(--accent-light)"
+                                    : "var(--border-hover)",
+                              }}
+                            />
+                            <span
+                              className="text-[10px] font-medium truncate"
+                              style={{
+                                color: isDone
+                                  ? "var(--success)"
+                                  : isActive
+                                    ? "var(--accent-light)"
+                                    : "var(--text-dim)",
+                              }}
+                            >
+                              {UPLOAD_STAGE_LABELS[s].replace("…", "")}
+                            </span>
+                          </div>
+                          {i < activeStages.length - 1 && (
+                            <ChevronRightIcon
+                              className="w-2.5 h-2.5 shrink-0"
+                              style={{ color: "var(--bg-input)" }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!processing && fileKind === "docx" && (
+                  <p
+                    className="text-[10px] text-center break-words"
+                    style={{ color: "var(--text-dim)" }}
+                  >
+                    Your .docx will be stored as-is. You can open it after
+                    upload
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
       </Dialog>
 
       <AlertDialog
@@ -2971,7 +3003,10 @@ function GridCard({
                       color: "var(--accent-light)",
                     }}
                   >
-                    <UsersIcon className="shrink-0" style={{ width: 9, height: 9 }} />
+                    <UsersIcon
+                      className="shrink-0"
+                      style={{ width: 9, height: 9 }}
+                    />
                     <span className="truncate min-w-0">{orgLabel}</span>
                   </span>
                 )}
