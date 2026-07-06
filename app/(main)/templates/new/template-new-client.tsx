@@ -1176,6 +1176,21 @@ export default function TemplateNewPage() {
       );
     }
 
+    // ── NEW: validate this is a TIK PNJ administrative document ──────────────
+    const validateRes = await fetch("/api/validate-tik-document", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: extractedText }),
+    });
+    const { valid, reason } = await validateRes.json();
+    if (!valid) {
+      throw new Error(
+        reason ||
+          "This file doesn't look like a TIK PNJ administrative document."
+      );
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     const uploadDocxBuffer = async (
       buffer: ArrayBuffer
     ): Promise<{ storageId: string; fileUrl: string }> => {

@@ -21,6 +21,7 @@ import type * as internalForms from "../internalForms.js";
 import type * as processFormResponses from "../processFormResponses.js";
 import type * as processInternalFormResponses from "../processInternalFormResponses.js";
 import type * as templates from "../templates.js";
+import type * as validations from "../validations.js";
 
 import type {
   ApiFromModules,
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   processFormResponses: typeof processFormResponses;
   processInternalFormResponses: typeof processInternalFormResponses;
   templates: typeof templates;
+  validations: typeof validations;
 }>;
 
 /**

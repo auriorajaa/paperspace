@@ -59,6 +59,16 @@ export default defineSchema({
     .index("by_document_id", ["documentId"])
     .index("by_collection_id", ["collectionId"])
     .index("by_document_and_collection", ["documentId", "collectionId"]),
+  documentValidations: defineTable({
+    contentHash: v.string(), // sha256 of the extracted header text
+    ownerId: v.string(),
+    verdict: v.string(), // "accept" | "reject"
+    reason: v.string(),
+    method: v.string(), // "heuristic" | "gemini"
+    createdAt: v.number(),
+  })
+    .index("by_content_hash", ["contentHash"])
+    .index("by_owner_and_date", ["ownerId", "createdAt"]),
 
   templates: defineTable({
     name: v.string(),
